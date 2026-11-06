@@ -1,0 +1,10 @@
+.env
+.env.*
+node_modules/
+stage/
+dist/
+*.tar.gz
+coverage/
+playwright-report/
+test-results/
+.DS_Store
