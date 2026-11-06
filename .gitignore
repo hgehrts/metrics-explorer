@@ -4,6 +4,9 @@ node_modules/
 stage/
 dist/
 *.tar.gz
+*.tgz
+.tools/
+build/
 coverage/
 playwright-report/
 test-results/

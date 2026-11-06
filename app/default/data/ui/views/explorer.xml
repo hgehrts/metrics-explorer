@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<view template="metrics_explorer:/templates/explorer.html" type="html" onunloadCancelJobs="true">
+  <label>Metrics Explorer</label>
+</view>

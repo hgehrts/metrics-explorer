@@ -1,0 +1,3 @@
+<nav search_view="explorer">
+  <view name="explorer" default="true"/>
+</nav>
