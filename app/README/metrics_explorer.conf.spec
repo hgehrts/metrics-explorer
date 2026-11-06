@@ -15,11 +15,6 @@ max_dimensions = <int>
 * -1 loads every dimension.
 * Default: -1
 
-hierarchy_depth = <int>
-* Number of name parts that become folders in the metric tree. The rest stays as the leaf name.
-* With 1, lab.cpu.user shows as folder lab, leaf cpu.user (matches the original).
-* Default: 1
-
 hierarchy_source = <string>
 * Field used to build the data tree. metric_name is the default.
 * Any other value is a dimension name.

@@ -14,5 +14,6 @@ test('the html view points at the explorer template and bundle', () => {
     );
     expect(view).toContain('metrics_explorer:/templates/explorer.html');
     expect(template).toContain('/static/app/metrics_explorer/build/explorer.js');
+    expect(template).toContain('/static/app/metrics_explorer/build/explorer.css');
     expect(template).toContain('id="root"');
 });

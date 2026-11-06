@@ -3,9 +3,25 @@
   <head>
     <meta charset="utf-8"/>
     <title>Metrics Explorer</title>
+    <link rel="stylesheet" href="${make_url('/static/app/metrics_explorer/build/explorer.css')}"/>
   </head>
   <body style="margin: 0">
     <div id="root"></div>
+    <script>
+      (function () {
+        var match = location.pathname.match(/\/([a-z]{2}-[A-Z]{2})(?:\/|$)/);
+        var locale = match ? match[1] : 'en-US';
+        var csrf = document.cookie.match(/splunkweb_csrf_token_(\d+)/);
+        var port = csrf ? csrf[1] : '8000';
+        var root = location.pathname.split('/' + locale + '/')[0];
+        window.$C = window.$C || {
+          LOCALE: locale,
+          MRSPARKLE_PORT_NUMBER: port,
+          MRSPARKLE_ROOT_PATH: root,
+          SPLUNKD_PATH: root + '/' + locale + '/splunkd/__raw'
+        };
+      })();
+    </script>
     <script src="${make_url('/static/app/metrics_explorer/build/explorer.js')}"></script>
   </body>
 </html>
