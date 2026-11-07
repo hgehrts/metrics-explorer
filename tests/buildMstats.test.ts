@@ -62,6 +62,40 @@ test('rejects a split field that could break out of the search', () => {
     ).toThrow('Split field is not allowed.');
 });
 
+test('includes one dimension value the way the original workspace does', () => {
+    expect(
+        buildMstats({
+            aggregation: 'Avg',
+            metric: 'cpu_metric.pctUser',
+            span: '10s',
+            splitBy: 'IP_address',
+            filters: [{ dimension: 'CPU', mode: 'include', values: ['0'] }],
+        })
+    ).toContain('AND "CPU"="0"');
+});
+
+test('excludes a value with NOT and groups several values', () => {
+    expect(
+        buildMstats({
+            aggregation: 'Avg',
+            metric: 'lab.cpu.user',
+            span: '10s',
+            filters: [{ dimension: 'extracted_host', mode: 'exclude', values: ['lab-a', 'lab-b'] }],
+        })
+    ).toContain('AND NOT ("extracted_host"="lab-a" OR "extracted_host"="lab-b")');
+});
+
+test('rejects a filter value that breaks out of the quotes', () => {
+    expect(() =>
+        buildMstats({
+            aggregation: 'Avg',
+            metric: 'lab.cpu.user',
+            span: '10s',
+            filters: [{ dimension: 'host', mode: 'include', values: ['lab\n| delete'] }],
+        })
+    ).toThrow('Line breaks are not allowed.');
+});
+
 test('rejects an unknown aggregation', () => {
     expect(() =>
         buildMstats({ aggregation: 'delete', metric: 'lab.cpu.user', span: '10s' })
