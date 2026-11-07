@@ -38,6 +38,7 @@ export const METRIC_FUNCTIONS: MetricFunction[] = [
 ];
 
 const BY_NAME = new Map(METRIC_FUNCTIONS.map((entry) => [entry.name, entry]));
+const BY_LABEL = new Map(METRIC_FUNCTIONS.map((entry) => [entry.label.toLowerCase(), entry]));
 
 export function resolveMetricFunction(value: string): MetricFunction | null {
     const name = value.trim().toLowerCase();
@@ -45,8 +46,8 @@ export function resolveMetricFunction(value: string): MetricFunction | null {
     if (known) {
         return known;
     }
-    if (!PERCENTILE.test(name)) {
-        return null;
+    if (PERCENTILE.test(name)) {
+        return { name, label: name, chart: 'line', rate: false };
     }
-    return { name, label: name, chart: 'line', rate: false };
+    return BY_LABEL.get(name) ?? null;
 }

@@ -7,7 +7,7 @@ import { buildDimensionSearch, buildDimensionValueSearch, SPLIT_LIMITS } from '.
 import { spanForRange } from '../spl/span';
 import { collectFieldValues, collectMetricNames, runSearch } from '../search/runSearch';
 import { ReferenceLine } from '../chart/reference';
-import { buildSpan, ChartSettings, CHART_TYPES, SPAN_UNITS, validateAxis } from '../chart/settings';
+import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, SPAN_UNITS, validateAxis } from '../chart/settings';
 import { AUTO_REFRESH_MS, ChartModel, cloneChart, createChart, createSeries, refreshStatus, Series } from '../model/workspace';
 import { ChartView } from './ChartView';
 
@@ -578,7 +578,19 @@ export function Explorer(): React.ReactElement {
                                 aria-label="Aggregation"
                                 list="metric-aggregations"
                                 value={series.aggregation}
-                                onChange={(event) => patchSeries({ aggregation: event.target.value })}
+                                onChange={(event) => {
+                                    const aggregation = event.target.value;
+                                    const next = resolveMetricFunction(aggregation);
+                                    patchSeries({ aggregation });
+                                    if (next?.chart === 'table' && selected.settings.content === 'chart') {
+                                        const othersPlot = selected.series.some(
+                                            (item) =>
+                                                item.id !== series.id &&
+                                                resolveMetricFunction(item.aggregation)?.chart !== 'table'
+                                        );
+                                        patchSettings({ content: othersPlot ? 'both' : 'table' });
+                                    }
+                                }}
                             />
                             <datalist id="metric-aggregations">
                                 {METRIC_FUNCTIONS.map((item) => (
@@ -867,6 +879,25 @@ export function Explorer(): React.ReactElement {
                                 </Select>
                             </Field>
                             <Field as="div">
+                                Show
+                                <Select
+                                    aria-label="Chart content"
+                                    value={selected.settings.content}
+                                    onChange={(event) => {
+                                        const content = event.target.value;
+                                        patchSettings({
+                                            content: content === 'table' || content === 'both' ? content : 'chart',
+                                        });
+                                    }}
+                                >
+                                    {CHART_CONTENT.map((item) => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.label}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </Field>
+                            <Field as="div">
                                 Time span = {selected.settings.span || 'Auto'}
                                 <span>Refer to the time range to set an appropriate time span.</span>
                                 <SplitRow>
@@ -908,6 +939,7 @@ export function Explorer(): React.ReactElement {
                                     </button>
                                 </SplitRow>
                             </Field>
+                            {selected.settings.content === 'table' ? null : (
                             <Field as="div">
                                 Y-axis
                                 <span>Set the minimum and maximum, for example 1000, 1k or 3m.</span>
@@ -943,6 +975,7 @@ export function Explorer(): React.ReactElement {
                                     Revert y-axis
                                 </button>
                             </Field>
+                            )}
                         </details>
                     </Field>
                 ) : null}

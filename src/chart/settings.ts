@@ -1,7 +1,11 @@
 export type ChartType = 'line' | 'area' | 'column';
 
+/** Chart only, the statistics table only, or both. Time aggregations always keep the table. */
+export type ChartContent = 'chart' | 'table' | 'both';
+
 export type ChartSettings = {
     type: ChartType;
+    content: ChartContent;
     /** Empty means automatic. Otherwise an SPL span such as 30s, 5m, 2h or 1d. */
     span: string;
     yMin: string;
@@ -15,6 +19,12 @@ export const CHART_TYPES: { id: ChartType; label: string }[] = [
     { id: 'column', label: 'Column chart' },
 ];
 
+export const CHART_CONTENT: { id: ChartContent; label: string }[] = [
+    { id: 'chart', label: 'Chart' },
+    { id: 'table', label: 'Statistics table' },
+    { id: 'both', label: 'Chart and statistics table' },
+];
+
 export const SPAN_UNITS: { id: 's' | 'm' | 'h' | 'd'; label: string }[] = [
     { id: 's', label: 'Seconds' },
     { id: 'm', label: 'Minutes' },
@@ -23,7 +33,7 @@ export const SPAN_UNITS: { id: 's' | 'm' | 'h' | 'd'; label: string }[] = [
 ];
 
 export function defaultSettings(): ChartSettings {
-    return { type: 'line', span: '', yMin: '', yMax: '', yScale: 'linear' };
+    return { type: 'line', content: 'chart', span: '', yMin: '', yMax: '', yScale: 'linear' };
 }
 
 const SUFFIX: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9 };

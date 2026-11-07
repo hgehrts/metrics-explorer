@@ -7,6 +7,7 @@ import { variables } from '@splunk/themes';
 import { toLineTable } from '../chart/columns';
 import { addReferenceLines } from '../chart/reference';
 import { axisOptions } from '../chart/settings';
+import { formatStatColumns, formatTimeCell } from '../chart/stats';
 import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
 import { ChartModel } from '../model/workspace';
 import { runSearch, SearchRow } from '../search/runSearch';
@@ -70,6 +71,26 @@ const Note = styled.p`
     font-size: 12px;
 `;
 
+const Grid = styled.div`
+    max-height: 260px;
+    overflow: auto;
+    margin-top: 8px;
+`;
+
+const Stats = styled.table`
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+
+    th,
+    td {
+        padding: 4px 8px;
+        border-bottom: 1px solid ${variables.neutral200};
+        text-align: left;
+        white-space: nowrap;
+    }
+`;
+
 type SeriesResult = {
     rows: SearchRow[];
     error: string;
@@ -101,9 +122,10 @@ export function ChartView(props: {
         setLoading(true);
         series.forEach((item, index) => {
             const chosen = resolveMetricFunction(item.aggregation);
-            if (!chosen || chosen.chart !== 'line') {
-                next[index] = { ...next[index], error: 'This aggregation is shown in the statistics table, which comes in the next phase.' };
+            if (!chosen) {
+                next[index] = { ...next[index], error: 'Unknown aggregation.' };
                 setResults([...next]);
+                setLoading(false);
                 return;
             }
             let search = '';
@@ -158,12 +180,28 @@ export function ChartView(props: {
         return () => stops.forEach((stop) => stop());
     }, [signature, props.range, span, props.refreshToken]);
 
+    const locale = typeof window === 'undefined' ? undefined : window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1];
     const tables = props.chart.series.map((item, index) => {
         const chosen = resolveMetricFunction(item.aggregation);
         const label = item.splitBy ? `${chosen?.label ?? item.aggregation} by ${item.splitBy}` : chosen?.label ?? item.aggregation;
-        return toLineTable(results[index]?.rows ?? [], label, item.splitBy || undefined);
+        return formatStatColumns(
+            toLineTable(results[index]?.rows ?? [], label, item.splitBy || undefined),
+            item.aggregation,
+            locale
+        );
     });
-    const merged = mergeTables(tables.filter((table) => (table.columns[0]?.length ?? 0) > 0));
+    const hasRows = (table: (typeof tables)[number]): boolean => (table.columns[0]?.length ?? 0) > 0;
+    const plotIndexes = props.chart.series.flatMap((item, index) =>
+        resolveMetricFunction(item.aggregation)?.chart === 'line' ? [index] : []
+    );
+    const tableOnly = props.chart.series.flatMap((item, index) =>
+        resolveMetricFunction(item.aggregation)?.chart === 'table' ? [index] : []
+    );
+    const content = props.chart.settings.content;
+    const tableIndexes = content === 'chart' ? tableOnly : props.chart.series.map((_, index) => index);
+    const showChart = content !== 'table' && plotIndexes.some((index) => hasRows(tables[index]));
+    const showTable = tableIndexes.some((index) => hasRows(tables[index]));
+    const merged = mergeTables(plotIndexes.map((index) => tables[index]).filter(hasRows));
     const data = addReferenceLines(
         merged,
         props.chart.series.flatMap((item) => item.referenceLines)
@@ -176,6 +214,10 @@ export function ChartView(props: {
                 (item, index) => item.overlay && (props.chart.series.length === 1 || name.startsWith(`${index + 1} `))
             )
         );
+    const stats = mergeTables(tableIndexes.map((index) => tables[index]).filter(hasRows));
+    if (stats.columns[0]) {
+        stats.columns[0] = stats.columns[0].map((value) => formatTimeCell(value, locale));
+    }
     const title = props.chart.series.map((item) => item.metric).join(', ');
     const Viz = (
         props.chart.settings.type === 'area' ? Area : props.chart.settings.type === 'column' ? Column : Line
@@ -220,7 +262,7 @@ export function ChartView(props: {
                             <SmallButton
                                 type="button"
                                 onClick={() => {
-                                    const blob = new Blob([toCsv(data)], { type: 'text/csv' });
+                                    const blob = new Blob([toCsv(showChart ? data : stats)], { type: 'text/csv' });
                                     const url = URL.createObjectURL(blob);
                                     const link = document.createElement('a');
                                     link.href = url;
@@ -240,7 +282,7 @@ export function ChartView(props: {
                 result.error ? <Note key={`${index}-${result.error}`}>{result.error}</Note> : null
             )}
             {loading ? <Note>Refreshing</Note> : null}
-            {data.columns[0] && data.columns[0].length > 0 ? (
+            {showChart && data.columns[0] && data.columns[0].length > 0 ? (
                 <Viz
                     key={props.chart.settings.type}
                     width="100%"
@@ -260,6 +302,30 @@ export function ChartView(props: {
                         ...axisOptions(props.chart.settings),
                     }}
                 />
+            ) : null}
+            {showTable ? (
+                <Grid>
+                    <Stats aria-label="Statistics table">
+                        <thead>
+                            <tr>
+                                {stats.fields.map((field) => (
+                                    <th key={field.name} scope="col">
+                                        {field.name === '_time' ? 'Time' : field.name}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {(stats.columns[0] ?? []).map((_, row) => (
+                                <tr key={`${stats.columns[0]?.[row] ?? ''}-${row}`}>
+                                    {stats.fields.map((field, column) => (
+                                        <td key={field.name}>{stats.columns[column]?.[row] ?? ''}</td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </Stats>
+                </Grid>
             ) : null}
         </Card>
     );
