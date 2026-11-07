@@ -1,4 +1,4 @@
-import { axisOptions, buildSpan, defaultSettings, parseAxisValue, splitSpan, validateAxis } from '../src/chart/settings';
+import { axisOptions, buildSpan, defaultSettings, parseAxisValue, splitSpan, validateAxis, visualFor } from '../src/chart/settings';
 
 test('reads the short forms the original workspace accepts', () => {
     expect(parseAxisValue('1000')).toBe(1000);
@@ -29,4 +29,11 @@ test('builds a span only from a positive whole number and a known unit', () => {
     expect(buildSpan('5', 'x')).toBeNull();
     expect(buildSpan('5 | delete', 'm')).toBeNull();
     expect(splitSpan('2h')).toEqual({ count: '2', unit: 'h' });
+});
+
+test('maps the chart types to a visualization and stack mode', () => {
+    expect(visualFor('line')).toEqual({ kind: 'line', stacked: false });
+    expect(visualFor('area')).toEqual({ kind: 'area', stacked: false });
+    expect(visualFor('column')).toEqual({ kind: 'column', stacked: false });
+    expect(visualFor('stacked')).toEqual({ kind: 'column', stacked: true });
 });

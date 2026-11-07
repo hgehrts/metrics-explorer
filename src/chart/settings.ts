@@ -1,4 +1,18 @@
-export type ChartType = 'line' | 'area' | 'column';
+export type ChartType = 'line' | 'area' | 'column' | 'stacked';
+
+/** Which visualization draws a chart type. Stacked columns use the column visualization in stacked mode. */
+export function visualFor(type: ChartType): { kind: 'line' | 'area' | 'column'; stacked: boolean } {
+    if (type === 'area') {
+        return { kind: 'area', stacked: false };
+    }
+    if (type === 'column') {
+        return { kind: 'column', stacked: false };
+    }
+    if (type === 'stacked') {
+        return { kind: 'column', stacked: true };
+    }
+    return { kind: 'line', stacked: false };
+}
 
 /** Chart only, the statistics table only, or both. Time aggregations always keep the table. */
 export type ChartContent = 'chart' | 'table' | 'both';
@@ -17,6 +31,7 @@ export const CHART_TYPES: { id: ChartType; label: string }[] = [
     { id: 'line', label: 'Line chart' },
     { id: 'area', label: 'Area chart' },
     { id: 'column', label: 'Column chart' },
+    { id: 'stacked', label: 'Stacked column chart' },
 ];
 
 export const CHART_CONTENT: { id: ChartContent; label: string }[] = [

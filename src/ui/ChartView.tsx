@@ -6,7 +6,7 @@ import styled, { css } from 'styled-components';
 import { variables } from '@splunk/themes';
 import { toLineTable } from '../chart/columns';
 import { addReferenceLines } from '../chart/reference';
-import { axisOptions } from '../chart/settings';
+import { axisOptions, visualFor } from '../chart/settings';
 import { formatStatColumns, formatTimeCell } from '../chart/stats';
 import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
 import { ChartModel } from '../model/workspace';
@@ -219,9 +219,8 @@ export function ChartView(props: {
         stats.columns[0] = stats.columns[0].map((value) => formatTimeCell(value, locale));
     }
     const title = props.chart.series.map((item) => item.metric).join(', ');
-    const Viz = (
-        props.chart.settings.type === 'area' ? Area : props.chart.settings.type === 'column' ? Column : Line
-    ) as typeof Line;
+    const visual = visualFor(props.chart.settings.type);
+    const Viz = (visual.kind === 'area' ? Area : visual.kind === 'column' ? Column : Line) as typeof Line;
     const first = results[0];
 
     return (
@@ -300,6 +299,7 @@ export function ChartView(props: {
                         xAxisTitleVisibility: 'collapsed',
                         yAxisTitleVisibility: 'collapsed',
                         ...axisOptions(props.chart.settings),
+                        ...(visual.stacked ? { stackMode: 'stacked' } : {}),
                     }}
                 />
             ) : null}
