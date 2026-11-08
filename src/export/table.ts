@@ -19,13 +19,16 @@ export function toCsv(table: LineTable): string {
 
 export function mergeTables(tables: LineTable[]): LineTable {
     const times = [...new Set(tables.flatMap((table) => table.columns[0] ?? []))].sort();
+    const counts = new Map<string, number>();
+    tables.forEach((table) => {
+        table.fields.slice(1).forEach((field) => counts.set(field.name, (counts.get(field.name) ?? 0) + 1));
+    });
     const fields = [{ name: '_time' }];
     const columns: string[][] = [times];
-    const prefix = tables.length > 1;
     tables.forEach((table, tableIndex) => {
         const index = new Map((table.columns[0] ?? []).map((time, position) => [time, position]));
         table.fields.slice(1).forEach((field, fieldIndex) => {
-            const name = prefix ? `${tableIndex + 1} ${field.name}` : field.name;
+            const name = (counts.get(field.name) ?? 0) > 1 ? `${tableIndex + 1} ${field.name}` : field.name;
             fields.push({ name });
             const source = table.columns[fieldIndex + 1] ?? [];
             columns.push(times.map((time) => source[index.get(time) ?? -1] ?? ''));

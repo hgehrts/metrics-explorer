@@ -1,0 +1,18 @@
+/* Flatten the dashboard panel so the workspace fills the content area under the Splunk bar and the app nav. */
+.dashboard-body,
+.dashboard-row,
+.dashboard-cell,
+.dashboard-panel,
+.panel-element-row,
+.dashboard-element,
+.dashboard-element .html {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+#root {
+    overflow: hidden;
+}

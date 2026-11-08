@@ -1,3 +1,5 @@
+import { parseTimeShift, shiftSeconds } from './timeShift';
+
 const SPANS: { seconds: number; spl: string }[] = [
     { seconds: 1, spl: '1s' },
     { seconds: 10, spl: '10s' },
@@ -35,23 +37,21 @@ export function spanForRange(earliest: string): string {
     return spanForDuration(RANGE_SECONDS[earliest] ?? 3600);
 }
 
-const SHIFT_SECONDS: Record<string, number> = {
-    '30m': 30 * 60,
-    '60m': 60 * 60,
-    '2h': 2 * 3600,
-    '24h': 24 * 3600,
-    '2d': 2 * 86400,
-    '7d': 7 * 86400,
-};
-
 export function searchWindow(range: string, shift = ''): { earliest: string; latest: string } {
     if (!shift) {
         return { earliest: range, latest: 'now' };
     }
-    const shiftSeconds = SHIFT_SECONDS[shift];
-    if (!shiftSeconds) {
+    const parsed = parseTimeShift(shift);
+    if (!parsed || !(range in RANGE_SECONDS)) {
         throw new Error('Time shift is not allowed.');
     }
-    const duration = RANGE_SECONDS[range] ?? 3600;
-    return { earliest: `-${duration + shiftSeconds}s`, latest: `-${shiftSeconds}s` };
+    if (parsed.unit === 'mon' || parsed.unit === 'y') {
+        return { earliest: `${range}-${parsed.token}`, latest: `-${parsed.token}` };
+    }
+    const seconds = shiftSeconds(shift);
+    if (!seconds) {
+        throw new Error('Time shift is not allowed.');
+    }
+    const duration = RANGE_SECONDS[range];
+    return { earliest: `-${duration + seconds}s`, latest: `-${seconds}s` };
 }

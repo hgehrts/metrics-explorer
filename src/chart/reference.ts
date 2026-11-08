@@ -1,12 +1,63 @@
 import { LineTable } from './columns';
 import { resolveMetricFunction } from '../spl/functions';
+import { parseTimeShift, shiftSeconds } from '../spl/timeShift';
 
 export type ReferenceLine = {
     kind: 'constant' | 'aggregation';
     value: string;
     label: string;
     includeValue: boolean;
+    /** Set together with latest for a window other than the chart. Both are allowlisted relative times. */
+    earliest?: string;
+    latest?: string;
 };
+
+function isBound(value: string): boolean {
+    if (value === 'now') {
+        return true;
+    }
+    return value.startsWith('-') && parseTimeShift(value.slice(1)) !== null;
+}
+
+function agoSeconds(value: string): number | null {
+    if (value === 'now') {
+        return 0;
+    }
+    const parsed = parseTimeShift(value.slice(1));
+    if (!parsed) {
+        return null;
+    }
+    if (parsed.unit === 'mon') {
+        return parsed.amount * 30 * 86400;
+    }
+    if (parsed.unit === 'y') {
+        return parsed.amount * 365 * 86400;
+    }
+    return shiftSeconds(value.slice(1));
+}
+
+/** Accepts now or -7d, -2mon and similar. The start must be earlier than the end. */
+export function referenceWindow(earliest: string, latest: string): { earliest: string; latest: string } | null {
+    const start = earliest.trim();
+    const end = latest.trim();
+    if (!isBound(start) || !isBound(end)) {
+        return null;
+    }
+    const startAgo = agoSeconds(start);
+    const endAgo = agoSeconds(end);
+    if (startAgo === null || endAgo === null || startAgo <= endAgo) {
+        return null;
+    }
+    return { earliest: start, latest: end };
+}
+
+export function referenceSummary(line: ReferenceLine): string {
+    const name = line.label.trim() || line.value.trim();
+    if (!line.earliest) {
+        return name;
+    }
+    return `${name} (${line.earliest} to ${line.latest || 'now'})`;
+}
 
 function finiteNumbers(table: LineTable): number[] {
     const numbers: number[] = [];
@@ -107,15 +158,20 @@ export function referenceLegend(line: ReferenceLine, numeric: number): string {
     return label || shown;
 }
 
-export function addReferenceLines(table: LineTable, lines: ReferenceLine[]): LineTable {
+export function addReferenceLines(
+    table: LineTable,
+    lines: ReferenceLine[],
+    supplied?: Array<number | null | undefined>
+): LineTable {
     const count = table.columns[0]?.length ?? 0;
     if (count === 0 || lines.length === 0) {
         return table;
     }
     const fields = [...table.fields];
     const columns = table.columns.map((column) => [...column]);
-    lines.forEach((line) => {
-        const numeric = referenceNumber(table, line);
+    lines.forEach((line, index) => {
+        const given = supplied?.[index];
+        const numeric = given === undefined ? referenceNumber(table, line) : given;
         if (numeric === null) {
             return;
         }

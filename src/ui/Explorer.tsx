@@ -2,13 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled, { css } from 'styled-components';
 import { variables } from '@splunk/themes';
 import { buildMetricTree, filterMetricTree, MetricNode } from '../catalog/metricTree';
-import { METRIC_FUNCTIONS, resolveMetricFunction } from '../spl/functions';
+import {
+    isPercentText,
+    METRIC_FUNCTIONS,
+    parsePercentile,
+    PERCENTILE_PRESETS,
+    rateExplanation,
+    resolveMetricFunction,
+} from '../spl/functions';
+import { parseTimeShift, SHIFT_UNITS, ShiftUnit, timeShiftToken } from '../spl/timeShift';
 import { buildDimensionSearch, buildDimensionValueSearch, SPLIT_LIMITS } from '../spl/buildMstats';
 import { spanForRange } from '../spl/span';
 import { collectFieldValues, collectMetricNames, runSearch } from '../search/runSearch';
-import { ReferenceLine } from '../chart/reference';
+import { ReferenceLine, referenceSummary, referenceWindow } from '../chart/reference';
 import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, SPAN_UNITS, validateAxis } from '../chart/settings';
-import { AUTO_REFRESH_MS, ChartModel, cloneChart, createChart, createSeries, refreshStatus, Series } from '../model/workspace';
+import { AUTO_REFRESH_MS, ChartModel, cloneChart, createChart, createSeries, refreshStatus, Series, seriesLegend } from '../model/workspace';
 import { ChartView } from './ChartView';
 
 const SHIFTS = [
@@ -19,6 +27,7 @@ const SHIFTS = [
     { id: '24h', label: '24 hours before' },
     { id: '2d', label: '2 days before' },
     { id: '7d', label: '7 days before' },
+    { id: 'custom', label: 'Custom' },
 ];
 
 const RANGES = [
@@ -30,10 +39,10 @@ const RANGES = [
     { id: '-2d', label: 'Last 2 days' },
 ];
 
-const Shell = styled.div`
+const Shell = styled.div<{ $left: boolean; $right: boolean }>`
     display: grid;
-    grid-template-columns: 300px minmax(0, 1fr) 300px;
-    height: 100vh;
+    grid-template-columns: ${(props) => (props.$left ? '300px' : '40px')} minmax(0, 1fr) ${(props) => (props.$right ? '300px' : '40px')};
+    height: 100%;
     background: ${variables.backgroundColorPage};
     color: ${variables.contentColorDefault};
 `;
@@ -53,9 +62,36 @@ const Analysis = styled(Pane)`
 `;
 
 const PaneHeader = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 14px 16px 8px;
     font-size: 16px;
     font-weight: 600;
+`;
+
+const Rail = styled.div<{ $edge: 'left' | 'right' }>`
+    display: flex;
+    justify-content: center;
+    padding-top: 12px;
+    background: ${variables.backgroundColorSidebar};
+    ${(props) =>
+        props.$edge === 'left'
+            ? css`
+                  border-right: 1px solid ${variables.neutral200};
+              `
+            : css`
+                  border-left: 1px solid ${variables.neutral200};
+              `}
+`;
+
+const IconButton = styled.button`
+    border: 0;
+    background: transparent;
+    color: ${variables.contentColorDefault};
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
 `;
 
 const SearchBox = styled.input`
@@ -72,25 +108,75 @@ const Tree = styled.div`
     padding: 0 8px 12px;
 `;
 
-const RowButton = styled.button<{ $depth: number; $selected: boolean }>`
+const AddButton = styled.button`
+    position: absolute;
+    right: 4px;
+    top: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: ${variables.backgroundColorSection};
+    color: ${variables.contentColorDefault};
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+`;
+
+const Row = styled.div<{ $depth: number; $selected: boolean }>`
+    position: relative;
+    display: flex;
+    align-items: center;
+    border-radius: 4px;
+    ${(props) =>
+        props.$selected &&
+        css`
+            background: ${variables.interactiveColorOverlaySelected};
+        `}
+    &:hover {
+        background: ${variables.interactiveColorOverlayHover};
+    }
+    &:hover ${AddButton},
+    &:focus-within ${AddButton} {
+        opacity: 1;
+        pointer-events: auto;
+    }
+`;
+
+const RowButton = styled.button<{ $depth: number }>`
     display: flex;
     width: 100%;
     text-align: left;
     gap: 6px;
     border: 0;
     border-radius: 4px;
-    padding: 6px 8px 6px ${(props) => 8 + props.$depth * 14}px;
+    padding: 6px 28px 6px ${(props) => 8 + props.$depth * 14}px;
     background: transparent;
+    color: ${variables.contentColorDefault};
+    cursor: pointer;
+`;
+
+const SeriesHeader = styled.button<{ $open: boolean }>`
+    display: flex;
+    gap: 8px;
+    width: calc(100% - 32px);
+    margin: 0 16px 8px;
+    padding: 8px;
+    text-align: left;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: ${variables.contentColorDefault};
+    cursor: pointer;
     ${(props) =>
-        props.$selected &&
+        props.$open &&
         css`
             background: ${variables.interactiveColorOverlaySelected};
         `}
-    color: ${variables.contentColorDefault};
-    cursor: pointer;
-    &:hover {
-        background: ${variables.interactiveColorOverlayHover};
-    }
 `;
 
 const Stage = styled.main`
@@ -219,7 +305,7 @@ function TreeRows(props: {
     nodes: MetricNode[];
     depth: number;
     open: Set<string>;
-    selected?: string;
+    selected: Set<string>;
     onToggle: (id: string) => void;
     onSelect: (metricName: string) => void;
     onAdd: (metricName: string) => void;
@@ -228,29 +314,35 @@ function TreeRows(props: {
         <>
             {props.nodes.map((node) => (
                 <React.Fragment key={node.id}>
-                    <RowButton
-                        type="button"
+                    <Row
                         data-isfolder={node.folder}
                         data-metric={node.metricName ?? ''}
                         $depth={props.depth}
-                        $selected={node.metricName === props.selected}
-                        onClick={() => (node.folder ? props.onToggle(node.id) : props.onSelect(node.metricName ?? ''))}
+                        $selected={!node.folder && props.selected.has(node.metricName ?? '')}
                     >
-                        <span>{node.folder ? (props.open.has(node.id) ? '▾' : '▸') : ''}</span>
-                        <span>{node.label}</span>
+                        <RowButton
+                            type="button"
+                            $depth={props.depth}
+                            onClick={() => (node.folder ? props.onToggle(node.id) : props.onSelect(node.metricName ?? ''))}
+                        >
+                            <span>{node.folder ? (props.open.has(node.id) ? '▾' : '▸') : ''}</span>
+                            <span>{node.label}</span>
+                        </RowButton>
                         {node.folder ? null : (
-                            <span
-                                role="button"
-                                aria-label={`Add ${node.label} to selected chart`}
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    props.onAdd(node.metricName ?? '');
-                                }}
+                            <AddButton
+                                type="button"
+                                aria-label="Add to selected chart"
+                                title="Add to selected chart"
+                                onClick={() => props.onAdd(node.metricName ?? '')}
                             >
-                                +
-                            </span>
+                                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                                    <path d="M1 13V3M1 13h9" stroke="currentColor" fill="none" />
+                                    <path d="M3 10l2.2-3 2 1.8L10 5" stroke="currentColor" fill="none" />
+                                    <path d="M12 2v5M9.5 4.5h5" stroke="currentColor" />
+                                </svg>
+                            </AddButton>
                         )}
-                    </RowButton>
+                    </Row>
                     {node.folder && props.open.has(node.id) ? (
                         <TreeRows
                             nodes={node.children}
@@ -278,6 +370,9 @@ export function Explorer(): React.ReactElement {
     const [charts, setCharts] = useState<ChartModel[]>([]);
     const [selectedId, setSelectedId] = useState('');
     const [selectedSeriesId, setSelectedSeriesId] = useState('');
+    const [expandedSeriesId, setExpandedSeriesId] = useState('');
+    const [leftOpen, setLeftOpen] = useState(true);
+    const [rightOpen, setRightOpen] = useState(true);
     const [layout, setLayout] = useState<'stack' | 'grid'>('stack');
     const [autoRefresh, setAutoRefresh] = useState(false);
     const [refreshToken, setRefreshToken] = useState(0);
@@ -288,6 +383,12 @@ export function Explorer(): React.ReactElement {
     const [filterMode, setFilterMode] = useState<'include' | 'exclude'>('include');
     const [filterChoices, setFilterChoices] = useState<string[]>([]);
     const [filterPicked, setFilterPicked] = useState<string[]>([]);
+    const [customOpen, setCustomOpen] = useState(false);
+    const [customText, setCustomText] = useState('');
+    const [percentileMethod, setPercentileMethod] = useState<'perc' | 'upperperc'>('perc');
+    const [shiftCustom, setShiftCustom] = useState(false);
+    const [shiftAmount, setShiftAmount] = useState('');
+    const [shiftUnit, setShiftUnit] = useState<ShiftUnit>('h');
     const [spanCount, setSpanCount] = useState('');
     const [spanUnit, setSpanUnit] = useState('m');
     const [referenceOpen, setReferenceOpen] = useState(false);
@@ -295,6 +396,12 @@ export function Explorer(): React.ReactElement {
     const [referenceValue, setReferenceValue] = useState('Avg');
     const [referenceLabel, setReferenceLabel] = useState('Avg');
     const [referenceInclude, setReferenceInclude] = useState(true);
+    const [referenceRange, setReferenceRange] = useState('');
+    const [referenceEarliestAmount, setReferenceEarliestAmount] = useState('7');
+    const [referenceEarliestUnit, setReferenceEarliestUnit] = useState<ShiftUnit>('d');
+    const [referenceLatestMode, setReferenceLatestMode] = useState<'now' | 'ago'>('now');
+    const [referenceLatestAmount, setReferenceLatestAmount] = useState('1');
+    const [referenceLatestUnit, setReferenceLatestUnit] = useState<ShiftUnit>('d');
     const [range, setRange] = useState('-60m');
     const [catalogRange, setCatalogRange] = useState('-2d');
 
@@ -323,11 +430,7 @@ export function Explorer(): React.ReactElement {
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
     const chosen = resolveMetricFunction(series?.aggregation ?? '');
     const span = spanForRange(range);
-    const seriesLabel = !series
-        ? ''
-        : series.splitBy
-          ? `${chosen?.label ?? series.aggregation} by ${series.splitBy}`
-          : chosen?.label ?? series.aggregation;
+    const selectedMetrics = new Set(selected?.series.map((item) => item.metric) ?? []);
 
     useEffect(() => {
         if (!autoRefresh) {
@@ -385,6 +488,7 @@ export function Explorer(): React.ReactElement {
         setCharts((current) => [...current, chart]);
         setSelectedId(chart.id);
         setSelectedSeriesId(chart.series[0].id);
+        setExpandedSeriesId(chart.series[0].id);
         refreshNow();
     }
 
@@ -400,6 +504,12 @@ export function Explorer(): React.ReactElement {
             )
         );
         setSelectedSeriesId(created.id);
+        setExpandedSeriesId(created.id);
+    }
+
+    function toggleSeries(id: string): void {
+        setSelectedSeriesId(id);
+        setExpandedSeriesId((current) => (current === id ? '' : id));
     }
 
     function patchSettings(patch: Partial<ChartSettings>): void {
@@ -411,6 +521,90 @@ export function Explorer(): React.ReactElement {
                 chart.id === selected.id ? { ...chart, settings: { ...chart.settings, ...patch } } : chart
             )
         );
+    }
+
+    const parsedPercentile = series ? parsePercentile(series.aggregation) : null;
+    const isPreset = parsedPercentile !== null && (PERCENTILE_PRESETS as readonly string[]).includes(parsedPercentile.value);
+    const percentilePreset = customOpen || (parsedPercentile && !isPreset) ? 'custom' : parsedPercentile ? parsedPercentile.value : '';
+    const percentileKind = parsedPercentile?.kind ?? percentileMethod;
+    const customValue = customOpen ? customText : (parsedPercentile?.value ?? customText);
+    const customError =
+        percentilePreset === 'custom' && customValue !== '' && !isPercentText(customValue)
+            ? 'Enter a percentile from 0 to below 100 with up to three decimals.'
+            : '';
+
+    function choosePercentilePreset(value: string): void {
+        if (!series) {
+            return;
+        }
+        if (value === 'custom') {
+            setCustomOpen(true);
+            setCustomText(parsedPercentile?.value ?? customText);
+            return;
+        }
+        setCustomOpen(false);
+        patchSeries({ aggregation: `${percentileKind}${value}` });
+    }
+
+    function changePercentileMethod(kind: 'perc' | 'upperperc'): void {
+        setPercentileMethod(kind);
+        if (series && parsedPercentile) {
+            patchSeries({ aggregation: `${kind}${parsedPercentile.value}` });
+        }
+    }
+
+    function changeCustomPercentile(text: string): void {
+        setCustomText(text);
+        if (series && isPercentText(text)) {
+            patchSeries({ aggregation: `${percentileKind}${text.trim()}` });
+        }
+    }
+
+    const parsedShift = series ? parseTimeShift(series.timeShift) : null;
+    const shiftIsPreset = !series || SHIFTS.some((item) => item.id === series.timeShift);
+    const shiftSelect = shiftCustom || (series && series.timeShift && !shiftIsPreset) ? 'custom' : (series?.timeShift ?? '');
+    const shiftFieldAmount = shiftCustom ? shiftAmount : parsedShift ? String(parsedShift.amount) : shiftAmount;
+    const shiftFieldUnit: ShiftUnit = shiftCustom ? shiftUnit : (parsedShift?.unit ?? shiftUnit);
+    const shiftError =
+        shiftSelect === 'custom' && shiftFieldAmount.trim() !== '' && !timeShiftToken(shiftFieldAmount, shiftFieldUnit)
+            ? /^\d+$/.test(shiftFieldAmount.trim())
+                ? 'Enter a smaller time shift.'
+                : 'Time shift must be a numeric value.'
+            : '';
+
+    function chooseShift(value: string): void {
+        if (!series) {
+            return;
+        }
+        if (value === 'custom') {
+            const parsed = parseTimeShift(series.timeShift);
+            setShiftCustom(true);
+            setShiftAmount(parsed ? String(parsed.amount) : shiftAmount);
+            setShiftUnit(parsed?.unit ?? shiftUnit);
+            return;
+        }
+        setShiftCustom(false);
+        patchSeries({ timeShift: value });
+    }
+
+    function changeShiftAmount(text: string): void {
+        setShiftCustom(true);
+        setShiftAmount(text);
+        const token = timeShiftToken(text, shiftUnit);
+        if (token) {
+            patchSeries({ timeShift: token });
+        }
+    }
+
+    function changeShiftUnit(unit: ShiftUnit): void {
+        const amount = shiftCustom ? shiftAmount : parsedShift ? String(parsedShift.amount) : shiftAmount;
+        setShiftCustom(true);
+        setShiftUnit(unit);
+        setShiftAmount(amount);
+        const token = timeShiftToken(amount, unit);
+        if (token) {
+            patchSeries({ timeShift: token });
+        }
     }
 
     function patchSeries(patch: Partial<Series>): void {
@@ -429,10 +623,31 @@ export function Explorer(): React.ReactElement {
         );
     }
 
+    const referenceEarliestToken = timeShiftToken(referenceEarliestAmount, referenceEarliestUnit);
+    const referenceLatestToken = referenceLatestMode === 'now' ? 'now' : timeShiftToken(referenceLatestAmount, referenceLatestUnit);
+    const referenceBounds =
+        referenceKind !== 'aggregation' || referenceRange === ''
+            ? null
+            : referenceRange === 'custom'
+              ? referenceEarliestToken && referenceLatestToken
+                  ? referenceWindow(`-${referenceEarliestToken}`, referenceLatestToken === 'now' ? 'now' : `-${referenceLatestToken}`)
+                  : null
+              : referenceWindow(referenceRange, 'now');
+    const referenceError =
+        referenceKind === 'aggregation' && referenceRange !== '' && !referenceBounds
+            ? 'Enter a time range that starts before it ends.'
+            : '';
+
     return (
-        <Shell>
+        <Shell $left={leftOpen} $right={rightOpen}>
+            {leftOpen ? (
             <Pane>
-                <PaneHeader>Data</PaneHeader>
+                <PaneHeader>
+                    Data
+                    <IconButton type="button" aria-label="Hide data" onClick={() => setLeftOpen(false)}>
+                        «
+                    </IconButton>
+                </PaneHeader>
                 <SearchBox
                     value={query}
                     placeholder="Search data to analyze"
@@ -448,7 +663,7 @@ export function Explorer(): React.ReactElement {
                         nodes={tree}
                         depth={0}
                         open={open}
-                        selected={series?.metric}
+                        selected={selectedMetrics}
                         onToggle={(id) => {
                             const next = new Set(open);
                             if (next.has(id)) {
@@ -478,6 +693,13 @@ export function Explorer(): React.ReactElement {
                     <div>Changing this time setting will affect performance.</div>
                 </Footer>
             </Pane>
+            ) : (
+                <Rail $edge="left">
+                    <IconButton type="button" aria-label="Show data" onClick={() => setLeftOpen(true)}>
+                        »
+                    </IconButton>
+                </Rail>
+            )}
             <Stage>
                 <Toolbar>
                     <select aria-label="Time range" value={range} onChange={(event) => setRange(event.target.value)}>
@@ -554,24 +776,33 @@ export function Explorer(): React.ReactElement {
                     </ChartList>
                 )}
             </Stage>
+            {rightOpen ? (
             <Analysis>
-                <PaneHeader>Analysis</PaneHeader>
-                {!series ? null : (
-                    <>
-                        <Note>
-                            {(selected?.series ?? []).map((item) => (
-                                <button
-                                    key={item.id}
-                                    type="button"
-                                    aria-pressed={item.id === series.id}
-                                    onClick={() => setSelectedSeriesId(item.id)}
-                                >
-                                    {item.metric}
-                                </button>
-                            ))}
+                <PaneHeader>
+                    Analysis
+                    <IconButton type="button" aria-label="Hide analysis" onClick={() => setRightOpen(false)}>
+                        »
+                    </IconButton>
+                </PaneHeader>
+                {(selected?.series ?? []).map((item) => (
+                    <SeriesHeader
+                        key={item.id}
+                        type="button"
+                        $open={item.id === expandedSeriesId}
+                        aria-expanded={item.id === expandedSeriesId}
+                        aria-label={`Settings for ${item.metric}`}
+                        onClick={() => toggleSeries(item.id)}
+                    >
+                        <span>{item.id === expandedSeriesId ? '▾' : '▸'}</span>
+                        <span>
+                            {item.metric}
                             <br />
-                            {seriesLabel}
-                        </Note>
+                            {seriesLegend(item, selected?.series ?? [])}
+                        </span>
+                    </SeriesHeader>
+                ))}
+                {!series || series.id !== expandedSeriesId ? null : (
+                    <>
                         <Field>
                             Aggregation
                             <TextInput
@@ -598,6 +829,47 @@ export function Explorer(): React.ReactElement {
                                 ))}
                             </datalist>
                             <span>Select or type an aggregation.</span>
+                            {chosen?.rate ? <Note>{rateExplanation(chosen.name)}</Note> : null}
+                        </Field>
+                        <Field>
+                            Percentile
+                            <Select
+                                aria-label="Percentile"
+                                value={percentilePreset}
+                                onChange={(event) => choosePercentilePreset(event.target.value)}
+                            >
+                                <option value="" disabled>
+                                    Not selected
+                                </option>
+                                {PERCENTILE_PRESETS.map((value) => (
+                                    <option key={value} value={value}>
+                                        {`p${value}`}
+                                    </option>
+                                ))}
+                                <option value="custom">Custom</option>
+                            </Select>
+                            {percentilePreset !== '' ? (
+                                <Select
+                                    aria-label="Percentile method"
+                                    value={percentileKind}
+                                    onChange={(event) =>
+                                        changePercentileMethod(event.target.value === 'upperperc' ? 'upperperc' : 'perc')
+                                    }
+                                >
+                                    <option value="perc">Approximate (perc)</option>
+                                    <option value="upperperc">Upper bound (upperperc)</option>
+                                </Select>
+                            ) : null}
+                            {percentilePreset === 'custom' ? (
+                                <TextInput
+                                    aria-label="Custom percentile"
+                                    inputMode="decimal"
+                                    placeholder="0 to 99.999"
+                                    value={customValue}
+                                    onChange={(event) => changeCustomPercentile(event.target.value)}
+                                />
+                            ) : null}
+                            {customError ? <span role="alert">{customError}</span> : null}
                         </Field>
                         <Field>
                             Split by
@@ -644,17 +916,36 @@ export function Explorer(): React.ReactElement {
                         </Field>
                         <Field>
                             Time shift
-                            <Select
-                                aria-label="Time shift"
-                                value={series.timeShift}
-                                onChange={(event) => patchSeries({ timeShift: event.target.value })}
-                            >
+                            <Select aria-label="Time shift" value={shiftSelect} onChange={(event) => chooseShift(event.target.value)}>
                                 {SHIFTS.map((item) => (
-                                    <option key={item.id} value={item.id}>
+                                    <option key={item.id || 'none'} value={item.id}>
                                         {item.label}
                                     </option>
                                 ))}
                             </Select>
+                            {shiftSelect === 'custom' ? (
+                                <SplitRow>
+                                    <TextInput
+                                        aria-label="Custom time shift"
+                                        inputMode="numeric"
+                                        placeholder="Number"
+                                        value={shiftFieldAmount}
+                                        onChange={(event) => changeShiftAmount(event.target.value)}
+                                    />
+                                    <Select
+                                        aria-label="Time shift unit"
+                                        value={shiftFieldUnit}
+                                        onChange={(event) => changeShiftUnit(event.target.value as ShiftUnit)}
+                                    >
+                                        {SHIFT_UNITS.map((unit) => (
+                                            <option key={unit.id} value={unit.id}>
+                                                {unit.label}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </SplitRow>
+                            ) : null}
+                            {shiftError ? <span role="alert">{shiftError}</span> : null}
                             <span>Display an earlier time range.</span>
                         </Field>
                         <Field>
@@ -754,8 +1045,8 @@ export function Explorer(): React.ReactElement {
                             Reference lines
                             <span>Add a horizontal line for a threshold or a value from this chart.</span>
                             {series.referenceLines.map((line, index) => (
-                                <SplitRow key={`${line.kind}-${line.label}-${index}`}>
-                                    <span>{line.label || line.value}</span>
+                                <SplitRow key={`${line.kind}-${line.label}-${line.earliest ?? ''}-${index}`}>
+                                    <span>{referenceSummary(line)}</span>
                                     <button
                                         type="button"
                                         aria-label={`Remove reference line ${line.label || line.value}`}
@@ -805,16 +1096,91 @@ export function Explorer(): React.ReactElement {
                                         />{' '}
                                         Include value
                                     </span>
+                                    {referenceKind === 'aggregation' ? (
+                                        <>
+                                            <Select
+                                                aria-label="Reference line time range"
+                                                value={referenceRange}
+                                                onChange={(event) => setReferenceRange(event.target.value)}
+                                            >
+                                                <option value="">Chart</option>
+                                                {RANGES.map((item) => (
+                                                    <option key={item.id} value={item.id}>
+                                                        {item.label}
+                                                    </option>
+                                                ))}
+                                                <option value="custom">Custom</option>
+                                            </Select>
+                                            {referenceRange === 'custom' ? (
+                                                <>
+                                                    <SplitRow>
+                                                        <TextInput
+                                                            aria-label="Reference earliest"
+                                                            inputMode="numeric"
+                                                            value={referenceEarliestAmount}
+                                                            onChange={(event) => setReferenceEarliestAmount(event.target.value)}
+                                                        />
+                                                        <Select
+                                                            aria-label="Reference earliest unit"
+                                                            value={referenceEarliestUnit}
+                                                            onChange={(event) => setReferenceEarliestUnit(event.target.value as ShiftUnit)}
+                                                        >
+                                                            {SHIFT_UNITS.map((unit) => (
+                                                                <option key={unit.id} value={unit.id}>
+                                                                    {unit.label}
+                                                                </option>
+                                                            ))}
+                                                        </Select>
+                                                    </SplitRow>
+                                                    <SplitRow>
+                                                        <Select
+                                                            aria-label="Reference latest"
+                                                            value={referenceLatestMode}
+                                                            onChange={(event) => setReferenceLatestMode(event.target.value === 'ago' ? 'ago' : 'now')}
+                                                        >
+                                                            <option value="now">Now</option>
+                                                            <option value="ago">Ago</option>
+                                                        </Select>
+                                                        {referenceLatestMode === 'ago' ? (
+                                                            <>
+                                                                <TextInput
+                                                                    aria-label="Reference latest amount"
+                                                                    inputMode="numeric"
+                                                                    value={referenceLatestAmount}
+                                                                    onChange={(event) => setReferenceLatestAmount(event.target.value)}
+                                                                />
+                                                                <Select
+                                                                    aria-label="Reference latest unit"
+                                                                    value={referenceLatestUnit}
+                                                                    onChange={(event) => setReferenceLatestUnit(event.target.value as ShiftUnit)}
+                                                                >
+                                                                    {SHIFT_UNITS.map((unit) => (
+                                                                        <option key={unit.id} value={unit.id}>
+                                                                            {unit.label}
+                                                                        </option>
+                                                                    ))}
+                                                                </Select>
+                                                            </>
+                                                        ) : null}
+                                                    </SplitRow>
+                                                </>
+                                            ) : null}
+                                            {referenceError ? <span role="alert">{referenceError}</span> : null}
+                                        </>
+                                    ) : null}
                                     <SplitRow>
                                         <button
                                             type="button"
-                                            disabled={!referenceValueReady(referenceKind, referenceValue)}
+                                            disabled={!referenceValueReady(referenceKind, referenceValue) || (referenceRange !== '' && !referenceBounds)}
                                             onClick={() => {
                                                 const line: ReferenceLine = {
                                                     kind: referenceKind,
                                                     value: referenceValue.trim(),
                                                     label: referenceLabel.trim(),
                                                     includeValue: referenceInclude,
+                                                    ...(referenceBounds
+                                                        ? { earliest: referenceBounds.earliest, latest: referenceBounds.latest }
+                                                        : {}),
                                                 };
                                                 patchSeries({ referenceLines: [...series.referenceLines, line] });
                                                 setReferenceOpen(false);
@@ -835,6 +1201,7 @@ export function Explorer(): React.ReactElement {
                                         setReferenceValue('Avg');
                                         setReferenceLabel('Avg');
                                         setReferenceInclude(true);
+                                        setReferenceRange('');
                                         setReferenceOpen(true);
                                     }}
                                 >
@@ -853,9 +1220,6 @@ export function Explorer(): React.ReactElement {
                                 Overlay on right axis
                             </span>
                         </Field>
-                        {chosen?.rate ? (
-                            <Note>This aggregation should only be used with accumulating counter metrics.</Note>
-                        ) : null}
                     </>
                 )}
                 {selected ? (
@@ -939,7 +1303,7 @@ export function Explorer(): React.ReactElement {
                                     </button>
                                 </SplitRow>
                             </Field>
-                            {selected.settings.content === 'table' ? null : (
+                            {selected.settings.content === 'table' || selected.settings.type === 'heatmap' ? null : (
                             <Field as="div">
                                 Y-axis
                                 <span>Set the minimum and maximum, for example 1000, 1k or 3m.</span>
@@ -980,6 +1344,13 @@ export function Explorer(): React.ReactElement {
                     </Field>
                 ) : null}
             </Analysis>
+            ) : (
+                <Rail $edge="right">
+                    <IconButton type="button" aria-label="Show analysis" onClick={() => setRightOpen(true)}>
+                        «
+                    </IconButton>
+                </Rail>
+            )}
         </Shell>
     );
 }

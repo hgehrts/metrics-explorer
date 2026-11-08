@@ -1,7 +1,7 @@
-export type ChartType = 'line' | 'area' | 'column' | 'stacked';
+export type ChartType = 'line' | 'area' | 'column' | 'stacked' | 'heatmap';
 
 /** Which visualization draws a chart type. Stacked columns use the column visualization in stacked mode. */
-export function visualFor(type: ChartType): { kind: 'line' | 'area' | 'column'; stacked: boolean } {
+export function visualFor(type: ChartType): { kind: 'line' | 'area' | 'column' | 'heatmap'; stacked: boolean } {
     if (type === 'area') {
         return { kind: 'area', stacked: false };
     }
@@ -10,6 +10,9 @@ export function visualFor(type: ChartType): { kind: 'line' | 'area' | 'column'; 
     }
     if (type === 'stacked') {
         return { kind: 'column', stacked: true };
+    }
+    if (type === 'heatmap') {
+        return { kind: 'heatmap', stacked: false };
     }
     return { kind: 'line', stacked: false };
 }
@@ -32,6 +35,7 @@ export const CHART_TYPES: { id: ChartType; label: string }[] = [
     { id: 'area', label: 'Area chart' },
     { id: 'column', label: 'Column chart' },
     { id: 'stacked', label: 'Stacked column chart' },
+    { id: 'heatmap', label: 'Heatmap' },
 ];
 
 export const CHART_CONTENT: { id: ChartContent; label: string }[] = [

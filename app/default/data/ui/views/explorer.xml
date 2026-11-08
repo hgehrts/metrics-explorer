@@ -1,4 +1,12 @@
 <?xml version="1.0"?>
-<view template="metrics_explorer:/templates/explorer.html" type="html" onunloadCancelJobs="true">
+<dashboard version="1.1" hideTitle="true" hideEdit="true" hideExport="true" hideFilters="true" script="build/explorer.js" stylesheet="build/explorer.css">
   <label>Metrics Explorer</label>
-</view>
+  <description>Browse metric indexes without writing SPL.</description>
+  <row>
+    <panel>
+      <html>
+        <div id="root"></div>
+      </html>
+    </panel>
+  </row>
+</dashboard>

@@ -1,5 +1,6 @@
 import { ReferenceLine } from '../chart/reference';
 import { ChartSettings, defaultSettings } from '../chart/settings';
+import { resolveMetricFunction } from '../spl/functions';
 
 export type SeriesFilter = {
     dimension: string;
@@ -33,6 +34,22 @@ let sequence = 0;
 function nextId(prefix: string): string {
     sequence += 1;
     return `${prefix}-${sequence}`;
+}
+
+/** Legend and analysis subtitle. A time shift is shown as `(-30m)`. Different metrics in one chart keep the metric name. */
+export function seriesLegend(
+    series: Pick<Series, 'metric' | 'aggregation' | 'splitBy' | 'timeShift'>,
+    siblings: Array<Pick<Series, 'metric'>> = [series]
+): string {
+    const chosen = resolveMetricFunction(series.aggregation);
+    const aggregation = chosen?.label ?? series.aggregation;
+    const severalMetrics = new Set(siblings.map((item) => item.metric)).size > 1;
+    const base = series.splitBy
+        ? `${aggregation} by ${series.splitBy}`
+        : severalMetrics
+          ? `${series.metric} ${aggregation}`
+          : aggregation;
+    return series.timeShift ? `${base} (-${series.timeShift})` : base;
 }
 
 export function createSeries(metric: string): Series {

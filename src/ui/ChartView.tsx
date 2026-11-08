@@ -5,13 +5,15 @@ import Line from '@splunk/visualizations/Line';
 import styled, { css } from 'styled-components';
 import { variables } from '@splunk/themes';
 import { toLineTable } from '../chart/columns';
-import { addReferenceLines } from '../chart/reference';
+import { addReferenceLines, referenceWindow } from '../chart/reference';
 import { axisOptions, visualFor } from '../chart/settings';
+import { heatmapTable } from '../chart/heatmap';
 import { formatStatColumns, formatTimeCell } from '../chart/stats';
+import { HeatmapChart } from './HeatmapChart';
 import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
-import { ChartModel } from '../model/workspace';
+import { ChartModel, seriesLegend } from '../model/workspace';
 import { runSearch, SearchRow } from '../search/runSearch';
-import { buildMstats } from '../spl/buildMstats';
+import { buildMstats, buildReferenceValueSearch } from '../spl/buildMstats';
 import { resolveMetricFunction } from '../spl/functions';
 import { searchWindow } from '../spl/span';
 
@@ -110,6 +112,7 @@ export function ChartView(props: {
     onClone: () => void;
 }): React.ReactElement {
     const [results, setResults] = useState<SeriesResult[]>([]);
+    const [referenceNumbers, setReferenceNumbers] = useState<Array<number | null | undefined>>([]);
     const [loading, setLoading] = useState(false);
     const [menu, setMenu] = useState(false);
     const signature = JSON.stringify(props.chart.series);
@@ -180,10 +183,61 @@ export function ChartView(props: {
         return () => stops.forEach((stop) => stop());
     }, [signature, props.range, span, props.refreshToken]);
 
+    const referenceJobs = props.chart.series.flatMap((item) =>
+        item.referenceLines.map((line) => ({ line, metric: item.metric, filters: item.filters }))
+    );
+    const referenceKey = JSON.stringify(
+        referenceJobs.map((job) => ({
+            kind: job.line.kind,
+            value: job.line.value,
+            earliest: job.line.earliest ?? '',
+            latest: job.line.latest ?? '',
+            metric: job.metric,
+            filters: job.filters,
+        }))
+    );
+    useEffect(() => {
+        const stops: Array<() => void> = [];
+        const next: Array<number | null | undefined> = referenceJobs.map((job) =>
+            job.line.kind === 'aggregation' && job.line.earliest ? null : undefined
+        );
+        referenceJobs.forEach((job, index) => {
+            const bounds = job.line.earliest ? referenceWindow(job.line.earliest, job.line.latest || 'now') : null;
+            if (job.line.kind !== 'aggregation' || !bounds) {
+                return;
+            }
+            let search = '';
+            try {
+                search = buildReferenceValueSearch({ aggregation: job.line.value, metric: job.metric, filters: job.filters });
+            } catch {
+                return;
+            }
+            stops.push(
+                runSearch(
+                    search,
+                    bounds.earliest,
+                    (payload) => {
+                        const row = payload.results?.[0];
+                        const raw = row ? Object.entries(row).find(([key]) => !key.startsWith('_'))?.[1] : undefined;
+                        const numeric = typeof raw === 'number' ? raw : Number(raw);
+                        next[index] = Number.isFinite(numeric) ? numeric : null;
+                        setReferenceNumbers([...next]);
+                    },
+                    () => {
+                        next[index] = null;
+                        setReferenceNumbers([...next]);
+                    },
+                    bounds.latest
+                )
+            );
+        });
+        setReferenceNumbers([...next]);
+        return () => stops.forEach((stop) => stop());
+    }, [referenceKey]);
+
     const locale = typeof window === 'undefined' ? undefined : window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1];
     const tables = props.chart.series.map((item, index) => {
-        const chosen = resolveMetricFunction(item.aggregation);
-        const label = item.splitBy ? `${chosen?.label ?? item.aggregation} by ${item.splitBy}` : chosen?.label ?? item.aggregation;
+        const label = seriesLegend(item, props.chart.series);
         return formatStatColumns(
             toLineTable(results[index]?.rows ?? [], label, item.splitBy || undefined),
             item.aggregation,
@@ -204,21 +258,23 @@ export function ChartView(props: {
     const merged = mergeTables(plotIndexes.map((index) => tables[index]).filter(hasRows));
     const data = addReferenceLines(
         merged,
-        props.chart.series.flatMap((item) => item.referenceLines)
+        referenceJobs.map((job) => job.line),
+        referenceJobs.map((job, index) => (job.line.kind === 'aggregation' && job.line.earliest ? (referenceNumbers[index] ?? null) : undefined))
     );
-    const y2Fields = data.fields
-        .slice(1)
-        .map((field) => field.name)
-        .filter((name) =>
-            props.chart.series.some(
-                (item, index) => item.overlay && (props.chart.series.length === 1 || name.startsWith(`${index + 1} `))
-            )
-        );
+    const plotted = plotIndexes.map((index) => tables[index]).filter(hasRows);
+    let fieldCursor = 1;
+    const y2Fields = plotted.flatMap((table, position) => {
+        const seriesIndex = plotIndexes.filter((index) => hasRows(tables[index]))[position];
+        const overlay = props.chart.series[seriesIndex]?.overlay;
+        const names = table.fields.slice(1).map((_, offset) => data.fields[fieldCursor + offset]?.name ?? '');
+        fieldCursor += table.fields.length - 1;
+        return overlay ? names.filter((name) => name !== '') : [];
+    });
     const stats = mergeTables(tableIndexes.map((index) => tables[index]).filter(hasRows));
     if (stats.columns[0]) {
         stats.columns[0] = stats.columns[0].map((value) => formatTimeCell(value, locale));
     }
-    const title = props.chart.series.map((item) => item.metric).join(', ');
+    const title = [...new Set(props.chart.series.map((item) => item.metric))].join(', ');
     const visual = visualFor(props.chart.settings.type);
     const Viz = (visual.kind === 'area' ? Area : visual.kind === 'column' ? Column : Line) as typeof Line;
     const first = results[0];
@@ -281,7 +337,18 @@ export function ChartView(props: {
                 result.error ? <Note key={`${index}-${result.error}`}>{result.error}</Note> : null
             )}
             {loading ? <Note>Refreshing</Note> : null}
-            {showChart && data.columns[0] && data.columns[0].length > 0 ? (
+            {showChart && visual.kind === 'heatmap' ? (
+                <HeatmapChart
+                    table={heatmapTable(
+                        props.chart.series,
+                        tables,
+                        plotIndexes.filter((index) => hasRows(tables[index])),
+                        merged
+                    )}
+                    locale={locale}
+                />
+            ) : null}
+            {showChart && visual.kind !== 'heatmap' && data.columns[0] && data.columns[0].length > 0 ? (
                 <Viz
                     key={props.chart.settings.type}
                     width="100%"

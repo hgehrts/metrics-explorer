@@ -1,4 +1,4 @@
-import { buildMstats } from '../src/spl/buildMstats';
+import { buildMstats, buildReferenceValueSearch } from '../src/spl/buildMstats';
 
 test('builds one mstats command for a metric', () => {
     expect(
@@ -48,6 +48,21 @@ test('moves a series onto the current axis after reading an earlier window', () 
     expect(
         buildMstats({ aggregation: 'Avg', metric: 'lab.cpu.user', span: '10s', timeShift: '60m' })
     ).toContain('| eval _time=relative_time(_time, "+60m")');
+});
+
+test('accepts a custom time shift and rebuilds the token', () => {
+    expect(buildMstats({ aggregation: 'avg', metric: 'lab.cpu.user', span: '10s', timeShift: '3w' })).toContain(
+        '| eval _time=relative_time(_time, "+3w")'
+    );
+});
+
+test('builds one reference value without putting the time window into the search', () => {
+    expect(buildReferenceValueSearch({ aggregation: 'Avg', metric: 'lab.cpu.user' })).toBe(
+        '| mstats avg("lab.cpu.user") AS value WHERE index=*'
+    );
+    expect(() => buildReferenceValueSearch({ aggregation: 'Avg', metric: 'cpu.user" | delete' })).toThrow(
+        'Metric name is not allowed.'
+    );
 });
 
 test('rejects a time shift that is not one of the presets', () => {

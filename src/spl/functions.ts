@@ -5,7 +5,25 @@ export type MetricFunction = {
     rate: boolean;
 };
 
-const PERCENTILE = /^(?:perc|p|upperperc)(?:100|\d{1,2}(?:\.\d{1,3})?)$/;
+/** Presets offered in the percentile list. Custom values use any percent from 0 up to, but not including, 100, with up to three decimals (Splunk rejects 100). */
+export const PERCENTILE_PRESETS = ['50', '75', '90', '95', '99', '99.9'] as const;
+
+export type Percentile = { kind: 'perc' | 'upperperc'; value: string };
+
+const PERCENT_TEXT = /^\d{1,2}(?:\.\d{1,3})?$/;
+
+export function isPercentText(text: string): boolean {
+    return PERCENT_TEXT.test(text.trim());
+}
+
+/** Reads perc95, p99.9 and upperperc95. The short form p95 counts as perc. */
+export function parsePercentile(value: string): Percentile | null {
+    const match = /^(upperperc|perc|p)(.+)$/.exec(value.trim().toLowerCase());
+    if (!match || !isPercentText(match[2])) {
+        return null;
+    }
+    return { kind: match[1] === 'upperperc' ? 'upperperc' : 'perc', value: match[2].trim() };
+}
 
 export const METRIC_FUNCTIONS: MetricFunction[] = [
     { name: 'avg', label: 'Avg', chart: 'line', rate: false },
@@ -40,14 +58,30 @@ export const METRIC_FUNCTIONS: MetricFunction[] = [
 const BY_NAME = new Map(METRIC_FUNCTIONS.map((entry) => [entry.name, entry]));
 const BY_LABEL = new Map(METRIC_FUNCTIONS.map((entry) => [entry.label.toLowerCase(), entry]));
 
+/** Short text shown next to a rate aggregation. Empty for every other function. */
+export function rateExplanation(name: string): string {
+    if (name === 'rate') {
+        return 'Rate is the per-second change of one counter series. Use it only with accumulating counter metrics.';
+    }
+    if (name === 'rate_avg') {
+        return 'Rate (Avg) takes the per-second change of each series, then averages those rates. Use it only with accumulating counter metrics.';
+    }
+    if (name === 'rate_sum') {
+        return 'Rate (Sum) takes the per-second change of each series, then adds those rates. Use it only with accumulating counter metrics.';
+    }
+    return '';
+}
+
 export function resolveMetricFunction(value: string): MetricFunction | null {
     const name = value.trim().toLowerCase();
     const known = BY_NAME.get(name);
     if (known) {
         return known;
     }
-    if (PERCENTILE.test(name)) {
-        return { name, label: name, chart: 'line', rate: false };
+    const percentile = parsePercentile(name);
+    if (percentile) {
+        const label = percentile.kind === 'upperperc' ? `upper p${percentile.value}` : `p${percentile.value}`;
+        return { name, label, chart: 'line', rate: false };
     }
     return BY_LABEL.get(name) ?? null;
 }

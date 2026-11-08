@@ -1,5 +1,5 @@
 import { mergeTables, toCsv } from '../src/export/table';
-import { refreshStatus } from '../src/model/workspace';
+import { refreshStatus, seriesLegend } from '../src/model/workspace';
 
 test('counts down from ten seconds while auto-refresh is on', () => {
     expect(refreshStatus(1_000, 0, true)).toBe('');
@@ -34,4 +34,20 @@ test('aligns several series on the same time column', () => {
             ['2', '3'],
         ],
     });
+});
+
+test('keeps distinct series names and shows a time shift in the legend', () => {
+    expect(
+        mergeTables([
+            { fields: [{ name: '_time' }, { name: 'Avg (-30m)' }], columns: [['t1'], ['1']] },
+            { fields: [{ name: '_time' }, { name: 'Avg' }], columns: [['t1'], ['2']] },
+        ]).fields.map((field) => field.name)
+    ).toEqual(['_time', 'Avg (-30m)', 'Avg']);
+    expect(seriesLegend({ metric: 'cpu.user', aggregation: 'Max', splitBy: '', timeShift: '30m' })).toBe('Max (-30m)');
+    expect(
+        seriesLegend({ metric: 'cpu.user', aggregation: 'Avg', splitBy: '', timeShift: '' }, [
+            { metric: 'cpu.user' },
+            { metric: 'cpu.idle' },
+        ])
+    ).toBe('cpu.user Avg');
 });

@@ -1,4 +1,5 @@
 import { resolveMetricFunction } from './functions';
+import { parseTimeShift } from './timeShift';
 
 const IDENTIFIER = /^[A-Za-z0-9_.:-]+$/;
 const SPAN = /^\d+(s|m|h|d)$/;
@@ -96,12 +97,25 @@ export function buildMstats(input: {
     return `${shifted} | chart useother=false first(value) over _time BY ${input.splitBy} WHERE ${rank}`;
 }
 
+/** One number for a reference line. The time window is a job parameter, not part of this string. */
+export function buildReferenceValueSearch(input: { aggregation: string; metric: string; filters?: MetricFilter[] }): string {
+    const aggregation = resolveMetricFunction(input.aggregation);
+    if (!aggregation || aggregation.chart !== 'line' || aggregation.rate || aggregation.name.startsWith('upperperc')) {
+        throw new Error('Unknown aggregation.');
+    }
+    assertIdentifier(input.metric, 'Metric name');
+    const extra = filterClause(input.filters);
+    const where = extra ? `index=* AND ${extra}` : 'index=*';
+    return `| mstats ${aggregation.name}(${quoteSpl(input.metric)}) AS value WHERE ${where}`;
+}
+
 function timeShiftClause(shift?: string): string {
     if (!shift) {
         return '';
     }
-    if (!/^(30m|60m|2h|24h|2d|7d)$/.test(shift)) {
+    const parsed = parseTimeShift(shift);
+    if (!parsed) {
         throw new Error('Time shift is not allowed.');
     }
-    return ` | eval _time=relative_time(_time, "+${shift}")`;
+    return ` | eval _time=relative_time(_time, "+${parsed.token}")`;
 }

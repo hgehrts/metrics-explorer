@@ -36,4 +36,5 @@ test('maps the chart types to a visualization and stack mode', () => {
     expect(visualFor('area')).toEqual({ kind: 'area', stacked: false });
     expect(visualFor('column')).toEqual({ kind: 'column', stacked: false });
     expect(visualFor('stacked')).toEqual({ kind: 'column', stacked: true });
+    expect(visualFor('heatmap')).toEqual({ kind: 'heatmap', stacked: false });
 });
