@@ -1,4 +1,4 @@
-import { buildCatalogSearch, filtersFromStanza, pickDefaults, validateFilter } from '../src/model/dataFilters';
+import { buildCatalogSearch, filtersFromStanza, indexFromSearch, pickDefaults, validateFilter } from '../src/model/dataFilters';
 
 test('no filters searches every index', () => {
     expect(buildCatalogSearch([])).toBe('| mcatalog values(metric_name) WHERE index=*');
@@ -51,4 +51,13 @@ test('a grouped catalog search returns one row per dimension value', () => {
         '| mcatalog values(metric_name) WHERE index=* BY extracted_host'
     );
     expect(() => buildCatalogSearch([], 'bad dim')).toThrow('Dimension name is not allowed.');
+});
+
+test('an index from the URL is used only when it is a valid index name', () => {
+    expect(indexFromSearch('?index=metrics_lab')).toBe('metrics_lab');
+    expect(indexFromSearch('?foo=1&index=other.idx')).toBe('other.idx');
+    expect(indexFromSearch('?index=a*')).toBeNull();
+    expect(indexFromSearch('?index=x"y')).toBeNull();
+    expect(indexFromSearch('?index=')).toBeNull();
+    expect(indexFromSearch('')).toBeNull();
 });

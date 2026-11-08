@@ -55,6 +55,60 @@ export const METRIC_FUNCTIONS: MetricFunction[] = [
     { name: 'rate_sum', label: 'Rate (Sum)', chart: 'line', rate: true },
 ];
 
+/** Event and dataset functions. tstats has no rate_avg or rate_sum, and it adds distinct counts and table functions. */
+const EVENT_EXTRA: MetricFunction[] = [
+    { name: 'dc', label: 'Distinct count', chart: 'line', rate: false },
+    { name: 'estdc', label: 'Estimated distinct count', chart: 'line', rate: false },
+    { name: 'mode', label: 'Mode', chart: 'table', rate: false },
+    { name: 'values', label: 'Values', chart: 'table', rate: false },
+    { name: 'first', label: 'First', chart: 'table', rate: false },
+    { name: 'last', label: 'Last', chart: 'table', rate: false },
+    { name: 'exactperc95', label: 'exact p95', chart: 'line', rate: false },
+];
+
+export const EVENT_FUNCTIONS: MetricFunction[] = [
+    ...METRIC_FUNCTIONS.filter((entry) => entry.name !== 'rate_avg' && entry.name !== 'rate_sum'),
+    ...EVENT_EXTRA,
+];
+
+const EVENT_BY_NAME = new Map(EVENT_FUNCTIONS.map((entry) => [entry.name, entry]));
+
+export type SeriesSource = 'metric' | 'event' | 'dataset';
+
+export function resolveForSource(source: SeriesSource | undefined, value: string): MetricFunction | null {
+    return (source ?? 'metric') === 'metric' ? resolveMetricFunction(value) : resolveEventFunction(value);
+}
+
+export function functionsFor(source: SeriesSource): MetricFunction[] {
+    return source === 'metric' ? METRIC_FUNCTIONS : EVENT_FUNCTIONS;
+}
+
+/** count is the only tstats function that does not take a field. */
+export function needsField(name: string): boolean {
+    return name !== 'count';
+}
+
+/** Resolves a function for events and datasets. rate_avg and rate_sum are refused. exactperc is accepted. */
+export function resolveEventFunction(value: string): MetricFunction | null {
+    const name = value.trim().toLowerCase();
+    if (name === 'rate_avg' || name === 'rate_sum') {
+        return null;
+    }
+    const known = EVENT_BY_NAME.get(name);
+    if (known) {
+        return known;
+    }
+    const exact = /^exactperc(\d{1,2}(?:\.\d{1,3})?)$/.exec(name);
+    if (exact && isPercentText(exact[1])) {
+        return { name, label: `exact p${exact[1]}`, chart: 'line', rate: false };
+    }
+    const resolved = resolveMetricFunction(value);
+    if (!resolved || resolved.name === 'rate_avg' || resolved.name === 'rate_sum') {
+        return null;
+    }
+    return resolved;
+}
+
 const BY_NAME = new Map(METRIC_FUNCTIONS.map((entry) => [entry.name, entry]));
 const BY_LABEL = new Map(METRIC_FUNCTIONS.map((entry) => [entry.label.toLowerCase(), entry]));
 

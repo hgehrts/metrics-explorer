@@ -1,0 +1,56 @@
+import { buildSourcetypeSearch, buildTstats, relatedEventsSearch } from '../src/spl/buildMstats';
+import { needsField, resolveEventFunction } from '../src/spl/functions';
+import { createSeries } from '../src/model/workspace';
+
+test('the sourcetype list skips nothing it was given and falls back to the internal index', () => {
+    expect(buildSourcetypeSearch(['_internal', 'main'])).toBe(
+        '| tstats count where (index="_internal" OR index="main") by sourcetype'
+    );
+    expect(buildSourcetypeSearch([])).toBe(
+        '| tstats count where (index="_internal" OR index="_audit" OR index="main") by sourcetype'
+    );
+    expect(buildSourcetypeSearch(['bad name'])).toBe(
+        '| tstats count where (index="_internal" OR index="_audit" OR index="main") by sourcetype'
+    );
+});
+
+test('an event series counts a sourcetype over time', () => {
+    expect(
+        buildTstats({ source: 'event', name: 'splunkd', aggregation: 'Count', span: '30m', indexes: ['_internal'] })
+    ).toBe('| tstats count AS value where (index="_internal") AND sourcetype="splunkd" by _time span=30m');
+});
+
+test('a data model series names the model, and a field aggregation quotes the field', () => {
+    expect(
+        buildTstats({ source: 'dataset', name: 'Internal_Server', aggregation: 'Avg', span: '1h', field: 'bytes' })
+    ).toBe('| tstats avg("bytes") AS value from datamodel=Internal_Server by _time span=1h');
+});
+
+test('event functions refuse the metric-only rates and accept exactperc and distinct count', () => {
+    expect(resolveEventFunction('Rate (Avg)')).toBeNull();
+    expect(resolveEventFunction('dc')?.name).toBe('dc');
+    expect(resolveEventFunction('exactperc99')?.label).toBe('exact p99');
+    expect(needsField('count')).toBe(false);
+    expect(needsField('avg')).toBe(true);
+});
+
+test('a function that needs a field is refused without one', () => {
+    expect(() => buildTstats({ source: 'event', name: 'splunkd', aggregation: 'Avg', span: '30m' })).toThrow(
+        'Field is not allowed.'
+    );
+});
+
+test('related events keep the sourcetype and the include filters', () => {
+    expect(
+        relatedEventsSearch({
+            source: 'event',
+            name: 'splunkd',
+            filters: [{ dimension: 'host', mode: 'include', values: ['lab-a'] }],
+        })
+    ).toBe('(index="_internal" OR index="_audit" OR index="main") sourcetype="splunkd" host="lab-a"');
+    expect(relatedEventsSearch({ source: 'metric', name: 'lab.cpu.user' })).toBe('index=*');
+});
+
+test('an event series starts with Count', () => {
+    expect(createSeries('splunkd', [], 'event')).toMatchObject({ source: 'event', aggregation: 'Count', field: '' });
+});

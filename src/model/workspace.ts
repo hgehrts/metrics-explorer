@@ -1,6 +1,6 @@
 import { ReferenceLine } from '../chart/reference';
 import { ChartSettings, defaultSettings } from '../chart/settings';
-import { resolveMetricFunction } from '../spl/functions';
+import { resolveMetricFunction, SeriesSource } from '../spl/functions';
 
 export type SeriesFilter = {
     dimension: string;
@@ -10,7 +10,11 @@ export type SeriesFilter = {
 
 export type Series = {
     id: string;
+    /** Metric name, event sourcetype, or data model name, depending on source. */
     metric: string;
+    source: SeriesSource;
+    /** The tstats field. Empty for count, and unused for metrics. */
+    field: string;
     aggregation: string;
     splitBy: string;
     splitDirection: 'highest' | 'lowest';
@@ -76,11 +80,13 @@ export function seriesLegend(
     return series.timeShift ? `${base} (-${series.timeShift})` : base;
 }
 
-export function createSeries(metric: string, filters: SeriesFilter[] = []): Series {
+export function createSeries(metric: string, filters: SeriesFilter[] = [], source: SeriesSource = 'metric'): Series {
     return {
         id: nextId('series'),
         metric,
-        aggregation: 'Avg',
+        source,
+        field: '',
+        aggregation: source === 'metric' ? 'Avg' : 'Count',
         splitBy: INHERIT_SPLIT,
         splitDirection: 'highest',
         splitLimit: 5,
@@ -91,8 +97,8 @@ export function createSeries(metric: string, filters: SeriesFilter[] = []): Seri
     };
 }
 
-export function createChart(metric: string, filters: SeriesFilter[] = []): ChartModel {
-    return { id: nextId('chart'), series: [createSeries(metric, filters)], settings: defaultSettings() };
+export function createChart(metric: string, filters: SeriesFilter[] = [], source: SeriesSource = 'metric'): ChartModel {
+    return { id: nextId('chart'), series: [createSeries(metric, filters, source)], settings: defaultSettings() };
 }
 
 export function cloneChart(chart: ChartModel): ChartModel {

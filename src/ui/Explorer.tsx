@@ -4,14 +4,17 @@ import { variables } from '@splunk/themes';
 import { buildMetricTree, buildValueTree, filterMetricTree, HIERARCHY_SEPARATORS, MetricNode, ValueRow } from '../catalog/metricTree';
 import {
     isPercentText,
-    METRIC_FUNCTIONS,
+    functionsFor,
+    needsField,
     parsePercentile,
     PERCENTILE_PRESETS,
     rateExplanation,
+    resolveForSource,
     resolveMetricFunction,
+    SeriesSource,
 } from '../spl/functions';
 import { parseTimeShift, SHIFT_UNITS, ShiftUnit, timeShiftToken } from '../spl/timeShift';
-import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, SPLIT_LIMITS } from '../spl/buildMstats';
+import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, buildSourcetypeSearch, SPLIT_LIMITS } from '../spl/buildMstats';
 import { spanForRange } from '../spl/span';
 import { collectFieldValues, collectMetricNames, collectValueMetrics, runSearch } from '../search/runSearch';
 import { ReferenceLine, referenceSummary, referenceWindow } from '../chart/reference';
@@ -32,7 +35,7 @@ import {
 } from '../model/workspace';
 import { ChartView } from './ChartView';
 import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
-import { buildCatalogSearch, DataFilter, filterLabel, validateFilter } from '../model/dataFilters';
+import { buildCatalogSearch, DataFilter, filterLabel, indexFromSearch, validateFilter } from '../model/dataFilters';
 import { loadSettings } from '../model/loadDefaults';
 
 /** The filter a tree leaf adds: a metric under a dimension value only shows that value. */
@@ -201,6 +204,31 @@ const GroupRow = styled.div`
     flex-wrap: wrap;
     gap: 8px;
     margin: 0 12px 8px;
+`;
+
+const SectionButton = styled.button`
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 8px 12px;
+    border: 0;
+    border-top: 1px solid ${variables.neutral200};
+    background: transparent;
+    color: ${variables.contentColorDefault};
+    text-align: left;
+    cursor: pointer;
+    font-weight: 600;
+`;
+
+const SectionItem = styled.button`
+    display: block;
+    width: 100%;
+    padding: 4px 12px 4px 28px;
+    border: 0;
+    background: transparent;
+    color: ${variables.contentColorDefault};
+    text-align: left;
+    cursor: pointer;
 `;
 
 const Tree = styled.div`
@@ -482,6 +510,7 @@ export function Explorer(): React.ReactElement {
     const [metricDims, setMetricDims] = useState<Record<string, string[]>>({});
     const [globalSplit, setGlobalSplit] = useState('');
     const [savedSession, setSavedSession] = useState<SavedSession | null>(() => readSavedSession());
+    const [recovered, setRecovered] = useState(false);
     const [filterOpen, setFilterOpen] = useState(false);
     const [filterDimension, setFilterDimension] = useState('');
     const [filterMode, setFilterMode] = useState<'include' | 'exclude'>('include');
@@ -508,6 +537,12 @@ export function Explorer(): React.ReactElement {
     const [referenceLatestUnit, setReferenceLatestUnit] = useState<ShiftUnit>('d');
     const [range, setRange] = useState('-60m');
     const [catalogRange, setCatalogRange] = useState('-2d');
+    const [eventsOpen, setEventsOpen] = useState(false);
+    const [datasetsOpen, setDatasetsOpen] = useState(false);
+    const [sourcetypes, setSourcetypes] = useState<string[]>([]);
+    const [sourcetypesReady, setSourcetypesReady] = useState(false);
+    const [eventIndexes, setEventIndexes] = useState<string[]>([]);
+    const [datamodels, setDatamodels] = useState<string[]>([]);
     const [defaultFilters, setDefaultFilters] = useState<DataFilter[]>([]);
     const [groupBy, setGroupBy] = useState('metric_name');
     const [separator, setSeparator] = useState('.');
@@ -550,8 +585,13 @@ export function Explorer(): React.ReactElement {
                     return;
                 }
                 // Only the controls are enabled after this point, so nothing the user adds is overwritten here.
+                // An index from the URL replaces the default index filters, so the explorer opens on that index.
+                const urlIndex = indexFromSearch(window.location.search);
+                const start = urlIndex
+                    ? [...settings.filters.filter((item) => item.kind !== 'index'), { kind: 'index' as const, value: urlIndex }]
+                    : settings.filters;
                 setDefaultFilters(settings.filters);
-                setDataFilters(settings.filters);
+                setDataFilters(start);
                 setGroupBy(settings.hierarchySource);
                 setSeparator(settings.hierarchySeparator);
                 setDefaultsReady(true);
@@ -607,6 +647,7 @@ export function Explorer(): React.ReactElement {
         setRange(savedSession.range);
         setCatalogRange(savedSession.catalogRange);
         setGlobalSplit(savedSession.globalSplit);
+        setRecovered(true);
     }
 
     useEffect(() => {
@@ -632,6 +673,83 @@ export function Explorer(): React.ReactElement {
         );
     }, [groupBy, dataFilters, catalogRange, defaultsReady]);
 
+    useEffect(() => {
+        if (!eventsOpen) {
+            return undefined;
+        }
+        let alive = true;
+        let stop = (): void => undefined;
+        setSourcetypesReady(false);
+        fetch('/splunkd/__raw/services/data/indexes?output_mode=json&count=0', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+        })
+            .then((response) => (response.ok ? response.json() : { entry: [] }))
+            .then((body: { entry?: Array<{ name?: string; content?: { datatype?: string } }> }) => {
+                if (!alive) {
+                    return;
+                }
+                const indexes = (body.entry ?? [])
+                    .filter((entry) => entry.content?.datatype !== 'metric')
+                    .map((entry) => entry.name ?? '')
+                    .filter((name) => /^[A-Za-z0-9_.-]+$/.test(name));
+                setEventIndexes(indexes);
+                stop = runSearch(
+                    buildSourcetypeSearch(indexes),
+                    catalogRange,
+                    (payload) => {
+                        setSourcetypes(collectFieldValues(payload, 'sourcetype'));
+                        setSourcetypesReady(true);
+                    },
+                    () => {
+                        setSourcetypes([]);
+                        setSourcetypesReady(true);
+                    }
+                );
+            })
+            .catch(() => {
+                if (alive) {
+                    setSourcetypes([]);
+                    setSourcetypesReady(true);
+                }
+            });
+        return () => {
+            alive = false;
+            stop();
+        };
+    }, [eventsOpen, catalogRange]);
+
+    useEffect(() => {
+        if (!datasetsOpen) {
+            return undefined;
+        }
+        let alive = true;
+        fetch('/splunkd/__raw/services/datamodel/model?output_mode=json&count=0', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+        })
+            .then((response) => (response.ok ? response.json() : { entry: [] }))
+            .then((body: { entry?: Array<{ name?: string }> }) => {
+                if (!alive) {
+                    return;
+                }
+                setDatamodels(
+                    (body.entry ?? [])
+                        .map((entry) => entry.name ?? '')
+                        .filter((name) => /^[A-Za-z0-9_.:-]+$/.test(name))
+                        .sort()
+                );
+            })
+            .catch(() => {
+                if (alive) {
+                    setDatamodels([]);
+                }
+            });
+        return () => {
+            alive = false;
+        };
+    }, [datasetsOpen]);
+
     const tree = useMemo(
         () =>
             filterMetricTree(
@@ -642,7 +760,7 @@ export function Explorer(): React.ReactElement {
     );
     const selected = charts.find((chart) => chart.id === selectedId) ?? charts[0];
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
-    const chosen = resolveMetricFunction(series?.aggregation ?? '');
+    const chosen = resolveForSource(series?.source, series?.aggregation ?? '');
     const span = spanForRange(range);
     const selectedMetrics = new Set(selected?.series.map((item) => item.metric) ?? []);
 
@@ -714,8 +832,8 @@ export function Explorer(): React.ReactElement {
         setRefreshedAt(Date.now());
     }
 
-    function addChart(metricName: string, filter?: MetricNode['filter']): void {
-        const chart = createChart(metricName, seriesFilters(filter));
+    function addChart(metricName: string, filter?: MetricNode['filter'], source: SeriesSource = 'metric'): void {
+        const chart = createChart(metricName, seriesFilters(filter), source);
         setCharts((current) => [...current, chart]);
         setSelectedId(chart.id);
         setSelectedSeriesId(chart.series[0].id);
@@ -723,12 +841,12 @@ export function Explorer(): React.ReactElement {
         refreshNow();
     }
 
-    function addToSelected(metricName: string, filter?: MetricNode['filter']): void {
+    function addToSelected(metricName: string, filter?: MetricNode['filter'], source: SeriesSource = 'metric'): void {
         if (!selected) {
-            addChart(metricName, filter);
+            addChart(metricName, filter, source);
             return;
         }
-        const created = createSeries(metricName, seriesFilters(filter));
+        const created = createSeries(metricName, seriesFilters(filter), source);
         setCharts((current) =>
             current.map((chart) =>
                 chart.id === selected.id ? { ...chart, series: [...chart.series, created] } : chart
@@ -992,6 +1110,28 @@ export function Explorer(): React.ReactElement {
                         onAdd={addToSelected}
                     />
                 </Tree>
+                <SectionButton type="button" aria-expanded={eventsOpen} onClick={() => setEventsOpen((open) => !open)}>
+                    {eventsOpen ? '▾' : '▸'} Events
+                </SectionButton>
+                {eventsOpen
+                    ? sourcetypes.map((name) => (
+                          <SectionItem key={name} type="button" onClick={() => addChart(name, undefined, 'event')}>
+                              {name}
+                          </SectionItem>
+                      ))
+                    : null}
+                {eventsOpen && sourcetypesReady && sourcetypes.length === 0 ? <Note>No sourcetypes in this time range.</Note> : null}
+                <SectionButton type="button" aria-expanded={datasetsOpen} onClick={() => setDatasetsOpen((open) => !open)}>
+                    {datasetsOpen ? '▾' : '▸'} Datasets
+                </SectionButton>
+                {datasetsOpen
+                    ? datamodels.map((name) => (
+                          <SectionItem key={name} type="button" onClick={() => addChart(name, undefined, 'dataset')}>
+                              {name}
+                          </SectionItem>
+                      ))
+                    : null}
+                {datasetsOpen && datamodels.length === 0 ? <Note>No data models.</Note> : null}
                 <Footer>
                     Data ingested from{' '}
                     <select
@@ -1074,6 +1214,14 @@ export function Explorer(): React.ReactElement {
                         Remove all
                     </ToolButton>
                 </Toolbar>
+                {recovered && charts.length > 0 ? (
+                    <Note role="status">
+                        Your work has been recovered.{' '}
+                        <ToolButton type="button" onClick={() => setRecovered(false)}>
+                            Dismiss
+                        </ToolButton>
+                    </Note>
+                ) : null}
                 {charts.length === 0 ? (
                     <Empty>
                         {savedSession ? (
@@ -1101,6 +1249,7 @@ export function Explorer(): React.ReactElement {
                                 span={span}
                                 refreshToken={refreshToken}
                                 globalSplit={globalSplit}
+                                eventIndexes={eventIndexes}
                                 selected={chart.id === selected?.id}
                                 onSelect={() => setSelectedId(chart.id)}
                                 onRemove={() => {
@@ -1157,24 +1306,32 @@ export function Explorer(): React.ReactElement {
                                 value={series.aggregation}
                                 onChange={(event) => {
                                     const aggregation = event.target.value;
-                                    const next = resolveMetricFunction(aggregation);
+                                    const next = resolveForSource(series.source, aggregation);
                                     patchSeries({ aggregation });
                                     if (next?.chart === 'table' && selected.settings.content === 'chart') {
                                         const othersPlot = selected.series.some(
                                             (item) =>
                                                 item.id !== series.id &&
-                                                resolveMetricFunction(item.aggregation)?.chart !== 'table'
+                                                resolveForSource(item.source, item.aggregation)?.chart !== 'table'
                                         );
                                         patchSettings({ content: othersPlot ? 'both' : 'table' });
                                     }
                                 }}
                             />
                             <datalist id="metric-aggregations">
-                                {METRIC_FUNCTIONS.map((item) => (
+                                {functionsFor(series.source ?? 'metric').map((item) => (
                                     <option key={item.name} value={item.label} />
                                 ))}
                             </datalist>
                             <span>Select or type an aggregation.</span>
+                            {(series.source ?? 'metric') !== 'metric' && needsField(chosen?.name ?? '') ? (
+                                <TextInput
+                                    aria-label="Event field"
+                                    value={series.field}
+                                    placeholder="Indexed field, for example bytes"
+                                    onChange={(event) => patchSeries({ field: event.target.value.trim() })}
+                                />
+                            ) : null}
                             {chosen?.rate ? <Note>{rateExplanation(chosen.name)}</Note> : null}
                         </Field>
                         <Field>

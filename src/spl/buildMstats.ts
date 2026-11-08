@@ -1,4 +1,4 @@
-import { resolveMetricFunction } from './functions';
+import { resolveEventFunction, resolveMetricFunction } from './functions';
 import { parseTimeShift } from './timeShift';
 
 const IDENTIFIER = /^[A-Za-z0-9_.:-]+$/;
@@ -116,6 +116,97 @@ export function buildReferenceValueSearch(input: { aggregation: string; metric: 
     const extra = filterClause(input.filters);
     const where = extra ? `index=* AND ${extra}` : 'index=*';
     return `| mstats ${aggregation.name}(${quoteSpl(input.metric)}) AS value WHERE ${where}`;
+}
+
+/** index=* includes metrics indexes, and tstats then returns nothing. Name the event indexes instead. */
+function eventIndexClause(indexes: string[] | undefined): string {
+    const usable = (indexes ?? []).filter((name) => /^[A-Za-z0-9_.-]+$/.test(name));
+    const chosen = usable.length > 0 ? usable : ['_internal', '_audit', 'main'];
+    return `(${chosen.map((name) => `index=${quoteSpl(name)}`).join(' OR ')})`;
+}
+
+/** Lists sourcetypes, but only in event indexes. tstats rejects a where clause that includes a metrics index. */
+export function buildSourcetypeSearch(indexes: string[]): string {
+    const usable = indexes.filter((name) => /^[A-Za-z0-9_.-]+$/.test(name));
+    const where = eventIndexClause(usable);
+    return `| tstats count where ${where} by sourcetype`;
+}
+
+/** A tstats search for an event sourcetype or a data model, one point per span. */
+export function buildTstats(input: {
+    source: 'event' | 'dataset';
+    name: string;
+    aggregation: string;
+    span: string;
+    field?: string;
+    splitBy?: string;
+    splitLimit?: number;
+    splitDirection?: 'highest' | 'lowest';
+    timeShift?: string;
+    filters?: MetricFilter[];
+    indexes?: string[];
+}): string {
+    const aggregation = resolveEventFunction(input.aggregation);
+    if (!aggregation) {
+        throw new Error('Unknown aggregation.');
+    }
+    if (!SPAN.test(input.span)) {
+        throw new Error('Span is not allowed.');
+    }
+    const field = (input.field ?? '').trim();
+    if (aggregation.name !== 'count') {
+        assertIdentifier(field, 'Field');
+    }
+    const call = aggregation.name === 'count' ? 'count' : `${aggregation.name}(${quoteSpl(field)})`;
+    const extra = filterClause(input.filters);
+    let from: string;
+    if (input.source === 'dataset') {
+        assertIdentifier(input.name, 'Data model');
+        from = `from datamodel=${input.name}${extra ? ` where ${extra}` : ''}`;
+    } else {
+        if (/[\r\n]/.test(input.name)) {
+            throw new Error('Line breaks are not allowed.');
+        }
+        const where = [eventIndexClause(input.indexes), `sourcetype=${quoteSpl(input.name)}`, extra].filter(Boolean).join(' AND ');
+        from = `where ${where}`;
+    }
+    const base = `| tstats ${call} AS value ${from}`;
+    if (!input.splitBy) {
+        return `${base} by _time span=${input.span}${timeShiftClause(input.timeShift)}`;
+    }
+    assertIdentifier(input.splitBy, 'Split field');
+    const limit = input.splitLimit ?? 5;
+    if (!SPLIT_LIMITS.includes(limit as (typeof SPLIT_LIMITS)[number])) {
+        throw new Error('Split limit is not allowed.');
+    }
+    const rank = input.splitDirection === 'lowest' ? `min in bottom${limit}` : `max in top${limit}`;
+    return `${base} by _time span=${input.span}, ${input.splitBy}${timeShiftClause(input.timeShift)} | chart useother=false first(value) over _time BY ${input.splitBy} WHERE ${rank}`;
+}
+
+/** The event search behind "Search Related Events": the chart window, plus include filters as fields. */
+export function relatedEventsSearch(input: {
+    source?: string;
+    name: string;
+    filters?: MetricFilter[];
+    indexes?: string[];
+}): string {
+    const parts = [input.source === 'event' ? eventIndexClause(input.indexes) : 'index=*'];
+    if (input.source === 'event' && input.name && !/[\r\n"]/.test(input.name)) {
+        parts.push(`sourcetype=${quoteSpl(input.name)}`);
+    }
+    for (const filter of input.filters ?? []) {
+        if (filter.mode !== 'include') {
+            continue;
+        }
+        assertIdentifier(filter.dimension, 'Filter field');
+        for (const value of filter.values) {
+            if (/[\r\n]/.test(value)) {
+                throw new Error('Line breaks are not allowed.');
+            }
+            parts.push(`${filter.dimension}=${quoteSpl(value)}`);
+        }
+    }
+    return parts.join(' ');
 }
 
 function timeShiftClause(shift?: string): string {

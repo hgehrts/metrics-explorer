@@ -80,3 +80,12 @@ export function pickDefaults(
     const base = stanzas.find((stanza) => stanza.name === 'defaults');
     return base ? filtersFromStanza(base.content) : [];
 }
+
+/**
+ * An index named in the URL, as another app opens the explorer with `?index=<name>`.
+ * It is checked like any index filter, and an invalid value is ignored.
+ */
+export function indexFromSearch(search: string): string | null {
+    const value = new URLSearchParams(search).get('index')?.trim() ?? '';
+    return value && validateFilter({ kind: 'index', value }) === null ? value : null;
+}

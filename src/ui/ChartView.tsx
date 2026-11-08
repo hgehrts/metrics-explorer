@@ -14,8 +14,8 @@ import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
 import { chartPng, chartSvg, safeFileName } from '../export/png';
 import { ChartModel, hasSplitValues, resolveSeries, seriesLegend } from '../model/workspace';
 import { runSearch, SearchRow } from '../search/runSearch';
-import { buildMstats, buildReferenceValueSearch } from '../spl/buildMstats';
-import { resolveMetricFunction } from '../spl/functions';
+import { buildMstats, buildReferenceValueSearch, buildTstats, relatedEventsSearch } from '../spl/buildMstats';
+import { resolveForSource } from '../spl/functions';
 import { searchWindow } from '../spl/span';
 
 const Card = styled.section<{ $selected: boolean }>`
@@ -108,6 +108,7 @@ export function ChartView(props: {
     span: string;
     refreshToken: number;
     globalSplit: string;
+    eventIndexes: string[];
     selected: boolean;
     onSelect: () => void;
     onRemove: () => void;
@@ -129,7 +130,7 @@ export function ChartView(props: {
         const next: SeriesResult[] = series.map(() => ({ rows: [], error: '', search: '', earliest: props.range, latest: 'now' }));
         setLoading(true);
         series.forEach((item, index) => {
-            const chosen = resolveMetricFunction(item.aggregation);
+            const chosen = resolveForSource(item.source, item.aggregation);
             if (!chosen) {
                 next[index] = { ...next[index], error: 'Unknown aggregation.' };
                 setResults([...next]);
@@ -140,16 +141,31 @@ export function ChartView(props: {
             let earliest = props.range;
             let latest = 'now';
             try {
-                search = buildMstats({
-                    aggregation: item.aggregation,
-                    metric: item.metric,
-                    span,
-                    splitBy: item.splitBy || undefined,
-                    splitDirection: item.splitDirection,
-                    splitLimit: item.splitLimit,
-                    timeShift: item.timeShift || undefined,
-                    filters: item.filters,
-                });
+                search =
+                    (item.source ?? 'metric') === 'metric'
+                        ? buildMstats({
+                              aggregation: item.aggregation,
+                              metric: item.metric,
+                              span,
+                              splitBy: item.splitBy || undefined,
+                              splitDirection: item.splitDirection,
+                              splitLimit: item.splitLimit,
+                              timeShift: item.timeShift || undefined,
+                              filters: item.filters,
+                          })
+                        : buildTstats({
+                              source: item.source === 'dataset' ? 'dataset' : 'event',
+                              name: item.metric,
+                              aggregation: item.aggregation,
+                              span,
+                              field: item.field,
+                              splitBy: item.splitBy || undefined,
+                              splitDirection: item.splitDirection,
+                              splitLimit: item.splitLimit,
+                              timeShift: item.timeShift || undefined,
+                              filters: item.filters,
+                              indexes: props.eventIndexes,
+                          });
                 const bounds = searchWindow(props.range, item.timeShift);
                 earliest = bounds.earliest;
                 latest = bounds.latest;
@@ -186,10 +202,12 @@ export function ChartView(props: {
             setLoading(false);
         }
         return () => stops.forEach((stop) => stop());
-    }, [signature, props.range, span, props.refreshToken]);
+    }, [signature, props.range, span, props.refreshToken, props.eventIndexes]);
 
     const referenceJobs = props.chart.series.flatMap((item) =>
-        item.referenceLines.map((line) => ({ line, metric: item.metric, filters: item.filters }))
+        (item.source ?? 'metric') === 'metric'
+            ? item.referenceLines.map((line) => ({ line, metric: item.metric, filters: item.filters }))
+            : []
     );
     const referenceKey = JSON.stringify(
         referenceJobs.map((job) => ({
@@ -256,10 +274,10 @@ export function ChartView(props: {
     });
     const hasRows = (table: (typeof tables)[number]): boolean => (table.columns[0]?.length ?? 0) > 0;
     const plotIndexes = shown.flatMap((item, index) =>
-        resolveMetricFunction(item.aggregation)?.chart === 'line' ? [index] : []
+        resolveForSource(item.source, item.aggregation)?.chart === 'line' ? [index] : []
     );
     const tableOnly = shown.flatMap((item, index) =>
-        resolveMetricFunction(item.aggregation)?.chart === 'table' ? [index] : []
+        resolveForSource(item.source, item.aggregation)?.chart === 'table' ? [index] : []
     );
     const content = props.chart.settings.content;
     const tableIndexes = content === 'chart' ? tableOnly : shown.map((_, index) => index);
@@ -320,6 +338,31 @@ export function ChartView(props: {
                                 }}
                             >
                                 Open in Search
+                            </SmallButton>
+                            <SmallButton
+                                type="button"
+                                onClick={() => {
+                                    const locale = window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1] ?? 'en-US';
+                                    const item = props.chart.series[0];
+                                    window.open(
+                                        splunkSearchUrl(
+                                            locale,
+                                            relatedEventsSearch({
+                                                source: item?.source,
+                                                name: item?.metric ?? '',
+                                                filters: item?.filters,
+                                                indexes: props.eventIndexes,
+                                            }),
+                                            props.range,
+                                            'now'
+                                        ),
+                                        '_blank',
+                                        'noopener'
+                                    );
+                                    setMenu(false);
+                                }}
+                            >
+                                Search Related Events
                             </SmallButton>
                             <SmallButton type="button" onClick={props.onClone}>
                                 Clone chart
