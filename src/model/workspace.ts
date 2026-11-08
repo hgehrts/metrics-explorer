@@ -29,6 +29,30 @@ export type ChartModel = {
 
 export const AUTO_REFRESH_MS = 10000;
 
+/** Marks a series that takes the workspace split. Not a valid dimension name, so it cannot collide with one. */
+export const INHERIT_SPLIT = '*global*';
+
+/** The split a series actually uses: its own dimension, the global one when it inherits, or none. */
+export function resolveSplit(series: Pick<Series, 'splitBy'>, globalSplit: string): string {
+    if (series.splitBy === INHERIT_SPLIT) {
+        return globalSplit;
+    }
+    return series.splitBy;
+}
+
+/** True when the rows carry values for the split field. Metrics without that dimension return rows without it. */
+export function hasSplitValues(rows: Array<Record<string, unknown>>, field: string): boolean {
+    if (!field) {
+        return false;
+    }
+    return rows.some((row) => row[field] !== undefined && row[field] !== null && row[field] !== '');
+}
+
+/** Series with their resolved split, for searches, legends and the signature of a chart. */
+export function resolveSeries(series: Series[], globalSplit: string): Series[] {
+    return series.map((item) => ({ ...item, splitBy: resolveSplit(item, globalSplit) }));
+}
+
 let sequence = 0;
 
 function nextId(prefix: string): string {
@@ -52,23 +76,23 @@ export function seriesLegend(
     return series.timeShift ? `${base} (-${series.timeShift})` : base;
 }
 
-export function createSeries(metric: string): Series {
+export function createSeries(metric: string, filters: SeriesFilter[] = []): Series {
     return {
         id: nextId('series'),
         metric,
         aggregation: 'Avg',
-        splitBy: '',
+        splitBy: INHERIT_SPLIT,
         splitDirection: 'highest',
         splitLimit: 5,
         timeShift: '',
         overlay: false,
-        filters: [],
+        filters,
         referenceLines: [],
     };
 }
 
-export function createChart(metric: string): ChartModel {
-    return { id: nextId('chart'), series: [createSeries(metric)], settings: defaultSettings() };
+export function createChart(metric: string, filters: SeriesFilter[] = []): ChartModel {
+    return { id: nextId('chart'), series: [createSeries(metric, filters)], settings: defaultSettings() };
 }
 
 export function cloneChart(chart: ChartModel): ChartModel {
@@ -77,6 +101,11 @@ export function cloneChart(chart: ChartModel): ChartModel {
         series: chart.series.map((series) => ({ ...series, id: nextId('series') })),
         settings: { ...chart.settings },
     };
+}
+
+/** Restored charts get new ids, so they never collide with ids issued after a reload. */
+export function reviveChart(chart: ChartModel): ChartModel {
+    return cloneChart(chart);
 }
 
 export function refreshStatus(now: number, refreshedAt: number, auto: boolean): string {

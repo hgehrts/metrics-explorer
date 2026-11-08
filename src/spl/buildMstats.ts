@@ -19,9 +19,13 @@ function assertIdentifier(value: string, label: string): void {
 
 export const SPLIT_LIMITS = [3, 5, 10, 20, 50, 100, 200, 500] as const;
 
+/**
+ * Dimensions of one metric. No mvexpand: it would drop the only row of a metric without dimensions,
+ * and then the search would never report that the metric has none.
+ */
 export function buildDimensionSearch(metric: string): string {
     assertIdentifier(metric, 'Metric name');
-    return `| mcatalog values(_dims) WHERE metric_name=${quoteSpl(metric)} AND index=* AND NOT metric_name="*_mrollup_*" | mvexpand values(_dims)`;
+    return `| mcatalog values(_dims) WHERE metric_name=${quoteSpl(metric)} AND index=* AND NOT metric_name="*_mrollup_*"`;
 }
 
 export type MetricFilter = {
@@ -29,6 +33,11 @@ export type MetricFilter = {
     mode: 'include' | 'exclude';
     values: string[];
 };
+
+/** Every dimension in the catalog, for the global split-by list. */
+export function buildAllDimensionSearch(): string {
+    return '| mcatalog values(_dims) WHERE index=* AND NOT metric_name="*_mrollup_*" | mvexpand values(_dims)';
+}
 
 export function buildDimensionValueSearch(metric: string, dimension: string): string {
     assertIdentifier(metric, 'Metric name');

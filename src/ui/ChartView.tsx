@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Area from '@splunk/visualizations/Area';
 import Column from '@splunk/visualizations/Column';
 import Line from '@splunk/visualizations/Line';
@@ -11,7 +11,8 @@ import { heatmapTable } from '../chart/heatmap';
 import { formatStatColumns, formatTimeCell } from '../chart/stats';
 import { HeatmapChart } from './HeatmapChart';
 import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
-import { ChartModel, seriesLegend } from '../model/workspace';
+import { chartPng, chartSvg, safeFileName } from '../export/png';
+import { ChartModel, hasSplitValues, resolveSeries, seriesLegend } from '../model/workspace';
 import { runSearch, SearchRow } from '../search/runSearch';
 import { buildMstats, buildReferenceValueSearch } from '../spl/buildMstats';
 import { resolveMetricFunction } from '../spl/functions';
@@ -106,6 +107,7 @@ export function ChartView(props: {
     range: string;
     span: string;
     refreshToken: number;
+    globalSplit: string;
     selected: boolean;
     onSelect: () => void;
     onRemove: () => void;
@@ -115,11 +117,14 @@ export function ChartView(props: {
     const [referenceNumbers, setReferenceNumbers] = useState<Array<number | null | undefined>>([]);
     const [loading, setLoading] = useState(false);
     const [menu, setMenu] = useState(false);
-    const signature = JSON.stringify(props.chart.series);
+    const [exportNote, setExportNote] = useState('');
+    const cardRef = useRef<HTMLElement>(null);
+    /** Series with the split they actually use, so inherited splits behave like chosen ones. */
+    const series = resolveSeries(props.chart.series, props.globalSplit);
+    const signature = JSON.stringify(series);
     const span = props.chart.settings.span || props.span;
 
     useEffect(() => {
-        const series = props.chart.series;
         const stops: Array<() => void> = [];
         const next: SeriesResult[] = series.map(() => ({ rows: [], error: '', search: '', earliest: props.range, latest: 'now' }));
         setLoading(true);
@@ -236,8 +241,13 @@ export function ChartView(props: {
     }, [referenceKey]);
 
     const locale = typeof window === 'undefined' ? undefined : window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1];
-    const tables = props.chart.series.map((item, index) => {
-        const label = seriesLegend(item, props.chart.series);
+    // A split only applies to a series whose metric has that dimension. Other series draw unsplit, and their legend says so.
+    const shown = series.map((item, index) => ({
+        ...item,
+        splitBy: hasSplitValues(results[index]?.rows ?? [], item.splitBy) ? item.splitBy : '',
+    }));
+    const tables = shown.map((item, index) => {
+        const label = seriesLegend(item, shown);
         return formatStatColumns(
             toLineTable(results[index]?.rows ?? [], label, item.splitBy || undefined),
             item.aggregation,
@@ -245,14 +255,14 @@ export function ChartView(props: {
         );
     });
     const hasRows = (table: (typeof tables)[number]): boolean => (table.columns[0]?.length ?? 0) > 0;
-    const plotIndexes = props.chart.series.flatMap((item, index) =>
+    const plotIndexes = shown.flatMap((item, index) =>
         resolveMetricFunction(item.aggregation)?.chart === 'line' ? [index] : []
     );
-    const tableOnly = props.chart.series.flatMap((item, index) =>
+    const tableOnly = shown.flatMap((item, index) =>
         resolveMetricFunction(item.aggregation)?.chart === 'table' ? [index] : []
     );
     const content = props.chart.settings.content;
-    const tableIndexes = content === 'chart' ? tableOnly : props.chart.series.map((_, index) => index);
+    const tableIndexes = content === 'chart' ? tableOnly : shown.map((_, index) => index);
     const showChart = content !== 'table' && plotIndexes.some((index) => hasRows(tables[index]));
     const showTable = tableIndexes.some((index) => hasRows(tables[index]));
     const merged = mergeTables(plotIndexes.map((index) => tables[index]).filter(hasRows));
@@ -280,7 +290,7 @@ export function ChartView(props: {
     const first = results[0];
 
     return (
-        <Card $selected={props.selected} onClick={props.onSelect}>
+        <Card ref={cardRef} $selected={props.selected} onClick={props.onSelect}>
             <TitleRow>
                 <strong>
                     {title} (Time span={span})
@@ -329,6 +339,37 @@ export function ChartView(props: {
                             >
                                 Export CSV
                             </SmallButton>
+                            <SmallButton
+                                type="button"
+                                disabled={visual.kind === 'heatmap' || !showChart}
+                                title={
+                                    visual.kind === 'heatmap' || !showChart
+                                        ? 'PNG export needs a line, area, or column chart.'
+                                        : 'Save the chart as a PNG image.'
+                                }
+                                onClick={async () => {
+                                    const svg = chartSvg(cardRef.current);
+                                    setMenu(false);
+                                    if (!svg) {
+                                        setExportNote('The chart is not drawn yet.');
+                                        return;
+                                    }
+                                    try {
+                                        const blob = await chartPng(svg, title);
+                                        const url = URL.createObjectURL(blob);
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        link.download = `${safeFileName(props.chart.series[0]?.metric || 'chart')}.png`;
+                                        link.click();
+                                        URL.revokeObjectURL(url);
+                                        setExportNote('');
+                                    } catch (error) {
+                                        setExportNote(error instanceof Error ? error.message : 'The PNG could not be created.');
+                                    }
+                                }}
+                            >
+                                Export PNG
+                            </SmallButton>
                         </Menu>
                     ) : null}
                 </Actions>
@@ -337,10 +378,11 @@ export function ChartView(props: {
                 result.error ? <Note key={`${index}-${result.error}`}>{result.error}</Note> : null
             )}
             {loading ? <Note>Refreshing</Note> : null}
+            {exportNote ? <Note>{exportNote}</Note> : null}
             {showChart && visual.kind === 'heatmap' ? (
                 <HeatmapChart
                     table={heatmapTable(
-                        props.chart.series,
+                        shown,
                         tables,
                         plotIndexes.filter((index) => hasRows(tables[index])),
                         merged

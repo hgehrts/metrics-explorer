@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled, { css } from 'styled-components';
 import { variables } from '@splunk/themes';
-import { buildMetricTree, filterMetricTree, MetricNode } from '../catalog/metricTree';
+import { buildMetricTree, buildValueTree, filterMetricTree, HIERARCHY_SEPARATORS, MetricNode, ValueRow } from '../catalog/metricTree';
 import {
     isPercentText,
     METRIC_FUNCTIONS,
@@ -11,13 +11,59 @@ import {
     resolveMetricFunction,
 } from '../spl/functions';
 import { parseTimeShift, SHIFT_UNITS, ShiftUnit, timeShiftToken } from '../spl/timeShift';
-import { buildDimensionSearch, buildDimensionValueSearch, SPLIT_LIMITS } from '../spl/buildMstats';
+import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, SPLIT_LIMITS } from '../spl/buildMstats';
 import { spanForRange } from '../spl/span';
-import { collectFieldValues, collectMetricNames, runSearch } from '../search/runSearch';
+import { collectFieldValues, collectMetricNames, collectValueMetrics, runSearch } from '../search/runSearch';
 import { ReferenceLine, referenceSummary, referenceWindow } from '../chart/reference';
 import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, SPAN_UNITS, validateAxis } from '../chart/settings';
-import { AUTO_REFRESH_MS, ChartModel, cloneChart, createChart, createSeries, refreshStatus, Series, seriesLegend } from '../model/workspace';
+import {
+    AUTO_REFRESH_MS,
+    ChartModel,
+    cloneChart,
+    createChart,
+    reviveChart,
+    createSeries,
+    INHERIT_SPLIT,
+    refreshStatus,
+    resolveSplit,
+    Series,
+    SeriesFilter,
+    seriesLegend,
+} from '../model/workspace';
 import { ChartView } from './ChartView';
+import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
+import { buildCatalogSearch, DataFilter, filterLabel, validateFilter } from '../model/dataFilters';
+import { loadSettings } from '../model/loadDefaults';
+
+/** The filter a tree leaf adds: a metric under a dimension value only shows that value. */
+function seriesFilters(filter: MetricNode['filter']): SeriesFilter[] {
+    return filter ? [{ dimension: filter.dimension, mode: 'include', values: [filter.value] }] : [];
+}
+
+/** The dimensions to offer. A value already chosen stays offered while the list is still loading. */
+function splitChoices(dimensions: string[], chosen: string): string[] {
+    return chosen && !dimensions.includes(chosen) ? [chosen, ...dimensions] : dimensions;
+}
+
+function sameFilters(left: DataFilter[], right: DataFilter[]): boolean {
+    return (
+        left.length === right.length &&
+        left.every((item, index) => item.kind === right[index].kind && item.value === right[index].value)
+    );
+}
+
+/** The signed-in Splunk user, so each user keeps their own saved charts. Empty when Splunk does not expose it. */
+function currentUser(): string {
+    return (window as unknown as { $C?: { USERNAME?: string } }).$C?.USERNAME ?? '';
+}
+
+function readSavedSession(): SavedSession | null {
+    try {
+        return parseSession(window.localStorage.getItem(sessionKey(currentUser())));
+    } catch {
+        return null;
+    }
+}
 
 const SHIFTS = [
     { id: '', label: 'None' },
@@ -101,6 +147,60 @@ const SearchBox = styled.input`
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
+`;
+
+const FilterBox = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0 12px 8px;
+`;
+
+const Chip = styled.span`
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 8px;
+    border-radius: 12px;
+    border: 1px solid ${variables.interactiveColorBorder};
+    background: ${variables.backgroundColorSection};
+    color: ${variables.contentColorDefault};
+    font-size: 12px;
+`;
+
+const ChipRemove = styled.button`
+    border: 0;
+    background: transparent;
+    color: ${variables.contentColorMuted};
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+`;
+
+const FilterForm = styled.form`
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+`;
+
+const FilterInput = styled.input`
+    flex: 1 1 120px;
+    min-width: 0;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid ${variables.interactiveColorBorder};
+    background: ${variables.backgroundColorSection};
+    color: ${variables.contentColorDefault};
+`;
+
+const GroupRow = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 12px 8px;
 `;
 
 const Tree = styled.div`
@@ -307,8 +407,8 @@ function TreeRows(props: {
     open: Set<string>;
     selected: Set<string>;
     onToggle: (id: string) => void;
-    onSelect: (metricName: string) => void;
-    onAdd: (metricName: string) => void;
+    onSelect: (metricName: string, filter?: MetricNode['filter']) => void;
+    onAdd: (metricName: string, filter?: MetricNode['filter']) => void;
 }): React.ReactElement {
     return (
         <>
@@ -323,7 +423,7 @@ function TreeRows(props: {
                         <RowButton
                             type="button"
                             $depth={props.depth}
-                            onClick={() => (node.folder ? props.onToggle(node.id) : props.onSelect(node.metricName ?? ''))}
+                            onClick={() => (node.folder ? props.onToggle(node.id) : props.onSelect(node.metricName ?? '', node.filter))}
                         >
                             <span>{node.folder ? (props.open.has(node.id) ? '▾' : '▸') : ''}</span>
                             <span>{node.label}</span>
@@ -333,7 +433,7 @@ function TreeRows(props: {
                                 type="button"
                                 aria-label="Add to selected chart"
                                 title="Add to selected chart"
-                                onClick={() => props.onAdd(node.metricName ?? '')}
+                                onClick={() => props.onAdd(node.metricName ?? '', node.filter)}
                             >
                                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                                     <path d="M1 13V3M1 13h9" stroke="currentColor" fill="none" />
@@ -378,6 +478,10 @@ export function Explorer(): React.ReactElement {
     const [refreshToken, setRefreshToken] = useState(0);
     const [refreshedAt, setRefreshedAt] = useState(0);
     const [dimensions, setDimensions] = useState<string[]>([]);
+    const [allDimensions, setAllDimensions] = useState<string[]>([]);
+    const [metricDims, setMetricDims] = useState<Record<string, string[]>>({});
+    const [globalSplit, setGlobalSplit] = useState('');
+    const [savedSession, setSavedSession] = useState<SavedSession | null>(() => readSavedSession());
     const [filterOpen, setFilterOpen] = useState(false);
     const [filterDimension, setFilterDimension] = useState('');
     const [filterMode, setFilterMode] = useState<'include' | 'exclude'>('include');
@@ -404,12 +508,67 @@ export function Explorer(): React.ReactElement {
     const [referenceLatestUnit, setReferenceLatestUnit] = useState<ShiftUnit>('d');
     const [range, setRange] = useState('-60m');
     const [catalogRange, setCatalogRange] = useState('-2d');
+    const [defaultFilters, setDefaultFilters] = useState<DataFilter[]>([]);
+    const [groupBy, setGroupBy] = useState('metric_name');
+    const [separator, setSeparator] = useState('.');
+    const [valueRows, setValueRows] = useState<ValueRow[]>([]);
+    const [dataFilters, setDataFilters] = useState<DataFilter[]>([]);
+    const [defaultsReady, setDefaultsReady] = useState(false);
+    const [filterKind, setFilterKind] = useState<DataFilter['kind']>('exclude');
+    const [filterText, setFilterText] = useState('');
+    const [filterError, setFilterError] = useState('');
+
+    /** The series as its header shows it: a split only counts when the metric has that dimension. */
+    function headerSeries(item: Series): Series {
+        const split = resolveSplit(item, globalSplit);
+        const known = metricDims[item.metric];
+        return { ...item, splitBy: known && split && !known.includes(split) ? '' : split };
+    }
+
+    function addDataFilter(): void {
+        const candidate: DataFilter = { kind: filterKind, value: filterText.trim() };
+        const problem = validateFilter(candidate);
+        if (problem) {
+            setFilterError(problem);
+            return;
+        }
+        if (dataFilters.some((item) => item.kind === candidate.kind && item.value === candidate.value)) {
+            setFilterError('This filter is already active.');
+            return;
+        }
+        setDataFilters((current) => [...current, candidate]);
+        setFilterText('');
+        setFilterError('');
+    }
 
     useEffect(() => {
+        let alive = true;
+        loadSettings()
+            .catch(() => ({ filters: [] as DataFilter[], hierarchySource: 'metric_name', hierarchySeparator: '.' }))
+            .then((settings) => {
+                if (!alive) {
+                    return;
+                }
+                // Only the controls are enabled after this point, so nothing the user adds is overwritten here.
+                setDefaultFilters(settings.filters);
+                setDataFilters(settings.filters);
+                setGroupBy(settings.hierarchySource);
+                setSeparator(settings.hierarchySeparator);
+                setDefaultsReady(true);
+            });
+        return () => {
+            alive = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!defaultsReady) {
+            return undefined;
+        }
         setCatalogError('');
         setCatalogReady(false);
         return runSearch(
-            '| mcatalog values(metric_name) WHERE index=*',
+            buildCatalogSearch(dataFilters),
             catalogRange,
             (payload) => {
                 setNames(collectMetricNames(payload));
@@ -420,11 +579,66 @@ export function Explorer(): React.ReactElement {
                 setCatalogReady(true);
             }
         );
+    }, [catalogRange, dataFilters, defaultsReady]);
+
+    useEffect(() => {
+        if (charts.length === 0) {
+            return;
+        }
+        const session = serializeSession({ charts, layout, range, catalogRange, globalSplit }, Date.now());
+        try {
+            window.localStorage.setItem(sessionKey(currentUser()), session);
+            setSavedSession(parseSession(session));
+        } catch {
+            // Storage can be full or disabled; the workspace still works without it.
+        }
+    }, [charts, layout, range, catalogRange, globalSplit]);
+
+    function openSaved(): void {
+        if (!savedSession) {
+            return;
+        }
+        const revived = savedSession.charts.map(reviveChart);
+        setCharts(revived);
+        setSelectedId(revived[0]?.id ?? '');
+        setSelectedSeriesId('');
+        setExpandedSeriesId('');
+        setLayout(savedSession.layout);
+        setRange(savedSession.range);
+        setCatalogRange(savedSession.catalogRange);
+        setGlobalSplit(savedSession.globalSplit);
+    }
+
+    useEffect(() => {
+        setAllDimensions([]);
+        return runSearch(
+            buildAllDimensionSearch(),
+            catalogRange,
+            (payload) => setAllDimensions(collectFieldValues(payload, '_dims')),
+            () => setAllDimensions([])
+        );
     }, [catalogRange]);
 
+    useEffect(() => {
+        setValueRows([]);
+        if (!defaultsReady || groupBy === 'metric_name') {
+            return undefined;
+        }
+        return runSearch(
+            buildCatalogSearch(dataFilters, groupBy),
+            catalogRange,
+            (payload) => setValueRows(collectValueMetrics(payload, groupBy)),
+            () => setValueRows([])
+        );
+    }, [groupBy, dataFilters, catalogRange, defaultsReady]);
+
     const tree = useMemo(
-        () => filterMetricTree(buildMetricTree(names), query),
-        [names, query]
+        () =>
+            filterMetricTree(
+                groupBy === 'metric_name' ? buildMetricTree(names, separator) : buildValueTree(groupBy, valueRows, separator),
+                query
+            ),
+        [names, valueRows, groupBy, separator, query]
     );
     const selected = charts.find((chart) => chart.id === selectedId) ?? charts[0];
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
@@ -442,6 +656,23 @@ export function Explorer(): React.ReactElement {
         }, AUTO_REFRESH_MS);
         return () => window.clearInterval(timer);
     }, [autoRefresh]);
+
+    const selectedMetricKey = [...new Set((selected?.series ?? []).map((item) => item.metric))].sort().join('\n');
+
+    useEffect(() => {
+        // Dimensions of every metric in the selected chart, so each series header names only splits its metric has.
+        const metrics = selectedMetricKey ? selectedMetricKey.split('\n') : [];
+        const stops = metrics.map((metric) =>
+            runSearch(
+                buildDimensionSearch(metric),
+                range,
+                (payload) =>
+                    setMetricDims((current) => ({ ...current, [metric]: collectFieldValues(payload, '_dims') })),
+                () => setMetricDims((current) => ({ ...current, [metric]: [] }))
+            )
+        );
+        return () => stops.forEach((stop) => stop());
+    }, [selectedMetricKey, range]);
 
     useEffect(() => {
         setDimensions([]);
@@ -483,8 +714,8 @@ export function Explorer(): React.ReactElement {
         setRefreshedAt(Date.now());
     }
 
-    function addChart(metricName: string): void {
-        const chart = createChart(metricName);
+    function addChart(metricName: string, filter?: MetricNode['filter']): void {
+        const chart = createChart(metricName, seriesFilters(filter));
         setCharts((current) => [...current, chart]);
         setSelectedId(chart.id);
         setSelectedSeriesId(chart.series[0].id);
@@ -492,12 +723,12 @@ export function Explorer(): React.ReactElement {
         refreshNow();
     }
 
-    function addToSelected(metricName: string): void {
+    function addToSelected(metricName: string, filter?: MetricNode['filter']): void {
         if (!selected) {
-            addChart(metricName);
+            addChart(metricName, filter);
             return;
         }
-        const created = createSeries(metricName);
+        const created = createSeries(metricName, seriesFilters(filter));
         setCharts((current) =>
             current.map((chart) =>
                 chart.id === selected.id ? { ...chart, series: [...chart.series, created] } : chart
@@ -648,12 +879,96 @@ export function Explorer(): React.ReactElement {
                         «
                     </IconButton>
                 </PaneHeader>
+                <FilterBox aria-label="Data filters">
+                    {dataFilters.map((filter) => (
+                        <Chip key={`${filter.kind}:${filter.value}`}>
+                            {filterLabel(filter)}
+                            <ChipRemove
+                                type="button"
+                                aria-label={`Remove filter ${filterLabel(filter)}`}
+                                disabled={!defaultsReady}
+                                onClick={() => setDataFilters((current) => current.filter((item) => item !== filter))}
+                            >
+                                ×
+                            </ChipRemove>
+                        </Chip>
+                    ))}
+                    {sameFilters(dataFilters, defaultFilters) ? null : (
+                        <ToolButton type="button" disabled={!defaultsReady} onClick={() => setDataFilters(defaultFilters)}>
+                            Reset to defaults
+                        </ToolButton>
+                    )}
+                    <FilterForm
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            addDataFilter();
+                        }}
+                    >
+                        <Select
+                            aria-label="New filter type"
+                            disabled={!defaultsReady}
+                            value={filterKind}
+                            onChange={(event) => setFilterKind(event.target.value === 'index' ? 'index' : 'exclude')}
+                        >
+                            <option value="exclude">Metric name not</option>
+                            <option value="index">Index</option>
+                        </Select>
+                        <FilterInput
+                            aria-label="New filter value"
+                            disabled={!defaultsReady}
+                            value={filterText}
+                            placeholder={filterKind === 'index' ? 'e.g. metrics_lab' : 'e.g. itsi.*'}
+                            onChange={(event) => setFilterText(event.target.value)}
+                        />
+                        <ToolButton type="submit" disabled={!defaultsReady}>
+                            Add filter
+                        </ToolButton>
+                    </FilterForm>
+                    {filterError ? <Note role="alert">{filterError}</Note> : null}
+                </FilterBox>
                 <SearchBox
                     value={query}
                     placeholder="Search data to analyze"
                     aria-label="Search data to analyze"
                     onChange={(event) => setQuery(event.target.value)}
                 />
+                <GroupRow>
+                    <Field>
+                        Group by
+                        <Select
+                            aria-label="Group by"
+                            value={groupBy}
+                            onChange={(event) => {
+                                setGroupBy(event.target.value);
+                                setOpen(new Set());
+                            }}
+                        >
+                            <option value="metric_name">metric_name</option>
+                            {splitChoices(allDimensions.filter((name) => name !== 'metric_name'), groupBy === 'metric_name' ? '' : groupBy).map((name) => (
+                                <option key={name} value={name}>
+                                    {name}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                    <Field>
+                        Separator
+                        <Select
+                            aria-label="Group separator"
+                            value={separator}
+                            onChange={(event) => {
+                                setSeparator(event.target.value);
+                                setOpen(new Set());
+                            }}
+                        >
+                            {HIERARCHY_SEPARATORS.map((item) => (
+                                <option key={item} value={item}>
+                                    {item}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                </GroupRow>
                 <Tree>
                     {catalogError ? <Note>{catalogError}</Note> : null}
                     {catalogReady && !catalogError && tree.length === 0 ? (
@@ -727,6 +1042,21 @@ export function Explorer(): React.ReactElement {
                         <option value="on">Auto-refresh on</option>
                     </Select>
                     <span>{charts.length > 0 ? `Time span=${span}` : ''}</span>
+                    <Select
+                        aria-label="Global split by"
+                        value={globalSplit}
+                        onChange={(event) => setGlobalSplit(event.target.value)}
+                    >
+                        <option value="">Split By</option>
+                        {splitChoices(allDimensions, globalSplit).map((name) => (
+                            <option key={name} value={name}>
+                                {name}
+                            </option>
+                        ))}
+                    </Select>
+                    <ToolButton type="button" disabled={globalSplit === ''} onClick={() => setGlobalSplit('')}>
+                        Clear Split By
+                    </ToolButton>
                     <ToolButton type="button" aria-pressed={layout === 'grid'} $pressed={layout === 'grid'} onClick={() => setLayout('grid')}>
                         Grid layout
                     </ToolButton>
@@ -746,8 +1076,20 @@ export function Explorer(): React.ReactElement {
                 </Toolbar>
                 {charts.length === 0 ? (
                     <Empty>
-                        <h1>Start by selecting data.</h1>
-                        <p>Find something interesting? Save it to a dashboard, or create an alert.</p>
+                        {savedSession ? (
+                            <>
+                                <h1>Let&apos;s bring you up to speed!</h1>
+                                <p>Open your latest charts, or start by selecting data.</p>
+                                <ToolButton type="button" onClick={openSaved}>
+                                    Open Charts
+                                </ToolButton>
+                            </>
+                        ) : (
+                            <>
+                                <h1>Start by selecting data.</h1>
+                                <p>Find something interesting? Save it to a dashboard, or create an alert.</p>
+                            </>
+                        )}
                     </Empty>
                 ) : (
                     <ChartList $grid={layout === 'grid'} data-layout={layout}>
@@ -758,6 +1100,7 @@ export function Explorer(): React.ReactElement {
                                 range={range}
                                 span={span}
                                 refreshToken={refreshToken}
+                                globalSplit={globalSplit}
                                 selected={chart.id === selected?.id}
                                 onSelect={() => setSelectedId(chart.id)}
                                 onRemove={() => {
@@ -797,7 +1140,10 @@ export function Explorer(): React.ReactElement {
                         <span>
                             {item.metric}
                             <br />
-                            {seriesLegend(item, selected?.series ?? [])}
+                            {seriesLegend(
+                                headerSeries(item),
+                                (selected?.series ?? []).map(headerSeries)
+                            )}
                         </span>
                     </SeriesHeader>
                 ))}
@@ -878,15 +1224,22 @@ export function Explorer(): React.ReactElement {
                                 value={series.splitBy}
                                 onChange={(event) => patchSeries({ splitBy: event.target.value })}
                             >
+                                <option value={INHERIT_SPLIT}>Inherit Global Split By</option>
                                 <option value="">None</option>
-                                {dimensions.map((name) => (
+                                {splitChoices(dimensions, series.splitBy === INHERIT_SPLIT ? '' : series.splitBy).map((name) => (
                                     <option key={name} value={name}>
                                         {name}
                                     </option>
                                 ))}
                             </Select>
-                            <span>Display this series as separate values.</span>
-                            {series.splitBy ? (
+                            <span>
+                                {series.splitBy === INHERIT_SPLIT
+                                    ? globalSplit
+                                        ? `Uses the global split by ${globalSplit}.`
+                                        : 'No global split is set.'
+                                    : 'Display this series as separate values.'}
+                            </span>
+                            {resolveSplit(series, globalSplit) ? (
                                 <SplitRow>
                                     <Select
                                         aria-label="Split limit type"

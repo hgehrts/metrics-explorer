@@ -1,4 +1,4 @@
-import { buildMstats, buildReferenceValueSearch } from '../src/spl/buildMstats';
+import { buildAllDimensionSearch, buildDimensionSearch, buildMstats, buildReferenceValueSearch } from '../src/spl/buildMstats';
 
 test('builds one mstats command for a metric', () => {
     expect(
@@ -53,6 +53,12 @@ test('moves a series onto the current axis after reading an earlier window', () 
 test('accepts a custom time shift and rebuilds the token', () => {
     expect(buildMstats({ aggregation: 'avg', metric: 'lab.cpu.user', span: '10s', timeShift: '3w' })).toContain(
         '| eval _time=relative_time(_time, "+3w")'
+    );
+});
+
+test('lists the dimensions of the whole catalog for the global split', () => {
+    expect(buildAllDimensionSearch()).toBe(
+        '| mcatalog values(_dims) WHERE index=* AND NOT metric_name="*_mrollup_*" | mvexpand values(_dims)'
     );
 });
 
@@ -115,4 +121,11 @@ test('rejects an unknown aggregation', () => {
     expect(() =>
         buildMstats({ aggregation: 'delete', metric: 'lab.cpu.user', span: '10s' })
     ).toThrow('Unknown aggregation.');
+});
+
+test('the per-metric dimension search keeps a row for metrics without dimensions', () => {
+    expect(buildDimensionSearch('lab.cpu.user')).toBe(
+        '| mcatalog values(_dims) WHERE metric_name="lab.cpu.user" AND index=* AND NOT metric_name="*_mrollup_*"'
+    );
+    expect(buildDimensionSearch('lab.cpu.user')).not.toContain('mvexpand');
 });

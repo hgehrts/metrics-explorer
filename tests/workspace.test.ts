@@ -1,5 +1,28 @@
 import { mergeTables, toCsv } from '../src/export/table';
-import { refreshStatus, seriesLegend } from '../src/model/workspace';
+import {
+    createSeries,
+    hasSplitValues,
+    INHERIT_SPLIT,
+    refreshStatus,
+    resolveSplit,
+    seriesLegend,
+} from '../src/model/workspace';
+
+test('a split applies only when the rows carry that dimension', () => {
+    expect(hasSplitValues([{ extracted_host: 'lab-a' }], 'extracted_host')).toBe(true);
+    expect(hasSplitValues([{ value: 1 }], 'extracted_host')).toBe(false);
+    expect(hasSplitValues([{ extracted_host: '' }], 'extracted_host')).toBe(false);
+    expect(hasSplitValues([{ extracted_host: 'lab-a' }], '')).toBe(false);
+});
+
+test('a new series inherits the global split, and a chosen split overrides it', () => {
+    const series = createSeries('lab.net.bytes_total');
+    expect(series.splitBy).toBe(INHERIT_SPLIT);
+    expect(resolveSplit(series, 'host')).toBe('host');
+    expect(resolveSplit(series, '')).toBe('');
+    expect(resolveSplit({ splitBy: 'c' }, 'host')).toBe('c');
+    expect(resolveSplit({ splitBy: '' }, 'host')).toBe('');
+});
 
 test('counts down from ten seconds while auto-refresh is on', () => {
     expect(refreshStatus(1_000, 0, true)).toBe('');

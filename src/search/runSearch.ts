@@ -1,4 +1,5 @@
 import SearchJob from '@splunk/search-job';
+import type { ValueRow } from '../catalog/metricTree';
 
 export type SearchRow = Record<string, unknown>;
 
@@ -93,4 +94,29 @@ export function collectMetricNames(payload: SearchPayload): string[] {
         }
     }
     return [...names].sort();
+}
+
+/** Rows of `mcatalog values(metric_name) ... BY <dimension>`: one dimension value and the metrics that carry it. */
+export function collectValueMetrics(payload: SearchPayload, dimension: string): ValueRow[] {
+    const rows: ValueRow[] = [];
+    for (const row of payload.results ?? []) {
+        const raw = row[dimension];
+        const value = Array.isArray(raw) ? String(raw[0] ?? '') : raw === undefined || raw === null ? '' : String(raw);
+        if (!value) {
+            continue;
+        }
+        const metrics = new Set<string>();
+        for (const [key, item] of Object.entries(row)) {
+            if (!key.includes('metric_name')) {
+                continue;
+            }
+            for (const name of Array.isArray(item) ? item : [item]) {
+                if (name !== undefined && name !== null && String(name) !== '') {
+                    metrics.add(String(name));
+                }
+            }
+        }
+        rows.push({ value, metrics: [...metrics].sort() });
+    }
+    return rows;
 }
