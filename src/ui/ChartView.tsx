@@ -12,11 +12,13 @@ import { formatStatColumns, formatTimeCell } from '../chart/stats';
 import { HeatmapChart } from './HeatmapChart';
 import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
 import { chartPng, chartSvg, safeFileName } from '../export/png';
-import { ChartModel, hasSplitValues, resolveSeries, seriesLegend } from '../model/workspace';
+import { ChartModel, globalFiltersFor, hasSplitValues, resolveSeries, SeriesFilter, seriesLegend } from '../model/workspace';
 import { runSearch, SearchRow } from '../search/runSearch';
 import { buildMstats, buildReferenceValueSearch, buildTstats, relatedEventsSearch } from '../spl/buildMstats';
 import { resolveForSource } from '../spl/functions';
-import { searchWindow } from '../spl/span';
+import { searchWindow, spanForRange } from '../spl/span';
+import { zoomWindow } from '../chart/zoom';
+import { formatTooltipValue } from '../chart/tooltip';
 
 const Card = styled.section<{ $selected: boolean }>`
     margin: 0;
@@ -68,6 +70,65 @@ const Menu = styled.div`
     background: ${variables.backgroundColorSection};
 `;
 
+// The visualization draws its own tooltip only when its tooltip option is on, and hover events need that option.
+// The tooltip stays in the DOM but is hidden, so the exact formatted value in HoverTip is the only one shown.
+const PlotArea = styled.div`
+    position: relative;
+
+    .highcharts-tooltip-container {
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+`;
+
+const HoverTip = styled.div`
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    padding: 6px 8px;
+    border: 1px solid ${variables.neutral200};
+    border-radius: 6px;
+    background: ${variables.backgroundColorSection};
+    color: ${variables.contentColorDefault};
+    font-size: 12px;
+    white-space: nowrap;
+`;
+
+type HoverPoint = { name: string; value: number; time: string };
+
+/** Reads the hovered point from a visualization event. Points without a numeric value show nothing. */
+function hoverPoint(payload: Record<string, unknown> | undefined): HoverPoint | null {
+    const value = Number(payload?.value);
+    if (payload?.value === undefined || payload?.value === null || !Number.isFinite(value)) {
+        return null;
+    }
+    const row = (payload.rowContext ?? {}) as Record<string, unknown>;
+    const time = row._time ?? payload._time;
+    return {
+        name: typeof payload.name === 'string' ? payload.name : '',
+        value,
+        time: typeof time === 'string' ? time : '',
+    };
+}
+
+const ZoomBar = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+    font-size: 12px;
+    color: ${variables.contentColorMuted};
+`;
+
+/** Shows an epoch-second bound as local time, or the word `now`. */
+function formatBound(value: string, locale: string | undefined): string {
+    if (value === 'now' || !/^\d+$/.test(value)) {
+        return value;
+    }
+    return new Date(Number(value) * 1000).toLocaleString(locale ?? 'en-US');
+}
+
 const Note = styled.p`
     margin: 8px 0;
     color: ${variables.contentColorMuted};
@@ -105,29 +166,56 @@ type SeriesResult = {
 export function ChartView(props: {
     chart: ChartModel;
     range: string;
+    latest: string;
     span: string;
     refreshToken: number;
     globalSplit: string;
+    /** Filters that apply to every chart. A series gets only those whose dimension its metric has. */
+    globalFilters: SeriesFilter[];
+    /** Dimensions per metric. A metric not in here yet takes every global filter until its dimensions arrive. */
+    metricDims: Record<string, string[]>;
     eventIndexes: string[];
     selected: boolean;
     onSelect: () => void;
     onRemove: () => void;
     onClone: () => void;
+    minimized: boolean;
+    maximized: boolean;
+    onMinimize: () => void;
+    onMaximize: () => void;
 }): React.ReactElement {
     const [results, setResults] = useState<SeriesResult[]>([]);
     const [referenceNumbers, setReferenceNumbers] = useState<Array<number | null | undefined>>([]);
     const [loading, setLoading] = useState(false);
     const [menu, setMenu] = useState(false);
     const [exportNote, setExportNote] = useState('');
+    /** A zoomed chart searches only its zoom window. It keeps that window until the user zooms out. */
+    const [zoom, setZoom] = useState<{ earliest: string; latest: string } | null>(null);
+    /** The point under the pointer. The visualization's own tooltip is off, so this one shows exact, formatted values. */
+    const [hover, setHover] = useState<HoverPoint | null>(null);
+    // The pointer position is not React state: a state update on every mouse move re-renders the chart and drops its hover.
+    const pointerAt = useRef({ x: 0, y: 0 });
+    const tipRef = useRef<HTMLDivElement | null>(null);
     const cardRef = useRef<HTMLElement>(null);
     /** Series with the split they actually use, so inherited splits behave like chosen ones. */
-    const series = resolveSeries(props.chart.series, props.globalSplit);
+    const series = resolveSeries(props.chart.series, props.globalSplit, props.chart.useGlobalSplit).map((item) => ({
+        ...item,
+        filters: [...globalFiltersFor(item, props.globalFilters, props.metricDims), ...item.filters],
+    }));
     const signature = JSON.stringify(series);
-    const span = props.chart.settings.span || props.span;
+    const timeWindow = zoom ?? { earliest: props.range, latest: props.latest };
+    const span = props.chart.settings.span || (zoom ? spanForRange(zoom.earliest, zoom.latest) : props.span);
+    // The global refresh waits while a chart is zoomed. Zooming out makes the next refresh count again.
+    const refreshToken = zoom ? 0 : props.refreshToken;
+
+    useEffect(() => {
+        // A new global range replaces the zoom, because the zoom lies inside the old range.
+        setZoom(null);
+    }, [props.range, props.latest]);
 
     useEffect(() => {
         const stops: Array<() => void> = [];
-        const next: SeriesResult[] = series.map(() => ({ rows: [], error: '', search: '', earliest: props.range, latest: 'now' }));
+        const next: SeriesResult[] = series.map(() => ({ rows: [], error: '', search: '', earliest: timeWindow.earliest, latest: timeWindow.latest }));
         setLoading(true);
         series.forEach((item, index) => {
             const chosen = resolveForSource(item.source, item.aggregation);
@@ -138,8 +226,8 @@ export function ChartView(props: {
                 return;
             }
             let search = '';
-            let earliest = props.range;
-            let latest = 'now';
+            let earliest = timeWindow.earliest;
+            let latest = timeWindow.latest;
             try {
                 search =
                     (item.source ?? 'metric') === 'metric'
@@ -166,7 +254,7 @@ export function ChartView(props: {
                               filters: item.filters,
                               indexes: props.eventIndexes,
                           });
-                const bounds = searchWindow(props.range, item.timeShift);
+                const bounds = searchWindow(timeWindow.earliest, item.timeShift, timeWindow.latest);
                 earliest = bounds.earliest;
                 latest = bounds.latest;
             } catch (error) {
@@ -202,7 +290,7 @@ export function ChartView(props: {
             setLoading(false);
         }
         return () => stops.forEach((stop) => stop());
-    }, [signature, props.range, span, props.refreshToken, props.eventIndexes]);
+    }, [signature, timeWindow.earliest, timeWindow.latest, span, refreshToken, props.eventIndexes]);
 
     const referenceJobs = props.chart.series.flatMap((item) =>
         (item.source ?? 'metric') === 'metric'
@@ -314,6 +402,20 @@ export function ChartView(props: {
                     {title} (Time span={span})
                 </strong>
                 <Actions>
+                    <SmallButton
+                        type="button"
+                        aria-label={props.minimized ? 'Restore chart' : 'Minimize chart'}
+                        onClick={props.onMinimize}
+                    >
+                        {props.minimized ? 'Show' : 'Minimize'}
+                    </SmallButton>
+                    <SmallButton
+                        type="button"
+                        aria-label={props.maximized ? 'Restore chart size' : 'Maximize chart'}
+                        onClick={props.onMaximize}
+                    >
+                        {props.maximized ? 'Restore' : 'Maximize'}
+                    </SmallButton>
                     <SmallButton type="button" aria-label="Chart actions" onClick={() => setMenu((open) => !open)}>
                         Actions
                     </SmallButton>
@@ -353,8 +455,8 @@ export function ChartView(props: {
                                                 filters: item?.filters,
                                                 indexes: props.eventIndexes,
                                             }),
-                                            props.range,
-                                            'now'
+                                            timeWindow.earliest,
+                                            timeWindow.latest
                                         ),
                                         '_blank',
                                         'noopener'
@@ -417,6 +519,19 @@ export function ChartView(props: {
                     ) : null}
                 </Actions>
             </TitleRow>
+            {props.minimized ? null : (
+                <>
+            {zoom ? (
+                <ZoomBar>
+                    <span>
+                        Zoomed: {formatBound(zoom.earliest, locale)} to {formatBound(zoom.latest, locale)}
+                    </span>
+                    <SmallButton type="button" onClick={() => setZoom(null)}>
+                        Zoom out
+                    </SmallButton>
+                    <span>Reset zoom to enable refresh.</span>
+                </ZoomBar>
+            ) : null}
             {results.map((result, index) =>
                 result.error ? <Note key={`${index}-${result.error}`}>{result.error}</Note> : null
             )}
@@ -434,10 +549,21 @@ export function ChartView(props: {
                 />
             ) : null}
             {showChart && visual.kind !== 'heatmap' && data.columns[0] && data.columns[0].length > 0 ? (
+                <PlotArea
+                    onMouseMove={(event) => {
+                        const box = event.currentTarget.getBoundingClientRect();
+                        pointerAt.current = { x: event.clientX - box.left, y: event.clientY - box.top };
+                        if (tipRef.current) {
+                            tipRef.current.style.left = `${pointerAt.current.x + 14}px`;
+                            tipRef.current.style.top = `${pointerAt.current.y + 14}px`;
+                        }
+                    }}
+                    onMouseLeave={() => setHover(null)}
+                >
                 <Viz
                     key={props.chart.settings.type}
                     width="100%"
-                    height={260}
+                    height={props.maximized ? 560 : 260}
                     y2Fields={y2Fields}
                     dataSources={{
                         primary: {
@@ -446,7 +572,28 @@ export function ChartView(props: {
                             meta: { totalCount: data.columns[0].length },
                         },
                     }}
+                    hasEventHandlers
+                    eventHandlers={[{ type: 'zoom', options: { events: ['range.select'] } }]}
+                    onEventTrigger={(event: { type?: string; payload?: Record<string, unknown> }) => {
+                        if (event?.type === 'point.mouseover') {
+                            setHover(hoverPoint(event.payload));
+                            return;
+                        }
+                        if (event?.type === 'point.mouseout') {
+                            setHover(null);
+                            return;
+                        }
+                        // Only a drag across the plot zooms. Clicks and other events change nothing.
+                        if (event?.type !== 'range.select') {
+                            return;
+                        }
+                        const next = zoomWindow(event.payload, Date.now() / 1000);
+                        if (next) {
+                            setZoom(next);
+                        }
+                    }}
                     options={{
+                        showTooltip: true,
                         legendDisplay: 'bottom',
                         xAxisTitleVisibility: 'collapsed',
                         yAxisTitleVisibility: 'collapsed',
@@ -454,6 +601,20 @@ export function ChartView(props: {
                         ...(visual.stacked ? { stackMode: 'stacked' } : {}),
                     }}
                 />
+                {hover ? (
+                    <HoverTip
+                        ref={tipRef}
+                        role="tooltip"
+                        style={{ left: pointerAt.current.x + 14, top: pointerAt.current.y + 14 }}
+                    >
+                        {hover.time ? <div>{hover.time}</div> : null}
+                        <div>
+                            {hover.name ? `${hover.name}: ` : ''}
+                            {formatTooltipValue(hover.value, props.chart.settings.decimals, locale ?? 'en-US')}
+                        </div>
+                    </HoverTip>
+                ) : null}
+                </PlotArea>
             ) : null}
             {showTable ? (
                 <Grid>
@@ -479,6 +640,8 @@ export function ChartView(props: {
                     </Stats>
                 </Grid>
             ) : null}
+                </>
+            )}
         </Card>
     );
 }

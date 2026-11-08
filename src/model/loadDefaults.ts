@@ -6,6 +6,8 @@ export type ExplorerSettings = {
     /** Field the data tree is grouped by at start. `metric_name` groups by the metric name. */
     hierarchySource: string;
     hierarchySeparator: string;
+    /** Most metric names the catalog lists. Above it the explorer says that not all metrics are listed. */
+    maxMetrics: number;
 };
 
 /** Splunk Web forwards REST calls under this prefix with the signed-in session. No credentials are sent or stored here. */
@@ -41,12 +43,25 @@ export async function loadSettings(): Promise<ExplorerSettings> {
     const metadata = stanzas.find((stanza) => stanza.name === 'metadata')?.content ?? {};
     return {
         filters: pickDefaults(stanzas, roles),
+        maxMetrics: maxMetricsFromMetadata(metadata),
         ...hierarchyFromMetadata(metadata),
     };
 }
 
+export const DEFAULT_MAX_METRICS = 20000;
+
+/** `max_metrics` from `[metadata]`. Only whole numbers from 1 to 1000000 count, everything else uses the default. */
+export function maxMetricsFromMetadata(content: Record<string, string | undefined>): number {
+    const configured = typeof content.max_metrics === 'string' ? content.max_metrics.trim() : '';
+    if (!/^\d{1,7}$/.test(configured)) {
+        return DEFAULT_MAX_METRICS;
+    }
+    const value = Number(configured);
+    return value >= 1 && value <= 1000000 ? value : DEFAULT_MAX_METRICS;
+}
+
 /** The grouping settings from `[metadata]`. Anything unknown or invalid falls back to metric names and `.`. */
-export function hierarchyFromMetadata(content: Record<string, string | undefined>): Omit<ExplorerSettings, 'filters'> {
+export function hierarchyFromMetadata(content: Record<string, string | undefined>): Pick<ExplorerSettings, 'hierarchySource' | 'hierarchySeparator'> {
     const configured = typeof content.hierarchy_source === 'string' ? content.hierarchy_source.trim() : '';
     const configuredSeparator = typeof content.hierarchy_separator === 'string' ? content.hierarchy_separator : '';
     return {

@@ -137,23 +137,66 @@ export function buildValueTree(dimension: string, rows: ValueRow[], separator: s
     return build(root, []).sort((left, right) => left.label.localeCompare(right.label));
 }
 
-export function filterMetricTree(nodes: MetricNode[], query: string): MetricNode[] {
+/**
+ * Matches a search text against a name. `*` stands for any run of characters, anywhere in the text.
+ * Without `*` the text is a plain, case-insensitive substring.
+ */
+export function matchesQuery(text: string, query: string): boolean {
     const needle = query.trim().toLowerCase();
     if (!needle) {
+        return true;
+    }
+    const haystack = text.toLowerCase();
+    if (!needle.includes('*')) {
+        return haystack.includes(needle);
+    }
+    const pattern = needle
+        .split('*')
+        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+        .join('.*');
+    return new RegExp(pattern).test(haystack);
+}
+
+export function filterMetricTree(nodes: MetricNode[], query: string): MetricNode[] {
+    if (!query.trim()) {
         return nodes;
     }
     const visit = (node: MetricNode): MetricNode | null => {
         if (!node.folder) {
-            const haystack = `${node.metricName} ${node.label}`.toLowerCase();
-            return haystack.includes(needle) ? node : null;
+            return matchesQuery(`${node.metricName} ${node.label}`, query) ? node : null;
         }
         const children = node.children
             .map(visit)
             .filter((child): child is MetricNode => child !== null);
-        if (children.length === 0 && !node.label.toLowerCase().includes(needle)) {
+        if (children.length === 0 && !matchesQuery(node.label, query)) {
             return null;
         }
         return { ...node, children };
     };
     return nodes.map(visit).filter((node): node is MetricNode => node !== null);
+}
+
+/**
+ * Keeps at most `max` distinct metric names, in name order. Used for `max_metrics`.
+ * `truncated` tells the explorer to say that not all metrics are listed.
+ */
+export function limitMetricNames(names: string[], max: number): { names: string[]; truncated: boolean } {
+    const sorted = [...new Set(names)].sort();
+    return { names: sorted.slice(0, max), truncated: sorted.length > max };
+}
+
+/** Same limit for the grouped tree: drops metrics beyond `max` and any value row left without metrics. */
+export function limitValueRows(rows: ValueRow[], max: number): { rows: ValueRow[]; truncated: boolean } {
+    const distinct = limitMetricNames(
+        rows.flatMap((row) => row.metrics),
+        max
+    );
+    if (!distinct.truncated) {
+        return { rows, truncated: false };
+    }
+    const allowed = new Set(distinct.names);
+    const limited = rows
+        .map((row) => ({ value: row.value, metrics: row.metrics.filter((name) => allowed.has(name)) }))
+        .filter((row) => row.metrics.length > 0);
+    return { rows: limited, truncated: true };
 }

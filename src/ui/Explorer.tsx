@@ -1,7 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styled, { css } from 'styled-components';
 import { variables } from '@splunk/themes';
-import { buildMetricTree, buildValueTree, filterMetricTree, HIERARCHY_SEPARATORS, MetricNode, ValueRow } from '../catalog/metricTree';
+import {
+    buildMetricTree,
+    buildValueTree,
+    filterMetricTree,
+    HIERARCHY_SEPARATORS,
+    limitMetricNames,
+    limitValueRows,
+    MetricNode,
+    ValueRow,
+} from '../catalog/metricTree';
 import {
     isPercentText,
     functionsFor,
@@ -16,6 +25,8 @@ import {
 import { parseTimeShift, SHIFT_UNITS, ShiftUnit, timeShiftToken } from '../spl/timeShift';
 import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, buildSourcetypeSearch, SPLIT_LIMITS } from '../spl/buildMstats';
 import { spanForRange } from '../spl/span';
+import { boundForInput, customRange } from '../spl/timeRange';
+import { isSeriesFilter } from '../model/session';
 import { collectFieldValues, collectMetricNames, collectValueMetrics, runSearch } from '../search/runSearch';
 import { ReferenceLine, referenceSummary, referenceWindow } from '../chart/reference';
 import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, SPAN_UNITS, validateAxis } from '../chart/settings';
@@ -36,7 +47,7 @@ import {
 import { ChartView } from './ChartView';
 import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
 import { buildCatalogSearch, DataFilter, filterLabel, indexFromSearch, validateFilter } from '../model/dataFilters';
-import { loadSettings } from '../model/loadDefaults';
+import { DEFAULT_MAX_METRICS, loadSettings } from '../model/loadDefaults';
 
 /** The filter a tree leaf adds: a metric under a dimension value only shows that value. */
 function seriesFilters(filter: MetricNode['filter']): SeriesFilter[] {
@@ -502,6 +513,9 @@ export function Explorer(): React.ReactElement {
     const [leftOpen, setLeftOpen] = useState(true);
     const [rightOpen, setRightOpen] = useState(true);
     const [layout, setLayout] = useState<'stack' | 'grid'>('stack');
+    /** A maximized chart fills the stage alone. Minimized charts show only their title row. Neither is saved. */
+    const [maximizedId, setMaximizedId] = useState('');
+    const [minimizedIds, setMinimizedIds] = useState<Set<string>>(new Set());
     const [autoRefresh, setAutoRefresh] = useState(false);
     const [refreshToken, setRefreshToken] = useState(0);
     const [refreshedAt, setRefreshedAt] = useState(0);
@@ -509,6 +523,12 @@ export function Explorer(): React.ReactElement {
     const [allDimensions, setAllDimensions] = useState<string[]>([]);
     const [metricDims, setMetricDims] = useState<Record<string, string[]>>({});
     const [globalSplit, setGlobalSplit] = useState('');
+    /** Filters for every chart. Each chart's own filters come after them. */
+    const [globalFilters, setGlobalFilters] = useState<SeriesFilter[]>([]);
+    const [globalDimension, setGlobalDimension] = useState('');
+    const [globalMode, setGlobalMode] = useState<'include' | 'exclude'>('include');
+    const [globalValues, setGlobalValues] = useState('');
+    const [globalFilterError, setGlobalFilterError] = useState('');
     const [savedSession, setSavedSession] = useState<SavedSession | null>(() => readSavedSession());
     const [recovered, setRecovered] = useState(false);
     const [filterOpen, setFilterOpen] = useState(false);
@@ -536,6 +556,12 @@ export function Explorer(): React.ReactElement {
     const [referenceLatestAmount, setReferenceLatestAmount] = useState('1');
     const [referenceLatestUnit, setReferenceLatestUnit] = useState<ShiftUnit>('d');
     const [range, setRange] = useState('-60m');
+    /** The end of the chart range. `now` for presets; a custom range can end at a fixed time. */
+    const [latest, setLatest] = useState('now');
+    const [customTime, setCustomTime] = useState(false);
+    const [customStart, setCustomStart] = useState('');
+    const [customEnd, setCustomEnd] = useState('');
+    const [customTimeError, setCustomTimeError] = useState('');
     const [catalogRange, setCatalogRange] = useState('-2d');
     const [eventsOpen, setEventsOpen] = useState(false);
     const [datasetsOpen, setDatasetsOpen] = useState(false);
@@ -545,6 +571,9 @@ export function Explorer(): React.ReactElement {
     const [datamodels, setDatamodels] = useState<string[]>([]);
     const [defaultFilters, setDefaultFilters] = useState<DataFilter[]>([]);
     const [groupBy, setGroupBy] = useState('metric_name');
+    const [maxMetrics, setMaxMetrics] = useState(DEFAULT_MAX_METRICS);
+    const [namesTruncated, setNamesTruncated] = useState(false);
+    const [valuesTruncated, setValuesTruncated] = useState(false);
     const [separator, setSeparator] = useState('.');
     const [valueRows, setValueRows] = useState<ValueRow[]>([]);
     const [dataFilters, setDataFilters] = useState<DataFilter[]>([]);
@@ -555,9 +584,42 @@ export function Explorer(): React.ReactElement {
 
     /** The series as its header shows it: a split only counts when the metric has that dimension. */
     function headerSeries(item: Series): Series {
-        const split = resolveSplit(item, globalSplit);
+        const split = resolveSplit(item, globalSplit, selected?.useGlobalSplit ?? true);
         const known = metricDims[item.metric];
         return { ...item, splitBy: known && split && !known.includes(split) ? '' : split };
+    }
+
+    /** Adds a filter for every chart. The values are typed as a comma separated list. */
+    function addGlobalFilter(): void {
+        const dimension = globalDimension.trim();
+        const values = globalValues
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+        if (!dimension) {
+            setGlobalFilterError('Select a dimension.');
+            return;
+        }
+        if (values.length === 0) {
+            setGlobalFilterError('Enter at least one value.');
+            return;
+        }
+        if (values.length > 50) {
+            setGlobalFilterError('Use at most 50 values.');
+            return;
+        }
+        const candidate: SeriesFilter = { dimension, mode: globalMode, values };
+        if (!isSeriesFilter(candidate)) {
+            setGlobalFilterError('Use letters, digits, dots, colons, dashes, and underscores. Values may not contain line breaks.');
+            return;
+        }
+        if (globalFilters.some((item) => item.dimension === dimension && item.mode === globalMode && item.values.join(',') === values.join(','))) {
+            setGlobalFilterError('This global filter is already active.');
+            return;
+        }
+        setGlobalFilters((current) => [...current, candidate]);
+        setGlobalValues('');
+        setGlobalFilterError('');
     }
 
     function addDataFilter(): void {
@@ -579,7 +641,12 @@ export function Explorer(): React.ReactElement {
     useEffect(() => {
         let alive = true;
         loadSettings()
-            .catch(() => ({ filters: [] as DataFilter[], hierarchySource: 'metric_name', hierarchySeparator: '.' }))
+            .catch(() => ({
+                filters: [] as DataFilter[],
+                hierarchySource: 'metric_name',
+                hierarchySeparator: '.',
+                maxMetrics: DEFAULT_MAX_METRICS,
+            }))
             .then((settings) => {
                 if (!alive) {
                     return;
@@ -591,6 +658,7 @@ export function Explorer(): React.ReactElement {
                     ? [...settings.filters.filter((item) => item.kind !== 'index'), { kind: 'index' as const, value: urlIndex }]
                     : settings.filters;
                 setDefaultFilters(settings.filters);
+                setMaxMetrics(settings.maxMetrics);
                 setDataFilters(start);
                 setGroupBy(settings.hierarchySource);
                 setSeparator(settings.hierarchySeparator);
@@ -611,7 +679,9 @@ export function Explorer(): React.ReactElement {
             buildCatalogSearch(dataFilters),
             catalogRange,
             (payload) => {
-                setNames(collectMetricNames(payload));
+                const limited = limitMetricNames(collectMetricNames(payload), maxMetrics);
+                setNames(limited.names);
+                setNamesTruncated(limited.truncated);
                 setCatalogReady(true);
             },
             (message) => {
@@ -625,14 +695,17 @@ export function Explorer(): React.ReactElement {
         if (charts.length === 0) {
             return;
         }
-        const session = serializeSession({ charts, layout, range, catalogRange, globalSplit }, Date.now());
+        const session = serializeSession(
+            { charts, layout, range, latest, catalogRange, globalSplit, globalFilters },
+            Date.now()
+        );
         try {
             window.localStorage.setItem(sessionKey(currentUser()), session);
             setSavedSession(parseSession(session));
         } catch {
             // Storage can be full or disabled; the workspace still works without it.
         }
-    }, [charts, layout, range, catalogRange, globalSplit]);
+    }, [charts, layout, range, latest, catalogRange, globalSplit, globalFilters]);
 
     function openSaved(): void {
         if (!savedSession) {
@@ -645,8 +718,16 @@ export function Explorer(): React.ReactElement {
         setExpandedSeriesId('');
         setLayout(savedSession.layout);
         setRange(savedSession.range);
+        setLatest(savedSession.latest);
+        // A saved range that is not a preset comes back in the custom fields, so the select shows what the charts use.
+        const preset = RANGES.some((item) => item.id === savedSession.range) && savedSession.latest === 'now';
+        setCustomTime(!preset);
+        setCustomStart(boundForInput(savedSession.range));
+        setCustomEnd(boundForInput(savedSession.latest));
+        setCustomTimeError('');
         setCatalogRange(savedSession.catalogRange);
         setGlobalSplit(savedSession.globalSplit);
+        setGlobalFilters(savedSession.globalFilters);
         setRecovered(true);
     }
 
@@ -668,7 +749,11 @@ export function Explorer(): React.ReactElement {
         return runSearch(
             buildCatalogSearch(dataFilters, groupBy),
             catalogRange,
-            (payload) => setValueRows(collectValueMetrics(payload, groupBy)),
+            (payload) => {
+                const limited = limitValueRows(collectValueMetrics(payload, groupBy), maxMetrics);
+                setValueRows(limited.rows);
+                setValuesTruncated(limited.truncated);
+            },
             () => setValueRows([])
         );
     }, [groupBy, dataFilters, catalogRange, defaultsReady]);
@@ -761,7 +846,7 @@ export function Explorer(): React.ReactElement {
     const selected = charts.find((chart) => chart.id === selectedId) ?? charts[0];
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
     const chosen = resolveForSource(series?.source, series?.aggregation ?? '');
-    const span = spanForRange(range);
+    const span = spanForRange(range, latest);
     const selectedMetrics = new Set(selected?.series.map((item) => item.metric) ?? []);
 
     useEffect(() => {
@@ -775,22 +860,32 @@ export function Explorer(): React.ReactElement {
         return () => window.clearInterval(timer);
     }, [autoRefresh]);
 
-    const selectedMetricKey = [...new Set((selected?.series ?? []).map((item) => item.metric))].sort().join('\n');
+    // Metric series of every chart. Their dimensions decide which global filters and splits apply to them.
+    const chartMetricKey = [
+        ...new Set(
+            charts.flatMap((chart) =>
+                chart.series.filter((item) => (item.source ?? 'metric') === 'metric').map((item) => item.metric)
+            )
+        ),
+    ]
+        .sort()
+        .join('\n');
 
     useEffect(() => {
-        // Dimensions of every metric in the selected chart, so each series header names only splits its metric has.
-        const metrics = selectedMetricKey ? selectedMetricKey.split('\n') : [];
+        // Dimensions of every metric in the charts, so each series names only splits its metric has and global filters skip the rest.
+        const metrics = chartMetricKey ? chartMetricKey.split('\n') : [];
         const stops = metrics.map((metric) =>
             runSearch(
                 buildDimensionSearch(metric),
                 range,
                 (payload) =>
                     setMetricDims((current) => ({ ...current, [metric]: collectFieldValues(payload, '_dims') })),
-                () => setMetricDims((current) => ({ ...current, [metric]: [] }))
+                () => setMetricDims((current) => ({ ...current, [metric]: [] })),
+                latest
             )
         );
         return () => stops.forEach((stop) => stop());
-    }, [selectedMetricKey, range]);
+    }, [chartMetricKey, range, latest]);
 
     useEffect(() => {
         setDimensions([]);
@@ -802,12 +897,13 @@ export function Explorer(): React.ReactElement {
                 buildDimensionSearch(series.metric),
                 range,
                 (payload) => setDimensions(collectFieldValues(payload, '_dims')),
-                () => setDimensions([])
+                () => setDimensions([]),
+                latest
             );
         } catch {
             return undefined;
         }
-    }, [series?.metric, range]);
+    }, [series?.metric, range, latest]);
 
     useEffect(() => {
         setFilterChoices([]);
@@ -820,12 +916,13 @@ export function Explorer(): React.ReactElement {
                 buildDimensionValueSearch(series.metric, filterDimension),
                 range,
                 (payload) => setFilterChoices(collectFieldValues(payload, filterDimension)),
-                () => setFilterChoices([])
+                () => setFilterChoices([]),
+                latest
             );
         } catch {
             return undefined;
         }
-    }, [filterOpen, series?.metric, filterDimension, range]);
+    }, [filterOpen, series?.metric, filterDimension, range, latest]);
 
     function refreshNow(): void {
         setRefreshToken((token) => token + 1);
@@ -859,6 +956,13 @@ export function Explorer(): React.ReactElement {
     function toggleSeries(id: string): void {
         setSelectedSeriesId(id);
         setExpandedSeriesId((current) => (current === id ? '' : id));
+    }
+
+    function patchChart(patch: Partial<Pick<ChartModel, 'useGlobalSplit'>>): void {
+        if (!selected) {
+            return;
+        }
+        setCharts((current) => current.map((chart) => (chart.id === selected.id ? { ...chart, ...patch } : chart)));
     }
 
     function patchSettings(patch: Partial<ChartSettings>): void {
@@ -1062,7 +1166,11 @@ export function Explorer(): React.ReactElement {
                             }}
                         >
                             <option value="metric_name">metric_name</option>
-                            {splitChoices(allDimensions.filter((name) => name !== 'metric_name'), groupBy === 'metric_name' ? '' : groupBy).map((name) => (
+                            <option value="index">index</option>
+                            {splitChoices(
+                                allDimensions.filter((name) => name !== 'metric_name' && name !== 'index'),
+                                groupBy === 'metric_name' || groupBy === 'index' ? '' : groupBy
+                            ).map((name) => (
                                 <option key={name} value={name}>
                                     {name}
                                 </option>
@@ -1091,6 +1199,11 @@ export function Explorer(): React.ReactElement {
                     {catalogError ? <Note>{catalogError}</Note> : null}
                     {catalogReady && !catalogError && tree.length === 0 ? (
                         <Note>No metrics in this time range.</Note>
+                    ) : null}
+                    {catalogReady && !catalogError && (groupBy === 'metric_name' ? namesTruncated : valuesTruncated) ? (
+                        <Note role="status">
+                            Not all metrics listed. Only the first {maxMetrics} are shown. Narrow the data filters or raise max_metrics.
+                        </Note>
                     ) : null}
                     <TreeRows
                         nodes={tree}
@@ -1157,13 +1270,61 @@ export function Explorer(): React.ReactElement {
             )}
             <Stage>
                 <Toolbar>
-                    <select aria-label="Time range" value={range} onChange={(event) => setRange(event.target.value)}>
+                    <select
+                        aria-label="Time range"
+                        value={customTime ? 'custom' : range}
+                        onChange={(event) => {
+                            if (event.target.value === 'custom') {
+                                setCustomTime(true);
+                                setCustomStart(boundForInput(range));
+                                setCustomEnd(boundForInput(latest));
+                                return;
+                            }
+                            setCustomTime(false);
+                            setCustomTimeError('');
+                            setRange(event.target.value);
+                            setLatest('now');
+                        }}
+                    >
                         {RANGES.map((item) => (
                             <option key={item.id} value={item.id}>
                                 {item.label}
                             </option>
                         ))}
+                        <option value="custom">Custom…</option>
                     </select>
+                    {customTime ? (
+                        <>
+                            <TextInput
+                                aria-label="Custom time range start"
+                                placeholder="-7d or 2026-11-06 14:00"
+                                value={customStart}
+                                onChange={(event) => setCustomStart(event.target.value)}
+                            />
+                            <TextInput
+                                aria-label="Custom time range end"
+                                placeholder="now or 2026-11-06 18:00"
+                                value={customEnd}
+                                onChange={(event) => setCustomEnd(event.target.value)}
+                            />
+                            <ToolButton
+                                type="button"
+                                onClick={() => {
+                                    const result = customRange(customStart, customEnd, Date.now() / 1000);
+                                    if ('error' in result) {
+                                        setCustomTimeError(result.error);
+                                        return;
+                                    }
+                                    setCustomTimeError('');
+                                    setRange(result.earliest);
+                                    setLatest(result.latest);
+                                }}
+                            >
+                                Apply time range
+                            </ToolButton>
+                            {customTimeError ? <Note role="alert">{customTimeError}</Note> : null}
+                        </>
+                    ) : null}
                     <ToolButton type="button" aria-label="Refresh chart data" onClick={refreshNow} disabled={charts.length === 0}>
                         Refresh <RefreshLabel refreshedAt={refreshedAt} auto={autoRefresh} />
                     </ToolButton>
@@ -1209,11 +1370,62 @@ export function Explorer(): React.ReactElement {
                         onClick={() => {
                             setCharts([]);
                             setSelectedId('');
+                            setMaximizedId('');
+                            setMinimizedIds(new Set());
                         }}
                     >
                         Remove all
                     </ToolButton>
                 </Toolbar>
+                <FilterBox aria-label="Global filters">
+                    {globalFilters.map((filter) => (
+                        <Chip key={`${filter.dimension}:${filter.mode}:${filter.values.join(',')}`}>
+                            {filter.dimension} {filter.mode === 'include' ? 'includes' : 'excludes'} {filter.values.join(', ')}
+                            <ChipRemove
+                                type="button"
+                                aria-label={`Remove global filter ${filter.dimension}`}
+                                onClick={() => setGlobalFilters((current) => current.filter((item) => item !== filter))}
+                            >
+                                ×
+                            </ChipRemove>
+                        </Chip>
+                    ))}
+                    <FilterForm
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            addGlobalFilter();
+                        }}
+                    >
+                        <Select
+                            aria-label="Global filter dimension"
+                            value={globalDimension}
+                            onChange={(event) => setGlobalDimension(event.target.value)}
+                        >
+                            <option value="">Select a dimension</option>
+                            {allDimensions.map((name) => (
+                                <option key={name} value={name}>
+                                    {name}
+                                </option>
+                            ))}
+                        </Select>
+                        <Select
+                            aria-label="Global filter mode"
+                            value={globalMode}
+                            onChange={(event) => setGlobalMode(event.target.value === 'exclude' ? 'exclude' : 'include')}
+                        >
+                            <option value="include">Include</option>
+                            <option value="exclude">Exclude</option>
+                        </Select>
+                        <FilterInput
+                            aria-label="Global filter values"
+                            value={globalValues}
+                            placeholder="Values, comma separated"
+                            onChange={(event) => setGlobalValues(event.target.value)}
+                        />
+                        <ToolButton type="submit">Add global filter</ToolButton>
+                    </FilterForm>
+                    {globalFilterError ? <Note role="alert">{globalFilterError}</Note> : null}
+                </FilterBox>
                 {recovered && charts.length > 0 ? (
                     <Note role="status">
                         Your work has been recovered.{' '}
@@ -1240,20 +1452,38 @@ export function Explorer(): React.ReactElement {
                         )}
                     </Empty>
                 ) : (
-                    <ChartList $grid={layout === 'grid'} data-layout={layout}>
-                        {charts.map((chart) => (
+                    <ChartList $grid={layout === 'grid' && !maximizedId} data-layout={layout}>
+                        {(maximizedId ? charts.filter((chart) => chart.id === maximizedId) : charts).map((chart) => (
                             <ChartView
                                 key={chart.id}
                                 chart={chart}
+                                minimized={minimizedIds.has(chart.id)}
+                                maximized={chart.id === maximizedId}
+                                onMinimize={() =>
+                                    setMinimizedIds((current) => {
+                                        const next = new Set(current);
+                                        if (next.has(chart.id)) {
+                                            next.delete(chart.id);
+                                        } else {
+                                            next.add(chart.id);
+                                        }
+                                        return next;
+                                    })
+                                }
+                                onMaximize={() => setMaximizedId((current) => (current === chart.id ? '' : chart.id))}
                                 range={range}
+                                latest={latest}
                                 span={span}
                                 refreshToken={refreshToken}
                                 globalSplit={globalSplit}
+                                globalFilters={globalFilters}
+                                metricDims={metricDims}
                                 eventIndexes={eventIndexes}
                                 selected={chart.id === selected?.id}
                                 onSelect={() => setSelectedId(chart.id)}
                                 onRemove={() => {
                                     setCharts((current) => current.filter((item) => item.id !== chart.id));
+                                    setMaximizedId((current) => (current === chart.id ? '' : current));
                                     if (selected?.id === chart.id) {
                                         setSelectedId('');
                                     }
@@ -1391,12 +1621,14 @@ export function Explorer(): React.ReactElement {
                             </Select>
                             <span>
                                 {series.splitBy === INHERIT_SPLIT
-                                    ? globalSplit
-                                        ? `Uses the global split by ${globalSplit}.`
-                                        : 'No global split is set.'
+                                    ? !selected.useGlobalSplit
+                                        ? 'The global split is off for this chart.'
+                                        : globalSplit
+                                          ? `Uses the global split by ${globalSplit}.`
+                                          : 'No global split is set.'
                                     : 'Display this series as separate values.'}
                             </span>
-                            {resolveSplit(series, globalSplit) ? (
+                            {resolveSplit(series, globalSplit, selected.useGlobalSplit) ? (
                                 <SplitRow>
                                     <Select
                                         aria-label="Split limit type"
@@ -1737,6 +1969,17 @@ export function Explorer(): React.ReactElement {
                         <details>
                             <summary>Chart settings</summary>
                             <Field as="div">
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        aria-label="Use global split by for this chart"
+                                        checked={selected.useGlobalSplit}
+                                        onChange={(event) => patchChart({ useGlobalSplit: event.target.checked })}
+                                    />{' '}
+                                    Use global split by for this chart
+                                </label>
+                            </Field>
+                            <Field as="div">
                                 Chart type
                                 <Select
                                     aria-label="Chart type"
@@ -1841,6 +2084,26 @@ export function Explorer(): React.ReactElement {
                                     <option value="linear">Linear</option>
                                     <option value="log">Log</option>
                                 </Select>
+                                <Select
+                                    aria-label="Tooltip decimal places"
+                                    value={String(selected.settings.decimals ?? 4)}
+                                    onChange={(event) => patchSettings({ decimals: Number(event.target.value) })}
+                                >
+                                    {[0, 1, 2, 3, 4].map((count) => (
+                                        <option key={count} value={count}>
+                                            {count} decimal places in tooltips
+                                        </option>
+                                    ))}
+                                </Select>
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        aria-label="Abbreviate axis numbers"
+                                        checked={selected.settings.abbreviate !== false}
+                                        onChange={(event) => patchSettings({ abbreviate: event.target.checked })}
+                                    />{' '}
+                                    Abbreviate numbers on the axis
+                                </label>
                                 {validateAxis(selected.settings) ? <span role="alert">{validateAxis(selected.settings)}</span> : null}
                                 <button
                                     type="button"

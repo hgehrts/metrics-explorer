@@ -1,6 +1,7 @@
 import { mergeTables, toCsv } from '../src/export/table';
 import {
     createSeries,
+    globalFiltersFor,
     hasSplitValues,
     INHERIT_SPLIT,
     refreshStatus,
@@ -73,4 +74,22 @@ test('keeps distinct series names and shows a time shift in the legend', () => {
             { metric: 'cpu.idle' },
         ])
     ).toBe('cpu.user Avg');
+});
+
+test('a chart that does not follow the global split draws inherited series unsplit', () => {
+    const inherited = { splitBy: '*global*' };
+    expect(resolveSplit(inherited, 'host', false)).toBe('');
+    expect(resolveSplit(inherited, 'host', true)).toBe('host');
+    expect(resolveSplit({ splitBy: 'c' }, 'host', false)).toBe('c');
+});
+
+test('global filters skip a metric that lacks the dimension', () => {
+    const filters = [
+        { dimension: 'extracted_host', mode: 'include' as const, values: ['lab-a'] },
+        { dimension: 'host', mode: 'include' as const, values: ['0a5dac8e81ff'] },
+    ];
+    const dims = { 'lab.net.bytes_total': ['extracted_host'] };
+    expect(globalFiltersFor({ metric: 'lab.net.bytes_total' }, filters, dims)).toEqual([filters[0]]);
+    expect(globalFiltersFor({ metric: 'lab.unknown' }, filters, dims)).toEqual(filters);
+    expect(globalFiltersFor({ metric: 'lab.net.bytes_total', source: 'event' }, filters, dims)).toEqual([]);
 });

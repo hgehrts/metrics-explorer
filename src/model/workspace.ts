@@ -29,6 +29,8 @@ export type ChartModel = {
     id: string;
     series: Series[];
     settings: ChartSettings;
+    /** When false, series that inherit the global split draw unsplit, so this chart keeps its own view. */
+    useGlobalSplit: boolean;
 };
 
 export const AUTO_REFRESH_MS = 10000;
@@ -36,10 +38,12 @@ export const AUTO_REFRESH_MS = 10000;
 /** Marks a series that takes the workspace split. Not a valid dimension name, so it cannot collide with one. */
 export const INHERIT_SPLIT = '*global*';
 
-/** The split a series actually uses: its own dimension, the global one when it inherits, or none. */
-export function resolveSplit(series: Pick<Series, 'splitBy'>, globalSplit: string): string {
+/**
+ * The split a series actually uses: its own dimension, the global one when it inherits and the chart follows it, or none.
+ */
+export function resolveSplit(series: Pick<Series, 'splitBy'>, globalSplit: string, useGlobalSplit = true): string {
     if (series.splitBy === INHERIT_SPLIT) {
-        return globalSplit;
+        return useGlobalSplit ? globalSplit : '';
     }
     return series.splitBy;
 }
@@ -53,8 +57,21 @@ export function hasSplitValues(rows: Array<Record<string, unknown>>, field: stri
 }
 
 /** Series with their resolved split, for searches, legends and the signature of a chart. */
-export function resolveSeries(series: Series[], globalSplit: string): Series[] {
-    return series.map((item) => ({ ...item, splitBy: resolveSplit(item, globalSplit) }));
+export function resolveSeries(series: Series[], globalSplit: string, useGlobalSplit = true): Series[] {
+    return series.map((item) => ({ ...item, splitBy: resolveSplit(item, globalSplit, useGlobalSplit) }));
+}
+
+/** The global filters a series gets: all of them for a metric with those dimensions, none for events and datasets. */
+export function globalFiltersFor(
+    item: { source?: string; metric: string },
+    filters: SeriesFilter[],
+    metricDims: Record<string, string[]>
+): SeriesFilter[] {
+    if ((item.source ?? 'metric') !== 'metric') {
+        return [];
+    }
+    const known = metricDims[item.metric];
+    return known ? filters.filter((filter) => known.includes(filter.dimension)) : filters;
 }
 
 let sequence = 0;
@@ -98,7 +115,12 @@ export function createSeries(metric: string, filters: SeriesFilter[] = [], sourc
 }
 
 export function createChart(metric: string, filters: SeriesFilter[] = [], source: SeriesSource = 'metric'): ChartModel {
-    return { id: nextId('chart'), series: [createSeries(metric, filters, source)], settings: defaultSettings() };
+    return {
+        id: nextId('chart'),
+        series: [createSeries(metric, filters, source)],
+        settings: defaultSettings(),
+        useGlobalSplit: true,
+    };
 }
 
 export function cloneChart(chart: ChartModel): ChartModel {
@@ -106,6 +128,7 @@ export function cloneChart(chart: ChartModel): ChartModel {
         id: nextId('chart'),
         series: chart.series.map((series) => ({ ...series, id: nextId('series') })),
         settings: { ...chart.settings },
+        useGlobalSplit: chart.useGlobalSplit,
     };
 }
 

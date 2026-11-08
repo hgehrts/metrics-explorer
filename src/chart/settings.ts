@@ -28,6 +28,10 @@ export type ChartSettings = {
     yMin: string;
     yMax: string;
     yScale: 'linear' | 'log';
+    /** Shortens axis numbers with SI prefixes, such as 214K. On by default; off shows the full numbers. */
+    abbreviate?: boolean;
+    /** Decimal places in the tooltip, 0 to 4. Missing means 4, the default of the original. */
+    decimals?: number;
 };
 
 export const CHART_TYPES: { id: ChartType; label: string }[] = [
@@ -52,7 +56,16 @@ export const SPAN_UNITS: { id: 's' | 'm' | 'h' | 'd'; label: string }[] = [
 ];
 
 export function defaultSettings(): ChartSettings {
-    return { type: 'line', content: 'chart', span: '', yMin: '', yMax: '', yScale: 'linear' };
+    return {
+        type: 'line',
+        content: 'chart',
+        span: '',
+        yMin: '',
+        yMax: '',
+        yScale: 'linear',
+        abbreviate: true,
+        decimals: 4,
+    };
 }
 
 const SUFFIX: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9 };
@@ -88,11 +101,14 @@ export function validateAxis(settings: Pick<ChartSettings, 'yMin' | 'yMax' | 'yS
     return '';
 }
 
-export function axisOptions(settings: ChartSettings): Record<string, number | string> {
+export function axisOptions(settings: ChartSettings): Record<string, number | string | boolean> {
     if (validateAxis(settings)) {
-        return { yAxisScale: settings.yScale };
+        return { yAxisScale: settings.yScale, yAxisAbbreviation: settings.abbreviate !== false };
     }
-    const options: Record<string, number | string> = { yAxisScale: settings.yScale };
+    const options: Record<string, number | string | boolean> = {
+        yAxisScale: settings.yScale,
+        yAxisAbbreviation: settings.abbreviate !== false,
+    };
     const min = parseAxisValue(settings.yMin);
     const max = parseAxisValue(settings.yMax);
     if (typeof min === 'number') {

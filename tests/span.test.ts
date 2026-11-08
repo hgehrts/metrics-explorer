@@ -1,4 +1,4 @@
-import { searchWindow, spanForDuration } from '../src/spl/span';
+import { searchWindow, spanForDuration, spanForRange } from '../src/spl/span';
 
 test('uses 10s for one hour so the chart stays under 1000 points', () => {
     expect(spanForDuration(3600)).toBe('10s');
@@ -23,4 +23,32 @@ test('rejects a time shift that is not on the allowlist', () => {
 
 test('uses 30 minutes for a week so the chart stays under 1000 points', () => {
     expect(spanForDuration(7 * 86400)).toBe('30m');
+});
+
+test('a custom range with a shift moves both epoch bounds back', () => {
+    const now = 1_800_000_000;
+    expect(searchWindow('1799990000', '1h', '1799996400', now)).toEqual({
+        earliest: String(1799990000 - 3600),
+        latest: String(1799996400 - 3600),
+    });
+});
+
+test('a custom range that ends now shifts the end with a relative token', () => {
+    const now = 1_800_000_000;
+    expect(searchWindow('1799990000', '1h', 'now', now)).toEqual({
+        earliest: String(1799990000 - 3600),
+        latest: '-3600s',
+    });
+});
+
+test('months need a relative range, not an absolute one', () => {
+    expect(() => searchWindow('1799990000', '1mon', '1799996400', 1_800_000_000)).toThrow(
+        'Months and years need a relative time range.'
+    );
+});
+
+test('the span follows the length of a custom range', () => {
+    const now = 1_800_000_000;
+    expect(spanForRange('-24h', 'now', now)).toBe('5m');
+    expect(spanForRange(String(now - 7 * 86400), String(now - 86400), now)).toBe('10m');
 });

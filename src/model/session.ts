@@ -1,4 +1,4 @@
-import { ChartModel } from './workspace';
+import { ChartModel, SeriesFilter } from './workspace';
 
 /** What is kept between visits: the charts and the view around them. Never credentials or search results. */
 export interface SavedSession {
@@ -7,8 +7,11 @@ export interface SavedSession {
     charts: ChartModel[];
     layout: 'stack' | 'grid';
     range: string;
+    /** End of the chart range: `now`, or a fixed time for a custom range. */
+    latest: string;
     catalogRange: string;
     globalSplit: string;
+    globalFilters: SeriesFilter[];
 }
 
 export const SESSION_VERSION = 1;
@@ -19,6 +22,22 @@ export function sessionKey(user: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const NAME = /^[A-Za-z0-9_.:-]+$/;
+const VALUE = /^[^\r\n]{1,200}$/;
+
+export function isSeriesFilter(value: unknown): value is SeriesFilter {
+    return (
+        isRecord(value) &&
+        typeof value.dimension === 'string' &&
+        NAME.test(value.dimension) &&
+        (value.mode === 'include' || value.mode === 'exclude') &&
+        Array.isArray(value.values) &&
+        value.values.length >= 1 &&
+        value.values.length <= 50 &&
+        value.values.every((item) => typeof item === 'string' && VALUE.test(item))
+    );
 }
 
 function isChart(value: unknown): value is ChartModel {
@@ -55,12 +74,26 @@ export function parseSession(text: string | null): SavedSession | null {
     if (typeof value.range !== 'string' || typeof value.globalSplit !== 'string' || typeof value.savedAt !== 'number') {
         return null;
     }
+    // Sessions saved before custom ranges existed end now.
+    if (typeof value.latest !== 'string' || !/^(now|-\d{1,4}[smhdw]|\d{1,11})$/.test(value.latest)) {
+        value.latest = 'now';
+    }
     // Sessions saved before the catalog range was kept fall back to the default.
     if (typeof value.catalogRange !== 'string') {
         value.catalogRange = '-2d';
     }
     if (value.charts.length === 0 || !value.charts.every(isChart)) {
         return null;
+    }
+    // Global filters are checked like any filter: names and values only, never raw SPL.
+    value.globalFilters = Array.isArray(value.globalFilters)
+        ? (value.globalFilters as unknown[]).filter(isSeriesFilter)
+        : [];
+    // Charts saved before the per-chart split switch follow the global split.
+    for (const chart of value.charts as Array<ChartModel & { useGlobalSplit?: unknown }>) {
+        if (typeof chart.useGlobalSplit !== 'boolean') {
+            chart.useGlobalSplit = true;
+        }
     }
     return value as unknown as SavedSession;
 }

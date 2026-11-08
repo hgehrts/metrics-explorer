@@ -19,8 +19,19 @@ test('rejects zero or negative bounds on a log scale', () => {
 });
 
 test('hands only valid bounds to the chart', () => {
-    expect(axisOptions({ ...defaultSettings(), yMin: '1k', yMax: '' })).toEqual({ yAxisScale: 'linear', yAxisMin: 1000 });
-    expect(axisOptions({ ...defaultSettings(), yMin: '10', yMax: '5' })).toEqual({ yAxisScale: 'linear' });
+    expect(axisOptions({ ...defaultSettings(), yMin: '1k', yMax: '' })).toEqual({
+        yAxisScale: 'linear',
+        yAxisAbbreviation: true,
+        yAxisMin: 1000,
+    });
+    expect(axisOptions({ ...defaultSettings(), yMin: '10', yMax: '5' })).toEqual({
+        yAxisScale: 'linear',
+        yAxisAbbreviation: true,
+    });
+    expect(axisOptions({ ...defaultSettings(), abbreviate: false })).toEqual({
+        yAxisScale: 'linear',
+        yAxisAbbreviation: false,
+    });
 });
 
 test('builds a span only from a positive whole number and a known unit', () => {

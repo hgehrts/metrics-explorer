@@ -1,4 +1,5 @@
 import { parseTimeShift, shiftSeconds } from './timeShift';
+import { boundSeconds, isRelativeBound } from './timeRange';
 
 const SPANS: { seconds: number; spl: string }[] = [
     { seconds: 1, spl: '1s' },
@@ -24,34 +25,44 @@ export function spanForDuration(durationSeconds: number, maxPoints = 1000): stri
     return SPANS[SPANS.length - 1].spl;
 }
 
-const RANGE_SECONDS: Record<string, number> = {
-    '-15m': 15 * 60,
-    '-60m': 60 * 60,
-    '-4h': 4 * 3600,
-    '-24h': 24 * 3600,
-    '-7d': 7 * 86400,
-    '-2d': 2 * 86400,
-};
-
-export function spanForRange(earliest: string): string {
-    return spanForDuration(RANGE_SECONDS[earliest] ?? 3600);
+/** Span for the range between two bounds. Presets and custom ranges use the same rule. */
+export function spanForRange(earliest: string, latest = 'now', nowSeconds = Date.now() / 1000): string {
+    const duration = boundSeconds(latest, nowSeconds) - boundSeconds(earliest, nowSeconds);
+    return spanForDuration(duration > 0 ? duration : 3600);
 }
 
-export function searchWindow(range: string, shift = ''): { earliest: string; latest: string } {
+/**
+ * The window one series searches. A time shift moves both bounds back. Relative ranges keep relative tokens;
+ * custom ranges with a shift use epoch seconds. Months and years are calendar units and need a relative range.
+ */
+export function searchWindow(
+    range: string,
+    shift = '',
+    latest = 'now',
+    nowSeconds = Date.now() / 1000
+): { earliest: string; latest: string } {
     if (!shift) {
-        return { earliest: range, latest: 'now' };
+        return { earliest: range, latest };
     }
     const parsed = parseTimeShift(shift);
-    if (!parsed || !(range in RANGE_SECONDS)) {
+    if (!parsed) {
         throw new Error('Time shift is not allowed.');
     }
+    const relativeRange = isRelativeBound(range) && latest === 'now';
     if (parsed.unit === 'mon' || parsed.unit === 'y') {
+        if (!relativeRange) {
+            throw new Error('Months and years need a relative time range.');
+        }
         return { earliest: `${range}-${parsed.token}`, latest: `-${parsed.token}` };
     }
     const seconds = shiftSeconds(shift);
     if (!seconds) {
         throw new Error('Time shift is not allowed.');
     }
-    const duration = RANGE_SECONDS[range];
-    return { earliest: `-${duration + seconds}s`, latest: `-${seconds}s` };
+    if (relativeRange) {
+        const duration = boundSeconds('now', nowSeconds) - boundSeconds(range, nowSeconds);
+        return { earliest: `-${duration + seconds}s`, latest: `-${seconds}s` };
+    }
+    const shiftedLatest = latest === 'now' ? `-${seconds}s` : String(Math.floor(boundSeconds(latest, nowSeconds) - seconds));
+    return { earliest: String(Math.floor(boundSeconds(range, nowSeconds) - seconds)), latest: shiftedLatest };
 }

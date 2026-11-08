@@ -4,7 +4,7 @@ import { createChart } from '../src/model/workspace';
 function sample(): string {
     const chart = createChart('lab.net.bytes_total');
     return serializeSession(
-        { charts: [chart], layout: 'grid', range: '-60m', catalogRange: '-7d', globalSplit: 'host' },
+        { charts: [chart], layout: 'grid', range: '-60m', latest: 'now', catalogRange: '-7d', globalSplit: 'host', globalFilters: [] },
         1234
     );
 }
@@ -19,6 +19,18 @@ test('a saved session comes back with its charts and view', () => {
     expect(session?.catalogRange).toBe('-7d');
     expect(session?.globalSplit).toBe('host');
     expect(session?.savedAt).toBe(1234);
+});
+
+test('a session keeps a custom range end and falls back to now for damaged values', () => {
+    const custom = parseSession(
+        serializeSession(
+            { charts: [createChart('lab.net.bytes_total')], layout: 'stack', range: '1700000000', latest: '1700003600', catalogRange: '-2d', globalSplit: '', globalFilters: [] },
+            1
+        )
+    );
+    expect(custom?.latest).toBe('1700003600');
+    const damaged = JSON.stringify({ version: 1, charts: [chart()], layout: 'grid', range: '-1h', latest: 'x | delete', globalSplit: '', savedAt: 1 });
+    expect(parseSession(damaged)?.latest).toBe('now');
 });
 
 test('a session saved without a catalog range gets the default one', () => {
