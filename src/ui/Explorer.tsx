@@ -16,6 +16,8 @@ import {
     functionsFor,
     needsField,
     parsePercentile,
+    percentileMethods,
+    PercentileKind,
     PERCENTILE_PRESETS,
     rateExplanation,
     resolveForSource,
@@ -23,7 +25,7 @@ import {
     SeriesSource,
 } from '../spl/functions';
 import { parseTimeShift, SHIFT_UNITS, ShiftUnit, timeShiftToken } from '../spl/timeShift';
-import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, buildSourcetypeSearch, SPLIT_LIMITS } from '../spl/buildMstats';
+import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, buildFieldSearch, buildSourcetypeSearch, readableFields, SPLIT_LIMITS } from '../spl/buildMstats';
 import { spanForRange } from '../spl/span';
 import { boundForInput, customRange } from '../spl/timeRange';
 import { isSeriesFilter } from '../model/session';
@@ -45,8 +47,13 @@ import {
     seriesLegend,
 } from '../model/workspace';
 import { ChartView } from './ChartView';
+import { DataLists } from './DataLists';
+import { SaveDialog, SaveMode } from './SaveDialog';
+import { t } from '../i18n';
 import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
+import { splunkGet } from '../api/splunkd';
 import { buildCatalogSearch, DataFilter, filterLabel, indexFromSearch, validateFilter } from '../model/dataFilters';
+import { loadAllowedMetricIndexes } from '../model/metricIndexes';
 import { DEFAULT_MAX_METRICS, loadSettings } from '../model/loadDefaults';
 
 /** The filter a tree leaf adds: a metric under a dimension value only shows that value. */
@@ -538,7 +545,9 @@ export function Explorer(): React.ReactElement {
     const [filterPicked, setFilterPicked] = useState<string[]>([]);
     const [customOpen, setCustomOpen] = useState(false);
     const [customText, setCustomText] = useState('');
-    const [percentileMethod, setPercentileMethod] = useState<'perc' | 'upperperc'>('perc');
+    const [percentileMethod, setPercentileMethod] = useState<PercentileKind>('perc');
+    const [sourceFields, setSourceFields] = useState<string[]>([]);
+    const [saveMode, setSaveMode] = useState<SaveMode | null>(null);
     const [shiftCustom, setShiftCustom] = useState(false);
     const [shiftAmount, setShiftAmount] = useState('');
     const [shiftUnit, setShiftUnit] = useState<ShiftUnit>('h');
@@ -568,6 +577,9 @@ export function Explorer(): React.ReactElement {
     const [sourcetypes, setSourcetypes] = useState<string[]>([]);
     const [sourcetypesReady, setSourcetypesReady] = useState(false);
     const [eventIndexes, setEventIndexes] = useState<string[]>([]);
+    /** Metric indexes this user's Splunk ACL allows. Undefined until loaded, or when the lookup failed. */
+    const [metricIndexes, setMetricIndexes] = useState<string[] | undefined>(undefined);
+    const [metricIndexesReady, setMetricIndexesReady] = useState(false);
     const [datamodels, setDatamodels] = useState<string[]>([]);
     const [defaultFilters, setDefaultFilters] = useState<DataFilter[]>([]);
     const [groupBy, setGroupBy] = useState('metric_name');
@@ -670,13 +682,43 @@ export function Explorer(): React.ReactElement {
     }, []);
 
     useEffect(() => {
-        if (!defaultsReady) {
+        let alive = true;
+        const get = async (path: string): Promise<unknown> => {
+            const response = await fetch(`/splunkd/__raw${path}`, {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            });
+            if (!response.ok) {
+                throw new Error(String(response.status));
+            }
+            return response.json() as unknown;
+        };
+        loadAllowedMetricIndexes(get)
+            .then((names) => {
+                if (alive) {
+                    setMetricIndexes(names);
+                    setMetricIndexesReady(true);
+                }
+            })
+            .catch(() => {
+                if (alive) {
+                    setMetricIndexes(undefined);
+                    setMetricIndexesReady(true);
+                }
+            });
+        return () => {
+            alive = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!defaultsReady || !metricIndexesReady) {
             return undefined;
         }
         setCatalogError('');
         setCatalogReady(false);
         return runSearch(
-            buildCatalogSearch(dataFilters),
+            buildCatalogSearch(dataFilters, '', metricIndexes),
             catalogRange,
             (payload) => {
                 const limited = limitMetricNames(collectMetricNames(payload), maxMetrics);
@@ -689,7 +731,7 @@ export function Explorer(): React.ReactElement {
                 setCatalogReady(true);
             }
         );
-    }, [catalogRange, dataFilters, defaultsReady]);
+    }, [catalogRange, dataFilters, defaultsReady, metricIndexes, metricIndexesReady]);
 
     useEffect(() => {
         if (charts.length === 0) {
@@ -707,47 +749,77 @@ export function Explorer(): React.ReactElement {
         }
     }, [charts, layout, range, latest, catalogRange, globalSplit, globalFilters]);
 
-    function openSaved(): void {
-        if (!savedSession) {
-            return;
-        }
-        const revived = savedSession.charts.map(reviveChart);
+    function applySession(saved: SavedSession): void {
+        const revived = saved.charts.map(reviveChart);
         setCharts(revived);
         setSelectedId(revived[0]?.id ?? '');
         setSelectedSeriesId('');
         setExpandedSeriesId('');
-        setLayout(savedSession.layout);
-        setRange(savedSession.range);
-        setLatest(savedSession.latest);
-        // A saved range that is not a preset comes back in the custom fields, so the select shows what the charts use.
-        const preset = RANGES.some((item) => item.id === savedSession.range) && savedSession.latest === 'now';
+        setLayout(saved.layout);
+        setRange(saved.range);
+        setLatest(saved.latest);
+        const preset = RANGES.some((item) => item.id === saved.range) && saved.latest === 'now';
         setCustomTime(!preset);
-        setCustomStart(boundForInput(savedSession.range));
-        setCustomEnd(boundForInput(savedSession.latest));
+        setCustomStart(boundForInput(saved.range));
+        setCustomEnd(boundForInput(saved.latest));
         setCustomTimeError('');
-        setCatalogRange(savedSession.catalogRange);
-        setGlobalSplit(savedSession.globalSplit);
-        setGlobalFilters(savedSession.globalFilters);
+        setCatalogRange(saved.catalogRange);
+        setGlobalSplit(saved.globalSplit);
+        setGlobalFilters(saved.globalFilters);
+        setRecovered(false);
+    }
+
+    function openSaved(): void {
+        if (!savedSession) {
+            return;
+        }
+        applySession(savedSession);
         setRecovered(true);
     }
 
     useEffect(() => {
+        const key = new URLSearchParams(window.location.search).get('workspace');
+        if (!key) {
+            return undefined;
+        }
+        let alive = true;
+        splunkGet(`storage/collections/data/mx_workspaces/${encodeURIComponent(key)}`)
+            .then((body) => {
+                if (!alive || !body || typeof body !== 'object') {
+                    return;
+                }
+                const state = (body as { state?: unknown }).state;
+                const session = parseSession(typeof state === 'string' ? state : null);
+                if (session) {
+                    applySession(session);
+                }
+            })
+            .catch(() => undefined);
+        return () => {
+            alive = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!metricIndexesReady) {
+            return undefined;
+        }
         setAllDimensions([]);
         return runSearch(
-            buildAllDimensionSearch(),
+            buildAllDimensionSearch(metricIndexes),
             catalogRange,
             (payload) => setAllDimensions(collectFieldValues(payload, '_dims')),
             () => setAllDimensions([])
         );
-    }, [catalogRange]);
+    }, [catalogRange, metricIndexes, metricIndexesReady]);
 
     useEffect(() => {
         setValueRows([]);
-        if (!defaultsReady || groupBy === 'metric_name') {
+        if (!defaultsReady || !metricIndexesReady || groupBy === 'metric_name') {
             return undefined;
         }
         return runSearch(
-            buildCatalogSearch(dataFilters, groupBy),
+            buildCatalogSearch(dataFilters, groupBy, metricIndexes),
             catalogRange,
             (payload) => {
                 const limited = limitValueRows(collectValueMetrics(payload, groupBy), maxMetrics);
@@ -756,7 +828,7 @@ export function Explorer(): React.ReactElement {
             },
             () => setValueRows([])
         );
-    }, [groupBy, dataFilters, catalogRange, defaultsReady]);
+    }, [groupBy, dataFilters, catalogRange, defaultsReady, metricIndexes, metricIndexesReady]);
 
     useEffect(() => {
         if (!eventsOpen) {
@@ -845,6 +917,27 @@ export function Explorer(): React.ReactElement {
     );
     const selected = charts.find((chart) => chart.id === selectedId) ?? charts[0];
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
+
+    useEffect(() => {
+        const source = series?.source ?? 'metric';
+        if (!series || (source !== 'event' && source !== 'dataset')) {
+            setSourceFields([]);
+            return undefined;
+        }
+        let search = '';
+        try {
+            search = buildFieldSearch(source, series.metric, eventIndexes);
+        } catch {
+            setSourceFields([]);
+            return undefined;
+        }
+        return runSearch(
+            search,
+            catalogRange,
+            (payload) => setSourceFields(readableFields(collectFieldValues(payload, 'field'))),
+            () => setSourceFields([])
+        );
+    }, [series?.id, series?.source, series?.metric, catalogRange, eventIndexes]);
     const chosen = resolveForSource(series?.source, series?.aggregation ?? '');
     const span = spanForRange(range, latest);
     const selectedMetrics = new Set(selected?.series.map((item) => item.metric) ?? []);
@@ -876,7 +969,7 @@ export function Explorer(): React.ReactElement {
         const metrics = chartMetricKey ? chartMetricKey.split('\n') : [];
         const stops = metrics.map((metric) =>
             runSearch(
-                buildDimensionSearch(metric),
+                buildDimensionSearch(metric, metricIndexes),
                 range,
                 (payload) =>
                     setMetricDims((current) => ({ ...current, [metric]: collectFieldValues(payload, '_dims') })),
@@ -885,7 +978,7 @@ export function Explorer(): React.ReactElement {
             )
         );
         return () => stops.forEach((stop) => stop());
-    }, [chartMetricKey, range, latest]);
+    }, [chartMetricKey, range, latest, metricIndexes]);
 
     useEffect(() => {
         setDimensions([]);
@@ -894,7 +987,7 @@ export function Explorer(): React.ReactElement {
         }
         try {
             return runSearch(
-                buildDimensionSearch(series.metric),
+                buildDimensionSearch(series.metric, metricIndexes),
                 range,
                 (payload) => setDimensions(collectFieldValues(payload, '_dims')),
                 () => setDimensions([]),
@@ -903,7 +996,7 @@ export function Explorer(): React.ReactElement {
         } catch {
             return undefined;
         }
-    }, [series?.metric, range, latest]);
+    }, [series?.metric, range, latest, metricIndexes]);
 
     useEffect(() => {
         setFilterChoices([]);
@@ -913,7 +1006,7 @@ export function Explorer(): React.ReactElement {
         }
         try {
             return runSearch(
-                buildDimensionValueSearch(series.metric, filterDimension),
+                buildDimensionValueSearch(series.metric, filterDimension, metricIndexes),
                 range,
                 (payload) => setFilterChoices(collectFieldValues(payload, filterDimension)),
                 () => setFilterChoices([]),
@@ -922,7 +1015,7 @@ export function Explorer(): React.ReactElement {
         } catch {
             return undefined;
         }
-    }, [filterOpen, series?.metric, filterDimension, range, latest]);
+    }, [filterOpen, series?.metric, filterDimension, range, latest, metricIndexes]);
 
     function refreshNow(): void {
         setRefreshToken((token) => token + 1);
@@ -931,6 +1024,19 @@ export function Explorer(): React.ReactElement {
 
     function addChart(metricName: string, filter?: MetricNode['filter'], source: SeriesSource = 'metric'): void {
         const chart = createChart(metricName, seriesFilters(filter), source);
+        setCharts((current) => [...current, chart]);
+        setSelectedId(chart.id);
+        setSelectedSeriesId(chart.series[0].id);
+        setExpandedSeriesId(chart.series[0].id);
+        refreshNow();
+    }
+
+    function addBaseChart(name: string, field: string, mode: 'live' | 'cached', owner: string): void {
+        const chart = createChart(name, [], 'base');
+        chart.series[0].field = field;
+        chart.series[0].aggregation = 'Avg';
+        chart.series[0].baseMode = mode;
+        chart.series[0].baseOwner = owner;
         setCharts((current) => [...current, chart]);
         setSelectedId(chart.id);
         setSelectedSeriesId(chart.series[0].id);
@@ -999,7 +1105,7 @@ export function Explorer(): React.ReactElement {
         patchSeries({ aggregation: `${percentileKind}${value}` });
     }
 
-    function changePercentileMethod(kind: 'perc' | 'upperperc'): void {
+    function changePercentileMethod(kind: PercentileKind): void {
         setPercentileMethod(kind);
         if (series && parsedPercentile) {
             patchSeries({ aggregation: `${kind}${parsedPercentile.value}` });
@@ -1245,6 +1351,7 @@ export function Explorer(): React.ReactElement {
                       ))
                     : null}
                 {datasetsOpen && datamodels.length === 0 ? <Note>No data models.</Note> : null}
+                <DataLists catalogRange={catalogRange} onAddBase={addBaseChart} />
                 <Footer>
                     Data ingested from{' '}
                     <select
@@ -1364,6 +1471,12 @@ export function Explorer(): React.ReactElement {
                     <ToolButton type="button" aria-pressed={layout === 'stack'} $pressed={layout === 'stack'} onClick={() => setLayout('stack')}>
                         Stack layout
                     </ToolButton>
+                    <ToolButton type="button" disabled={charts.length === 0} onClick={() => setSaveMode('all')}>
+                        {t('Save all charts')}
+                    </ToolButton>
+                    <ToolButton type="button" onClick={() => setSaveMode('workspace')}>
+                        {t('Workspaces')}
+                    </ToolButton>
                     <ToolButton
                         type="button"
                         disabled={charts.length === 0}
@@ -1479,6 +1592,7 @@ export function Explorer(): React.ReactElement {
                                 globalFilters={globalFilters}
                                 metricDims={metricDims}
                                 eventIndexes={eventIndexes}
+                                metricIndexes={metricIndexes}
                                 selected={chart.id === selected?.id}
                                 onSelect={() => setSelectedId(chart.id)}
                                 onRemove={() => {
@@ -1492,6 +1606,17 @@ export function Explorer(): React.ReactElement {
                                     const copy = cloneChart(chart);
                                     setCharts((current) => [...current, copy]);
                                     setSelectedId(copy.id);
+                                }}
+                                onWidenSpan={(next) =>
+                                    setCharts((current) =>
+                                        current.map((item) =>
+                                            item.id === chart.id ? { ...item, settings: { ...item.settings, span: next } } : item
+                                        )
+                                    )
+                                }
+                                onSave={(mode) => {
+                                    setSelectedId(chart.id);
+                                    setSaveMode(mode);
                                 }}
                             />
                         ))}
@@ -1555,12 +1680,20 @@ export function Explorer(): React.ReactElement {
                             </datalist>
                             <span>Select or type an aggregation.</span>
                             {(series.source ?? 'metric') !== 'metric' && needsField(chosen?.name ?? '') ? (
-                                <TextInput
-                                    aria-label="Event field"
-                                    value={series.field}
-                                    placeholder="Indexed field, for example bytes"
-                                    onChange={(event) => patchSeries({ field: event.target.value.trim() })}
-                                />
+                                <>
+                                    <TextInput
+                                        aria-label="Event field"
+                                        value={series.field}
+                                        list="source-fields"
+                                        placeholder="Indexed field, for example bytes"
+                                        onChange={(event) => patchSeries({ field: event.target.value.trim() })}
+                                    />
+                                    <datalist id="source-fields">
+                                        {sourceFields.map((name) => (
+                                            <option key={name} value={name} />
+                                        ))}
+                                    </datalist>
+                                </>
                             ) : null}
                             {chosen?.rate ? <Note>{rateExplanation(chosen.name)}</Note> : null}
                         </Field>
@@ -1586,11 +1719,22 @@ export function Explorer(): React.ReactElement {
                                     aria-label="Percentile method"
                                     value={percentileKind}
                                     onChange={(event) =>
-                                        changePercentileMethod(event.target.value === 'upperperc' ? 'upperperc' : 'perc')
+                                        changePercentileMethod(
+                                            event.target.value === 'upperperc' || event.target.value === 'exactperc'
+                                                ? event.target.value
+                                                : 'perc'
+                                        )
                                     }
                                 >
-                                    <option value="perc">Approximate (perc)</option>
-                                    <option value="upperperc">Upper bound (upperperc)</option>
+                                    {percentileMethods(series.source ?? 'metric').map((kind) => (
+                                        <option key={kind} value={kind}>
+                                            {kind === 'upperperc'
+                                                ? 'Upper bound (upperperc)'
+                                                : kind === 'exactperc'
+                                                  ? t('Exact (exactperc)')
+                                                  : 'Approximate (perc)'}
+                                        </option>
+                                    ))}
                                 </Select>
                             ) : null}
                             {percentilePreset === 'custom' ? (
@@ -1613,7 +1757,10 @@ export function Explorer(): React.ReactElement {
                             >
                                 <option value={INHERIT_SPLIT}>Inherit Global Split By</option>
                                 <option value="">None</option>
-                                {splitChoices(dimensions, series.splitBy === INHERIT_SPLIT ? '' : series.splitBy).map((name) => (
+                                {splitChoices(
+                                    (series.source ?? 'metric') === 'metric' ? dimensions : sourceFields,
+                                    series.splitBy === INHERIT_SPLIT ? '' : series.splitBy
+                                ).map((name) => (
                                     <option key={name} value={name}>
                                         {name}
                                     </option>
@@ -2124,6 +2271,25 @@ export function Explorer(): React.ReactElement {
                     </IconButton>
                 </Rail>
             )}
+            {saveMode ? (
+                <SaveDialog
+                    mode={saveMode}
+                    charts={charts}
+                    chartId={selectedId}
+                    range={range}
+                    latest={latest}
+                    span={span}
+                    catalogRange={catalogRange}
+                    layout={layout}
+                    globalSplit={globalSplit}
+                    globalFilters={globalFilters}
+                    metricDims={metricDims}
+                    eventIndexes={eventIndexes}
+                    metricIndexes={metricIndexes}
+                    onClose={() => setSaveMode(null)}
+                    onOpenWorkspace={applySession}
+                />
+            ) : null}
         </Shell>
     );
 }

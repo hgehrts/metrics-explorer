@@ -8,7 +8,9 @@ export type MetricFunction = {
 /** Presets offered in the percentile list. Custom values use any percent from 0 up to, but not including, 100, with up to three decimals (Splunk rejects 100). */
 export const PERCENTILE_PRESETS = ['50', '75', '90', '95', '99', '99.9'] as const;
 
-export type Percentile = { kind: 'perc' | 'upperperc'; value: string };
+export type PercentileKind = 'perc' | 'upperperc' | 'exactperc';
+
+export type Percentile = { kind: PercentileKind; value: string };
 
 const PERCENT_TEXT = /^\d{1,2}(?:\.\d{1,3})?$/;
 
@@ -16,13 +18,19 @@ export function isPercentText(text: string): boolean {
     return PERCENT_TEXT.test(text.trim());
 }
 
-/** Reads perc95, p99.9 and upperperc95. The short form p95 counts as perc. */
+/** Reads perc95, p99.9, upperperc95 and exactperc95. The short form p95 counts as perc. exactperc is for events only. */
 export function parsePercentile(value: string): Percentile | null {
-    const match = /^(upperperc|perc|p)(.+)$/.exec(value.trim().toLowerCase());
+    const match = /^(exactperc|upperperc|perc|p)(.+)$/.exec(value.trim().toLowerCase());
     if (!match || !isPercentText(match[2])) {
         return null;
     }
-    return { kind: match[1] === 'upperperc' ? 'upperperc' : 'perc', value: match[2].trim() };
+    const kind: PercentileKind = match[1] === 'p' || match[1] === 'perc' ? 'perc' : match[1] === 'upperperc' ? 'upperperc' : 'exactperc';
+    return { kind, value: match[2].trim() };
+}
+
+/** Percentile methods a data source can run. exactperc exists in tstats and timechart, not in mstats. */
+export function percentileMethods(source: SeriesSource): PercentileKind[] {
+    return source === 'metric' ? ['perc', 'upperperc'] : ['perc', 'upperperc', 'exactperc'];
 }
 
 export const METRIC_FUNCTIONS: MetricFunction[] = [
@@ -73,7 +81,7 @@ export const EVENT_FUNCTIONS: MetricFunction[] = [
 
 const EVENT_BY_NAME = new Map(EVENT_FUNCTIONS.map((entry) => [entry.name, entry]));
 
-export type SeriesSource = 'metric' | 'event' | 'dataset';
+export type SeriesSource = 'metric' | 'event' | 'dataset' | 'base';
 
 export function resolveForSource(source: SeriesSource | undefined, value: string): MetricFunction | null {
     return (source ?? 'metric') === 'metric' ? resolveMetricFunction(value) : resolveEventFunction(value);
@@ -133,7 +141,7 @@ export function resolveMetricFunction(value: string): MetricFunction | null {
         return known;
     }
     const percentile = parsePercentile(name);
-    if (percentile) {
+    if (percentile && percentile.kind !== 'exactperc') {
         const label = percentile.kind === 'upperperc' ? `upper p${percentile.value}` : `p${percentile.value}`;
         return { name, label, chart: 'line', rate: false };
     }

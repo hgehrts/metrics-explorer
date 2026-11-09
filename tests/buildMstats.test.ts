@@ -127,5 +127,8 @@ test('the per-metric dimension search keeps a row for metrics without dimensions
     expect(buildDimensionSearch('lab.cpu.user')).toBe(
         '| mcatalog values(_dims) WHERE metric_name="lab.cpu.user" AND index=* AND NOT metric_name="*_mrollup_*"'
     );
+    expect(buildDimensionSearch('lab.cpu.user', ['_metrics', 'metrics_lab'])).toContain(
+        '(index="_metrics" OR index="metrics_lab")'
+    );
     expect(buildDimensionSearch('lab.cpu.user')).not.toContain('mvexpand');
 });

@@ -53,6 +53,18 @@ test('a grouped catalog search returns one row per dimension value', () => {
     expect(() => buildCatalogSearch([], 'bad dim')).toThrow('Dimension name is not allowed.');
 });
 
+test('the catalog names every metric index the user may search, including internal ones', () => {
+    expect(buildCatalogSearch([], '', ['_metrics', 'metrics_lab'])).toBe(
+        '| mcatalog values(metric_name) WHERE (index="_metrics" OR index="metrics_lab")'
+    );
+    expect(buildCatalogSearch([{ kind: 'index', value: '_metrics' }], '', ['_metrics', 'metrics_lab'])).toBe(
+        '| mcatalog values(metric_name) WHERE index="_metrics"'
+    );
+    expect(buildCatalogSearch([{ kind: 'index', value: 'secret' }], '', ['_metrics'])).toBe(
+        '| mcatalog values(metric_name) WHERE index="__mx_none__"'
+    );
+});
+
 test('an index from the URL is used only when it is a valid index name', () => {
     expect(indexFromSearch('?index=metrics_lab')).toBe('metrics_lab');
     expect(indexFromSearch('?foo=1&index=other.idx')).toBe('other.idx');

@@ -25,4 +25,13 @@ COPYFILE_DISABLE=1 tar -czf "${DIST}/metrics_explorer-${VERSION}.tar.gz" \
   --exclude='.*' \
   -C "${ROOT}/stage" metrics_explorer
 
+COMPAT_STAGE="${ROOT}/stage/mx_compat_analytics_workspace"
+rm -rf "$COMPAT_STAGE"
+mkdir -p "$COMPAT_STAGE"
+cp -R "${ROOT}/compat/mx_compat_analytics_workspace/." "$COMPAT_STAGE/"
+find "$COMPAT_STAGE" -name '.DS_Store' -delete
+COPYFILE_DISABLE=1 tar -czf "${DIST}/mx_compat_analytics_workspace-1.0.0.tar.gz" \
+  --exclude='.*' \
+  -C "${ROOT}/stage" mx_compat_analytics_workspace
+
 echo "Wrote ${DIST}/metrics_explorer-${VERSION}.tar.gz"

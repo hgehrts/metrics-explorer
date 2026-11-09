@@ -1,0 +1,10 @@
+<dashboard version="1.1" script="redirect.js" hideEdit="true">
+  <label>Analytics Workspace</label>
+  <row>
+    <panel>
+      <html>
+        <p>The Analytics Workspace is now <a href="/en-US/app/metrics_explorer/explorer">Metrics Explorer</a>.</p>
+      </html>
+    </panel>
+  </row>
+</dashboard>

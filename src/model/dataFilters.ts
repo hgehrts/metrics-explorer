@@ -1,4 +1,4 @@
-import { quoteSpl } from '../spl/buildMstats';
+import { metricIndexClause, quoteSpl } from '../spl/buildMstats';
 
 /**
  * A filter on the data pane. `index` limits the catalog to an index. `exclude` hides metric names that match a pattern.
@@ -33,14 +33,20 @@ const FIELD = /^[A-Za-z0-9_.:-]+$/;
 /**
  * The catalog search for the tree, with the active filters applied.
  * With `by`, the search returns one row per value of that dimension, for the grouped tree.
+ * `metricIndexes` is the metric indexes the signed-in user may search. It replaces `index=*`,
+ * which never includes an internal index such as `_metrics`.
  */
-export function buildCatalogSearch(filters: DataFilter[], by = ''): string {
+export function buildCatalogSearch(filters: DataFilter[], by = '', metricIndexes?: string[]): string {
     const indexes = filters.filter((item) => item.kind === 'index').map((item) => item.value.trim());
     const excludes = filters.filter((item) => item.kind === 'exclude').map((item) => item.value.trim());
+    const allowed = metricIndexes === undefined ? null : new Set(metricIndexes);
+    const chosen = allowed ? (indexes.length > 0 ? indexes.filter((value) => allowed.has(value)) : metricIndexes) : indexes;
     const clauses = [
-        indexes.length > 0
-            ? `(${indexes.map((value) => `index=${quoteSpl(value)}`).join(' OR ')})`
-            : 'index=*',
+        metricIndexes === undefined && indexes.length === 0
+            ? 'index=*'
+            : metricIndexes === undefined
+              ? `(${indexes.map((value) => `index=${quoteSpl(value)}`).join(' OR ')})`
+              : metricIndexClause(chosen),
         ...excludes.map((value) => `NOT metric_name=${quoteSpl(value)}`),
     ];
     if (by && !FIELD.test(by)) {

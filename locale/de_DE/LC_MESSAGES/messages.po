@@ -1,0 +1,59 @@
+# German strings for Metrics Explorer. The React bundle reads the same texts from src/i18n.ts.
+msgid ""
+msgstr ""
+"Language: de_DE\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Save as report"
+msgstr "Als Bericht speichern"
+
+msgid "Save as dashboard panel"
+msgstr "Als Dashboard-Panel speichern"
+
+msgid "Save all charts"
+msgstr "Alle Diagramme speichern"
+
+msgid "Save as base search"
+msgstr "Als Base Search speichern"
+
+msgid "Create alert"
+msgstr "Benachrichtigung erstellen"
+
+msgid "Workspaces"
+msgstr "Arbeitsbereiche"
+
+msgid "Base Searches"
+msgstr "Base Searches"
+
+msgid "Alerts"
+msgstr "Benachrichtigungen"
+
+msgid "Show triggered instances"
+msgstr "Ausgelöste anzeigen"
+
+msgid "Use a wider span"
+msgstr "Größere Spanne verwenden"
+
+msgid "Loading…"
+msgstr "Wird geladen…"
+
+msgid "Exact (exactperc)"
+msgstr "Exakt (exactperc)"
+
+msgid "Open workspace"
+msgstr "Arbeitsbereich öffnen"
+
+msgid "Save workspace"
+msgstr "Arbeitsbereich speichern"
+
+msgid "Classic"
+msgstr "Klassisch"
+
+msgid "Dashboard Studio"
+msgstr "Dashboard Studio"
+
+msgid "Scheduled"
+msgstr "Geplant"
+
+msgid "Streaming"
+msgstr "Streaming"

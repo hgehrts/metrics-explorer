@@ -1,4 +1,4 @@
-import { searchWindow, spanForDuration, spanForRange } from '../src/spl/span';
+import { estimatedPoints, searchWindow, spanForDuration, spanForRange } from '../src/spl/span';
 
 test('uses 10s for one hour so the chart stays under 1000 points', () => {
     expect(spanForDuration(3600)).toBe('10s');
@@ -45,6 +45,13 @@ test('months need a relative range, not an absolute one', () => {
     expect(() => searchWindow('1799990000', '1mon', '1799996400', 1_800_000_000)).toThrow(
         'Months and years need a relative time range.'
     );
+});
+
+test('a manual span that is too fine is counted before the search starts', () => {
+    const now = 1_800_000_000;
+    expect(estimatedPoints('-7d', 'now', '10s', now)).toBeGreaterThan(1000);
+    expect(estimatedPoints('-60m', 'now', '10s', now)).toBeLessThanOrEqual(1000);
+    expect(estimatedPoints('-7d', 'now', '30m', now)).toBeLessThanOrEqual(1000);
 });
 
 test('the span follows the length of a custom range', () => {

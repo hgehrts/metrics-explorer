@@ -11,6 +11,41 @@ export function quoteSpl(value: string): string {
     return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
+const INDEX_NAME = /^[A-Za-z0-9_.-]+$/;
+
+/**
+ * Index clause for metric searches.
+ * `undefined` keeps `index=*`, which does not include internal indexes such as `_metrics`.
+ * A list names every metric index the caller's Splunk ACL allows, including internal ones.
+ */
+export function metricIndexClause(indexes?: string[]): string {
+    if (indexes === undefined) {
+        return 'index=*';
+    }
+    const names = [...new Set(indexes.filter((name) => INDEX_NAME.test(name)))].sort();
+    if (names.length === 0) {
+        return 'index="__mx_none__"';
+    }
+    if (names.length === 1) {
+        return `index=${quoteSpl(names[0])}`;
+    }
+    return `(${names.map((name) => `index=${quoteSpl(name)}`).join(' OR ')})`;
+}
+
+/** mpreview takes one index. Public indexes stay on `*`; each internal index is appended. */
+function mpreviewSearch(filter: string, indexes?: string[]): string {
+    const quoted = quoteSpl(filter);
+    if (indexes === undefined) {
+        return `| mpreview index=* filter=${quoted}`;
+    }
+    const names = [...new Set(indexes.filter((name) => INDEX_NAME.test(name)))].sort();
+    const targets = [...(names.some((name) => !name.startsWith('_')) ? ['*'] : []), ...names.filter((name) => name.startsWith('_'))];
+    const chosen = targets.length > 0 ? targets : ['__mx_none__'];
+    const head = `| mpreview index=${chosen[0] === '*' ? '*' : quoteSpl(chosen[0])} filter=${quoted}`;
+    const rest = chosen.slice(1).map((name) => `| append [| mpreview index=${quoteSpl(name)} filter=${quoted}]`);
+    return [head, ...rest].join(' ');
+}
+
 function assertIdentifier(value: string, label: string): void {
     if (!IDENTIFIER.test(value)) {
         throw new Error(`${label} is not allowed.`);
@@ -23,9 +58,9 @@ export const SPLIT_LIMITS = [3, 5, 10, 20, 50, 100, 200, 500] as const;
  * Dimensions of one metric. No mvexpand: it would drop the only row of a metric without dimensions,
  * and then the search would never report that the metric has none.
  */
-export function buildDimensionSearch(metric: string): string {
+export function buildDimensionSearch(metric: string, indexes?: string[]): string {
     assertIdentifier(metric, 'Metric name');
-    return `| mcatalog values(_dims) WHERE metric_name=${quoteSpl(metric)} AND index=* AND NOT metric_name="*_mrollup_*"`;
+    return `| mcatalog values(_dims) WHERE metric_name=${quoteSpl(metric)} AND ${metricIndexClause(indexes)} AND NOT metric_name="*_mrollup_*"`;
 }
 
 export type MetricFilter = {
@@ -35,15 +70,15 @@ export type MetricFilter = {
 };
 
 /** Every dimension in the catalog, for the global split-by list. */
-export function buildAllDimensionSearch(): string {
-    return '| mcatalog values(_dims) WHERE index=* AND NOT metric_name="*_mrollup_*" | mvexpand values(_dims)';
+export function buildAllDimensionSearch(indexes?: string[]): string {
+    return `| mcatalog values(_dims) WHERE ${metricIndexClause(indexes)} AND NOT metric_name="*_mrollup_*" | mvexpand values(_dims)`;
 }
 
-export function buildDimensionValueSearch(metric: string, dimension: string): string {
+export function buildDimensionValueSearch(metric: string, dimension: string, indexes?: string[]): string {
     assertIdentifier(metric, 'Metric name');
     assertIdentifier(dimension, 'Filter field');
     const field = quoteSpl(dimension);
-    return `| mcatalog values(metric_name) WHERE metric_name=${quoteSpl(metric)} AND index=* AND NOT metric_name="*_mrollup_*" BY ${field} | fields ${field}`;
+    return `| mcatalog values(metric_name) WHERE metric_name=${quoteSpl(metric)} AND ${metricIndexClause(indexes)} AND NOT metric_name="*_mrollup_*" BY ${field} | fields ${field}`;
 }
 
 function filterClause(filters: MetricFilter[] | undefined): string {
@@ -75,6 +110,8 @@ export function buildMstats(input: {
     splitDirection?: 'highest' | 'lowest';
     timeShift?: string;
     filters?: MetricFilter[];
+    /** Metric indexes the user may search. Omitted keeps `index=*`. */
+    indexes?: string[];
 }): string {
     const aggregation = resolveMetricFunction(input.aggregation);
     if (!aggregation) {
@@ -85,7 +122,7 @@ export function buildMstats(input: {
         throw new Error('Span is not allowed.');
     }
     const index = input.index ?? '*';
-    const indexClause = index === '*' ? 'index=*' : `index=${quoteSpl(index)}`;
+    const indexClause = index === '*' ? metricIndexClause(input.indexes) : `index=${quoteSpl(index)}`;
     if (index !== '*') {
         assertIdentifier(index, 'Index');
     }
@@ -107,14 +144,19 @@ export function buildMstats(input: {
 }
 
 /** One number for a reference line. The time window is a job parameter, not part of this string. */
-export function buildReferenceValueSearch(input: { aggregation: string; metric: string; filters?: MetricFilter[] }): string {
+export function buildReferenceValueSearch(input: {
+    aggregation: string;
+    metric: string;
+    filters?: MetricFilter[];
+    indexes?: string[];
+}): string {
     const aggregation = resolveMetricFunction(input.aggregation);
     if (!aggregation || aggregation.chart !== 'line' || aggregation.rate || aggregation.name.startsWith('upperperc')) {
         throw new Error('Unknown aggregation.');
     }
     assertIdentifier(input.metric, 'Metric name');
     const extra = filterClause(input.filters);
-    const where = extra ? `index=* AND ${extra}` : 'index=*';
+    const where = extra ? `${metricIndexClause(input.indexes)} AND ${extra}` : metricIndexClause(input.indexes);
     return `| mstats ${aggregation.name}(${quoteSpl(input.metric)}) AS value WHERE ${where}`;
 }
 
@@ -181,6 +223,137 @@ export function buildTstats(input: {
     }
     const rank = input.splitDirection === 'lowest' ? `min in bottom${limit}` : `max in top${limit}`;
     return `${base} by _time span=${input.span}, ${input.splitBy}${timeShiftClause(input.timeShift)} | chart useother=false first(value) over _time BY ${input.splitBy} WHERE ${rank}`;
+}
+
+const SKIP_FIELDS = new Set([
+    '_raw',
+    '_time',
+    '_indextime',
+    '_cd',
+    'punct',
+    'splunk_server',
+    'linecount',
+    'timestartpos',
+    'timeendpos',
+    'eventtype',
+    'tag',
+    'date_hour',
+    'date_mday',
+    'date_minute',
+    'date_month',
+    'date_second',
+    'date_wday',
+    'date_year',
+    'date_zone',
+]);
+
+/**
+ * Fields of one sourcetype or data model. tstats cannot list fields, so this samples events and summarizes them.
+ * The sample is capped at 200 events.
+ */
+export function buildFieldSearch(source: 'event' | 'dataset', name: string, indexes: string[] = []): string {
+    if (source === 'dataset') {
+        assertIdentifier(name, 'Data model');
+        return `| datamodel ${name} search | head 200 | fieldsummary maxvals=0 | fields field`;
+    }
+    if (/[\r\n]/.test(name)) {
+        throw new Error('Line breaks are not allowed.');
+    }
+    return `search ${eventIndexClause(indexes)} sourcetype=${quoteSpl(name)} | head 200 | fieldsummary maxvals=0 | fields field`;
+}
+
+/** Field names a chart can aggregate or split by. Internal and time fields are dropped. */
+export function readableFields(names: string[]): string[] {
+    return [...new Set(names.filter((name) => IDENTIFIER.test(name) && !SKIP_FIELDS.has(name)))].sort();
+}
+
+/**
+ * A base search keeps the metric, filters and split dimensions, and leaves the aggregation to the chart.
+ * Metrics use mpreview so later charts can timechart the raw values.
+ */
+export function buildBaseSearchSpl(input: {
+    source: 'metric' | 'event' | 'dataset';
+    name: string;
+    filters?: MetricFilter[];
+    indexes?: string[];
+    metricIndexes?: string[];
+}): string {
+    if (input.source === 'metric') {
+        assertIdentifier(input.name, 'Metric name');
+        const parts = [`metric_name=${input.name}`];
+        for (const filter of input.filters ?? []) {
+            if (filter.mode !== 'include') {
+                continue;
+            }
+            assertIdentifier(filter.dimension, 'Filter field');
+            for (const value of filter.values) {
+                if (/[\r\n]/.test(value)) {
+                    throw new Error('Line breaks are not allowed.');
+                }
+                parts.push(`${filter.dimension}=${quoteSpl(value)}`);
+            }
+        }
+        return mpreviewSearch(parts.join(' AND '), input.metricIndexes);
+    }
+    if (input.source === 'dataset') {
+        assertIdentifier(input.name, 'Data model');
+        return `| datamodel ${input.name} search`;
+    }
+    return relatedEventsSearch({ source: 'event', name: input.name, filters: input.filters, indexes: input.indexes });
+}
+
+const BASE_PREFIX = 'MX Base - ';
+
+export function baseSavedName(name: string): string {
+    const trimmed = name.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9 _.:-]{0,60}$/.test(trimmed)) {
+        throw new Error('Name is not allowed.');
+    }
+    return `${BASE_PREFIX}${trimmed}`;
+}
+
+/** The chart search on top of a base search. live runs it now; cached loads the last scheduled run. */
+export function buildBaseChartSearch(input: {
+    name: string;
+    mode: 'live' | 'cached';
+    owner: string;
+    aggregation: string;
+    span: string;
+    field: string;
+    splitBy?: string;
+    splitLimit?: number;
+    splitDirection?: 'highest' | 'lowest';
+}): string {
+    const aggregation = resolveEventFunction(input.aggregation);
+    if (!aggregation) {
+        throw new Error('Unknown aggregation.');
+    }
+    if (!SPAN.test(input.span)) {
+        throw new Error('Span is not allowed.');
+    }
+    const field = input.field.trim();
+    if (aggregation.name !== 'count') {
+        assertIdentifier(field, 'Field');
+    }
+    if (!/^[A-Za-z0-9_.:-]+$/.test(input.owner)) {
+        throw new Error('Owner is not allowed.');
+    }
+    const saved = baseSavedName(input.name);
+    const head =
+        input.mode === 'cached'
+            ? `| loadjob savedsearch=${quoteSpl(`${input.owner}:metrics_explorer:${saved}`)}`
+            : `| savedsearch ${quoteSpl(saved)}`;
+    const call = aggregation.name === 'count' ? 'count' : `${aggregation.name}(${quoteSpl(field)})`;
+    if (!input.splitBy) {
+        return `${head} | timechart span=${input.span} ${call} AS value`;
+    }
+    assertIdentifier(input.splitBy, 'Split field');
+    const limit = input.splitLimit ?? 5;
+    if (!SPLIT_LIMITS.includes(limit as (typeof SPLIT_LIMITS)[number])) {
+        throw new Error('Split limit is not allowed.');
+    }
+    // timechart keeps the highest series. A lowest split is applied by reversing the limit label in the chart, which timechart cannot do.
+    return `${head} | timechart span=${input.span} ${call} AS value by ${input.splitBy} limit=${limit} useother=f`;
 }
 
 /** The event search behind "Search Related Events": the chart window, plus include filters as fields. */

@@ -25,6 +25,27 @@ export function spanForDuration(durationSeconds: number, maxPoints = 1000): stri
     return SPANS[SPANS.length - 1].spl;
 }
 
+const SPAN_UNIT_SECONDS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+
+/** Seconds in an SPL span such as 30s or 5m. Anything else is not a span this app sets. */
+export function spanSeconds(span: string): number | null {
+    const match = /^(\d+)([smhd])$/.exec(span);
+    if (!match) {
+        return null;
+    }
+    return Number(match[1]) * SPAN_UNIT_SECONDS[match[2]];
+}
+
+/** How many points one series would draw. Used only to warn about a manual span that is too fine. */
+export function estimatedPoints(earliest: string, latest: string, span: string, nowSeconds = Date.now() / 1000): number {
+    const seconds = spanSeconds(span);
+    if (!seconds) {
+        return 0;
+    }
+    const duration = boundSeconds(latest, nowSeconds) - boundSeconds(earliest, nowSeconds);
+    return Math.ceil(Math.max(duration, 0) / seconds);
+}
+
 /** Span for the range between two bounds. Presets and custom ranges use the same rule. */
 export function spanForRange(earliest: string, latest = 'now', nowSeconds = Date.now() / 1000): string {
     const duration = boundSeconds(latest, nowSeconds) - boundSeconds(earliest, nowSeconds);

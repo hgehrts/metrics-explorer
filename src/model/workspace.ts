@@ -1,6 +1,6 @@
 import { ReferenceLine } from '../chart/reference';
 import { ChartSettings, defaultSettings } from '../chart/settings';
-import { resolveMetricFunction, SeriesSource } from '../spl/functions';
+import { resolveEventFunction, resolveMetricFunction, SeriesSource } from '../spl/functions';
 
 export type SeriesFilter = {
     dimension: string;
@@ -13,8 +13,12 @@ export type Series = {
     /** Metric name, event sourcetype, or data model name, depending on source. */
     metric: string;
     source: SeriesSource;
-    /** The tstats field. Empty for count, and unused for metrics. */
+    /** The tstats field, or the measure of a base search. Empty for count, and unused for metrics. */
     field: string;
+    /** live runs a base search now. cached loads its last scheduled result. */
+    baseMode?: 'live' | 'cached';
+    /** Owner of a base search, used in the loadjob path. */
+    baseOwner?: string;
     aggregation: string;
     splitBy: string;
     splitDirection: 'highest' | 'lowest';
@@ -86,7 +90,7 @@ export function seriesLegend(
     series: Pick<Series, 'metric' | 'aggregation' | 'splitBy' | 'timeShift'>,
     siblings: Array<Pick<Series, 'metric'>> = [series]
 ): string {
-    const chosen = resolveMetricFunction(series.aggregation);
+    const chosen = resolveMetricFunction(series.aggregation) ?? resolveEventFunction(series.aggregation);
     const aggregation = chosen?.label ?? series.aggregation;
     const severalMetrics = new Set(siblings.map((item) => item.metric)).size > 1;
     const base = series.splitBy
@@ -103,6 +107,8 @@ export function createSeries(metric: string, filters: SeriesFilter[] = [], sourc
         metric,
         source,
         field: '',
+        baseMode: 'live',
+        baseOwner: '',
         aggregation: source === 'metric' ? 'Avg' : 'Count',
         splitBy: INHERIT_SPLIT,
         splitDirection: 'highest',

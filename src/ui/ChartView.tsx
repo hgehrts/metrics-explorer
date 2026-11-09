@@ -14,9 +14,11 @@ import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
 import { chartPng, chartSvg, safeFileName } from '../export/png';
 import { ChartModel, globalFiltersFor, hasSplitValues, resolveSeries, SeriesFilter, seriesLegend } from '../model/workspace';
 import { runSearch, SearchRow } from '../search/runSearch';
-import { buildMstats, buildReferenceValueSearch, buildTstats, relatedEventsSearch } from '../spl/buildMstats';
+import { buildReferenceValueSearch, relatedEventsSearch } from '../spl/buildMstats';
 import { resolveForSource } from '../spl/functions';
-import { searchWindow, spanForRange } from '../spl/span';
+import { estimatedPoints, spanForRange } from '../spl/span';
+import { buildSeriesSearch } from '../spl/seriesSearch';
+import { t } from '../i18n';
 import { zoomWindow } from '../chart/zoom';
 import { formatTooltipValue } from '../chart/tooltip';
 
@@ -175,6 +177,8 @@ export function ChartView(props: {
     /** Dimensions per metric. A metric not in here yet takes every global filter until its dimensions arrive. */
     metricDims: Record<string, string[]>;
     eventIndexes: string[];
+    /** Metric indexes this user may search. Undefined keeps `index=*`. */
+    metricIndexes?: string[];
     selected: boolean;
     onSelect: () => void;
     onRemove: () => void;
@@ -183,6 +187,9 @@ export function ChartView(props: {
     maximized: boolean;
     onMinimize: () => void;
     onMaximize: () => void;
+    /** Replaces a manual span that would draw too many points. */
+    onWidenSpan: (span: string) => void;
+    onSave: (mode: 'report' | 'panel' | 'base' | 'alert') => void;
 }): React.ReactElement {
     const [results, setResults] = useState<SeriesResult[]>([]);
     const [referenceNumbers, setReferenceNumbers] = useState<Array<number | null | undefined>>([]);
@@ -218,45 +225,21 @@ export function ChartView(props: {
         const next: SeriesResult[] = series.map(() => ({ rows: [], error: '', search: '', earliest: timeWindow.earliest, latest: timeWindow.latest }));
         setLoading(true);
         series.forEach((item, index) => {
-            const chosen = resolveForSource(item.source, item.aggregation);
-            if (!chosen) {
-                next[index] = { ...next[index], error: 'Unknown aggregation.' };
-                setResults([...next]);
-                setLoading(false);
-                return;
-            }
             let search = '';
             let earliest = timeWindow.earliest;
             let latest = timeWindow.latest;
             try {
-                search =
-                    (item.source ?? 'metric') === 'metric'
-                        ? buildMstats({
-                              aggregation: item.aggregation,
-                              metric: item.metric,
-                              span,
-                              splitBy: item.splitBy || undefined,
-                              splitDirection: item.splitDirection,
-                              splitLimit: item.splitLimit,
-                              timeShift: item.timeShift || undefined,
-                              filters: item.filters,
-                          })
-                        : buildTstats({
-                              source: item.source === 'dataset' ? 'dataset' : 'event',
-                              name: item.metric,
-                              aggregation: item.aggregation,
-                              span,
-                              field: item.field,
-                              splitBy: item.splitBy || undefined,
-                              splitDirection: item.splitDirection,
-                              splitLimit: item.splitLimit,
-                              timeShift: item.timeShift || undefined,
-                              filters: item.filters,
-                              indexes: props.eventIndexes,
-                          });
-                const bounds = searchWindow(timeWindow.earliest, item.timeShift, timeWindow.latest);
-                earliest = bounds.earliest;
-                latest = bounds.latest;
+                const built = buildSeriesSearch(
+                    item,
+                    span,
+                    timeWindow.earliest,
+                    timeWindow.latest,
+                    props.eventIndexes,
+                    props.metricIndexes
+                );
+                search = built.search;
+                earliest = built.earliest;
+                latest = built.latest;
             } catch (error) {
                 next[index] = {
                     ...next[index],
@@ -290,7 +273,7 @@ export function ChartView(props: {
             setLoading(false);
         }
         return () => stops.forEach((stop) => stop());
-    }, [signature, timeWindow.earliest, timeWindow.latest, span, refreshToken, props.eventIndexes]);
+    }, [signature, timeWindow.earliest, timeWindow.latest, span, refreshToken, props.eventIndexes, props.metricIndexes]);
 
     const referenceJobs = props.chart.series.flatMap((item) =>
         (item.source ?? 'metric') === 'metric'
@@ -319,7 +302,12 @@ export function ChartView(props: {
             }
             let search = '';
             try {
-                search = buildReferenceValueSearch({ aggregation: job.line.value, metric: job.metric, filters: job.filters });
+                search = buildReferenceValueSearch({
+                    aggregation: job.line.value,
+                    metric: job.metric,
+                    filters: job.filters,
+                    indexes: props.metricIndexes,
+                });
             } catch {
                 return;
             }
@@ -344,7 +332,7 @@ export function ChartView(props: {
         });
         setReferenceNumbers([...next]);
         return () => stops.forEach((stop) => stop());
-    }, [referenceKey]);
+    }, [referenceKey, props.metricIndexes]);
 
     const locale = typeof window === 'undefined' ? undefined : window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1];
     // A split only applies to a series whose metric has that dimension. Other series draw unsplit, and their legend says so.
@@ -469,6 +457,18 @@ export function ChartView(props: {
                             <SmallButton type="button" onClick={props.onClone}>
                                 Clone chart
                             </SmallButton>
+                            <SmallButton type="button" onClick={() => props.onSave('report')}>
+                                {t('Save as report')}
+                            </SmallButton>
+                            <SmallButton type="button" onClick={() => props.onSave('panel')}>
+                                {t('Save as dashboard panel')}
+                            </SmallButton>
+                            <SmallButton type="button" onClick={() => props.onSave('base')}>
+                                {t('Save as base search')}
+                            </SmallButton>
+                            <SmallButton type="button" onClick={() => props.onSave('alert')}>
+                                {t('Create alert')}
+                            </SmallButton>
                             <SmallButton
                                 type="button"
                                 onClick={() => {
@@ -535,7 +535,19 @@ export function ChartView(props: {
             {results.map((result, index) =>
                 result.error ? <Note key={`${index}-${result.error}`}>{result.error}</Note> : null
             )}
-            {loading ? <Note>Refreshing</Note> : null}
+            {loading ? <Note>{results.some((result) => result.rows.length > 0) ? 'Refreshing' : t('Loading…')}</Note> : null}
+            {props.chart.settings.span && estimatedPoints(timeWindow.earliest, timeWindow.latest, props.chart.settings.span) > 1000 ? (
+                <Note role="status">
+                    This span draws about {estimatedPoints(timeWindow.earliest, timeWindow.latest, props.chart.settings.span)} points.
+                    A chart stays readable under 1,000.{' '}
+                    <SmallButton
+                        type="button"
+                        onClick={() => props.onWidenSpan(spanForRange(timeWindow.earliest, timeWindow.latest))}
+                    >
+                        {t('Use a wider span')}
+                    </SmallButton>
+                </Note>
+            ) : null}
             {exportNote ? <Note>{exportNote}</Note> : null}
             {showChart && visual.kind === 'heatmap' ? (
                 <HeatmapChart

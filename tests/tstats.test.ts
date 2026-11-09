@@ -1,4 +1,4 @@
-import { buildSourcetypeSearch, buildTstats, relatedEventsSearch } from '../src/spl/buildMstats';
+import { buildBaseChartSearch, buildBaseSearchSpl, buildFieldSearch, buildSourcetypeSearch, buildTstats, readableFields, relatedEventsSearch } from '../src/spl/buildMstats';
 import { needsField, resolveEventFunction } from '../src/spl/functions';
 import { createSeries } from '../src/model/workspace';
 
@@ -49,6 +49,33 @@ test('related events keep the sourcetype and the include filters', () => {
         })
     ).toBe('(index="_internal" OR index="_audit" OR index="main") sourcetype="splunkd" host="lab-a"');
     expect(relatedEventsSearch({ source: 'metric', name: 'lab.cpu.user' })).toBe('index=*');
+});
+
+test('a sourcetype field list samples events and drops internal fields', () => {
+    expect(buildFieldSearch('event', 'splunkd', ['_internal'])).toBe(
+        'search (index="_internal") sourcetype="splunkd" | head 200 | fieldsummary maxvals=0 | fields field'
+    );
+    expect(readableFields(['_raw', 'bytes', 'component', 'punct', 'bytes'])).toEqual(['bytes', 'component']);
+});
+
+test('a base search keeps the metric and filters and the chart adds the aggregation', () => {
+    expect(
+        buildBaseSearchSpl({
+            source: 'metric',
+            name: 'lab.cpu.user',
+            filters: [{ dimension: 'extracted_host', mode: 'include', values: ['lab-a'] }],
+        })
+    ).toBe('| mpreview index=* filter="metric_name=lab.cpu.user AND extracted_host=\\"lab-a\\""');
+    expect(
+        buildBaseChartSearch({
+            name: 'cpu',
+            mode: 'live',
+            owner: 'admin',
+            aggregation: 'Avg',
+            span: '30m',
+            field: '_value',
+        })
+    ).toBe('| savedsearch "MX Base - cpu" | timechart span=30m avg("_value") AS value');
 });
 
 test('an event series starts with Count', () => {
