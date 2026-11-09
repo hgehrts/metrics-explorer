@@ -57,3 +57,573 @@ msgstr "Geplant"
 
 msgid "Streaming"
 msgstr "Streaming"
+
+msgid "Data"
+msgstr "Daten"
+
+msgid "Analysis"
+msgstr "Analyse"
+
+msgid "Hide data"
+msgstr "Daten ausblenden"
+
+msgid "Show data"
+msgstr "Daten einblenden"
+
+msgid "Hide analysis"
+msgstr "Analyse ausblenden"
+
+msgid "Show analysis"
+msgstr "Analyse einblenden"
+
+msgid "Search data to analyze"
+msgstr "Zu analysierende Daten suchen"
+
+msgid "Metrics"
+msgstr "Metriken"
+
+msgid "Reset to defaults"
+msgstr "Auf Standard zurücksetzen"
+
+msgid "+ Add new filter"
+msgstr "+ Neuen Filter hinzufügen"
+
+msgid "New filter type"
+msgstr "Neuer Filtertyp"
+
+msgid "Metric name not"
+msgstr "Metrikname nicht"
+
+msgid "New filter value"
+msgstr "Neuer Filterwert"
+
+msgid "Add"
+msgstr "Hinzufügen"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "Group by"
+msgstr "Gruppieren nach"
+
+msgid "Group by name"
+msgstr "Nach Name gruppieren"
+
+msgid "Group by index"
+msgstr "Nach Index gruppieren"
+
+msgid "Group separator"
+msgstr "Trennzeichen der Gruppierung"
+
+msgid "No metrics in this time range."
+msgstr "Keine Metriken in diesem Zeitraum."
+
+msgid "No sourcetypes in this time range."
+msgstr "Keine Sourcetypes in diesem Zeitraum."
+
+msgid "No data models."
+msgstr "Keine Datenmodelle."
+
+msgid "Catalog time range"
+msgstr "Katalog-Zeitraum"
+
+msgid "Changing this time setting will affect performance."
+msgstr "Eine Änderung dieser Zeitangabe beeinflusst die Leistung."
+
+msgid "Time range"
+msgstr "Zeitraum"
+
+msgid "Custom…"
+msgstr "Benutzerdefiniert…"
+
+msgid "Custom time range start"
+msgstr "Benutzerdefinierter Start"
+
+msgid "Custom time range end"
+msgstr "Benutzerdefiniertes Ende"
+
+msgid "Apply time range"
+msgstr "Zeitraum anwenden"
+
+msgid "Refresh chart data"
+msgstr "Diagrammdaten aktualisieren"
+
+msgid "Grid layout"
+msgstr "Rasteransicht"
+
+msgid "Stack layout"
+msgstr "Listenansicht"
+
+msgid "Global split by"
+msgstr "Globale Unterteilung"
+
+msgid "Split By"
+msgstr "Unterteilen nach"
+
+msgid "Clear Split By"
+msgstr "Unterteilung entfernen"
+
+msgid "Remove all"
+msgstr "Alle entfernen"
+
+msgid "More actions"
+msgstr "Weitere Aktionen"
+
+msgid "Auto-refresh"
+msgstr "Automatisch aktualisieren"
+
+msgid "Auto-refresh off"
+msgstr "Automatische Aktualisierung aus"
+
+msgid "Auto-refresh on"
+msgstr "Automatische Aktualisierung an"
+
+msgid "Global filters"
+msgstr "Globale Filter"
+
+msgid "Global filter dimension"
+msgstr "Globale Filterdimension"
+
+msgid "Global filter mode"
+msgstr "Globaler Filtermodus"
+
+msgid "Global filter values"
+msgstr "Globale Filterwerte"
+
+msgid "Select a dimension"
+msgstr "Dimension wählen"
+
+msgid "Include"
+msgstr "Einschließen"
+
+msgid "Exclude"
+msgstr "Ausschließen"
+
+msgid "Values, comma separated"
+msgstr "Werte, durch Komma getrennt"
+
+msgid "+ Add global filter"
+msgstr "+ Globalen Filter hinzufügen"
+
+msgid "Dismiss"
+msgstr "Schließen"
+
+msgid "Open Charts"
+msgstr "Diagramme öffnen"
+
+msgid "Open your latest charts, or start by selecting data."
+msgstr "Öffne deine letzten Diagramme oder wähle zuerst Daten aus."
+
+msgid "Start by selecting data."
+msgstr "Wähle zuerst Daten aus."
+
+msgid "Find something interesting? Save it to a dashboard, or create an alert."
+msgstr "Etwas Interessantes gefunden? Speichere es in einem Dashboard oder erstelle eine Benachrichtigung."
+
+msgid "Select or type an aggregation."
+msgstr "Aggregation wählen oder eingeben."
+
+msgid "Event field"
+msgstr "Ereignisfeld"
+
+msgid "Indexed field, for example bytes"
+msgstr "Indexiertes Feld, zum Beispiel bytes"
+
+msgid "Overlay on right axis"
+msgstr "Auf der rechten Achse überlagern"
+
+msgid "Percentile"
+msgstr "Perzentil"
+
+msgid "Not selected"
+msgstr "Nicht gewählt"
+
+msgid "Custom"
+msgstr "Benutzerdefiniert"
+
+msgid "Percentile method"
+msgstr "Perzentilmethode"
+
+msgid "Custom percentile"
+msgstr "Benutzerdefiniertes Perzentil"
+
+msgid "0 to 99.999"
+msgstr "0 bis 99.999"
+
+msgid "Split by"
+msgstr "Unterteilen nach"
+
+msgid "None"
+msgstr "Keine"
+
+msgid "Split limit type"
+msgstr "Limit-Richtung"
+
+msgid "Highest"
+msgstr "Höchster Wert"
+
+msgid "Lowest"
+msgstr "Niedrigster Wert"
+
+msgid "Split limit"
+msgstr "Limit"
+
+msgid "Time shift"
+msgstr "Zeitverschiebung"
+
+msgid "Time shift unit"
+msgstr "Einheit der Zeitverschiebung"
+
+msgid "Custom time shift"
+msgstr "Benutzerdefinierte Zeitverschiebung"
+
+msgid "Number"
+msgstr "Zahl"
+
+msgid "Remove"
+msgstr "Entfernen"
+
+msgid "Filter dimension"
+msgstr "Filterdimension"
+
+msgid "Filter mode"
+msgstr "Filtermodus"
+
+msgid "Add filter"
+msgstr "Filter hinzufügen"
+
+msgid "Reference lines"
+msgstr "Bezugslinien"
+
+msgid "Reference calculation"
+msgstr "Berechnung der Bezugslinie"
+
+msgid "Raw data"
+msgstr "Rohdaten"
+
+msgid "Constant value"
+msgstr "Fester Wert"
+
+msgid "Reference value"
+msgstr "Bezugswert"
+
+msgid "Reference label"
+msgstr "Beschriftung der Bezugslinie"
+
+msgid "Label"
+msgstr "Beschriftung"
+
+msgid "Include value"
+msgstr "Wert einschließen"
+
+msgid "Chart"
+msgstr "Diagramm"
+
+msgid "Reference line time range"
+msgstr "Zeitraum der Bezugslinie"
+
+msgid "Reference earliest"
+msgstr "Bezugs-Start"
+
+msgid "Reference earliest unit"
+msgstr "Einheit Bezugs-Start"
+
+msgid "Reference latest"
+msgstr "Bezugs-Ende"
+
+msgid "Reference latest amount"
+msgstr "Menge Bezugs-Ende"
+
+msgid "Reference latest unit"
+msgstr "Einheit Bezugs-Ende"
+
+msgid "Now"
+msgstr "Jetzt"
+
+msgid "Ago"
+msgstr "Vor"
+
+msgid "Add reference line"
+msgstr "Bezugslinie hinzufügen"
+
+msgid "Chart settings"
+msgstr "Diagrammeinstellungen"
+
+msgid "Use global split by for this chart"
+msgstr "Globale Unterteilung für dieses Diagramm verwenden"
+
+msgid "Chart type"
+msgstr "Diagrammtyp"
+
+msgid "Show"
+msgstr "Anzeigen"
+
+msgid "Chart content"
+msgstr "Inhalt"
+
+msgid "Refer to the time range to set an appropriate time span."
+msgstr "Der Zeitraum bestimmt eine passende Zeitspanne."
+
+msgid "Span count"
+msgstr "Anzahl"
+
+msgid "Span unit"
+msgstr "Einheit"
+
+msgid "Apply span"
+msgstr "Zeitspanne anwenden"
+
+msgid "Revert span"
+msgstr "Zeitspanne zurücksetzen"
+
+msgid "Y-axis"
+msgstr "Y-Achse"
+
+msgid "Y-axis minimum"
+msgstr "Y-Achse Minimum"
+
+msgid "Y-axis maximum"
+msgstr "Y-Achse Maximum"
+
+msgid "Y-axis scale"
+msgstr "Y-Achsen-Skala"
+
+msgid "Log"
+msgstr "Logarithmisch"
+
+msgid "Tooltip decimal places"
+msgstr "Nachkommastellen im Tooltip"
+
+msgid "Abbreviate numbers on the axis"
+msgstr "Zahlen auf der Achse abkürzen"
+
+msgid "Revert y-axis"
+msgstr "Y-Achse zurücksetzen"
+
+msgid "Data ingested from"
+msgstr "Daten erfasst seit"
+
+msgid "Let's bring you up to speed!"
+msgstr "Weiter geht's!"
+
+msgid "Your work has been recovered."
+msgstr "Deine Arbeit wurde wiederhergestellt."
+
+msgid "Time span"
+msgstr "Zeitspanne"
+
+msgid "Refresh"
+msgstr "Aktualisieren"
+
+msgid "Events"
+msgstr "Ereignisse"
+
+msgid "Datasets"
+msgstr "Datensätze"
+
+msgid "Last 15 minutes"
+msgstr "Letzte 15 Minuten"
+
+msgid "Last 60 minutes"
+msgstr "Letzte 60 Minuten"
+
+msgid "Last 4 hours"
+msgstr "Letzte 4 Stunden"
+
+msgid "Last 24 hours"
+msgstr "Letzte 24 Stunden"
+
+msgid "Last 7 days"
+msgstr "Letzte 7 Tage"
+
+msgid "Last 2 days"
+msgstr "Letzte 2 Tage"
+
+msgid "Save"
+msgstr "Speichern"
+
+msgid "Saving…"
+msgstr "Speichern…"
+
+msgid "Close"
+msgstr "Schließen"
+
+msgid "Delete"
+msgstr "Löschen"
+
+msgid "Format"
+msgstr "Format"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Description"
+msgstr "Beschreibung"
+
+msgid "Mode"
+msgstr "Modus"
+
+msgid "Sharing"
+msgstr "Freigabe"
+
+msgid "Schedule"
+msgstr "Zeitplan"
+
+msgid "Severity"
+msgstr "Schweregrad"
+
+msgid "Frequency"
+msgstr "Häufigkeit"
+
+msgid "Threshold"
+msgstr "Schwellenwert"
+
+msgid "Condition"
+msgstr "Bedingung"
+
+msgid "Throttle"
+msgstr "Drosselung"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "Low"
+msgstr "Niedrig"
+
+msgid "Medium"
+msgstr "Mittel"
+
+msgid "High"
+msgstr "Hoch"
+
+msgid "Critical"
+msgstr "Kritisch"
+
+msgid "Live"
+msgstr "Live"
+
+msgid "Cached"
+msgstr "Zwischengespeichert"
+
+msgid "Private"
+msgstr "Privat"
+
+msgid "App"
+msgstr "App"
+
+msgid "greater than"
+msgstr "größer als"
+
+msgid "less than"
+msgstr "kleiner als"
+
+msgid "equal to"
+msgstr "gleich"
+
+msgid "New dashboard"
+msgstr "Neues Dashboard"
+
+msgid "Existing dashboard"
+msgstr "Vorhandenes Dashboard"
+
+msgid "Dashboard format"
+msgstr "Dashboard-Format"
+
+msgid "Alert type"
+msgstr "Alarmtyp"
+
+msgid "Alert comparator"
+msgstr "Alarm-Vergleich"
+
+msgid "Alert threshold"
+msgstr "Alarm-Schwellenwert"
+
+msgid "Alert frequency"
+msgstr "Alarm-Häufigkeit"
+
+msgid "Alert severity"
+msgstr "Alarm-Schweregrad"
+
+msgid "Alert throttle"
+msgstr "Alarm-Drosselung"
+
+msgid "Base search mode"
+msgstr "Modus der Basissuche"
+
+msgid "Base search schedule"
+msgstr "Zeitplan der Basissuche"
+
+msgid "Save name"
+msgstr "Name"
+
+msgid "Save description"
+msgstr "Beschreibung"
+
+msgid "1h, or empty"
+msgstr "1h, oder leer"
+
+msgid "No saved workspaces."
+msgstr "Keine gespeicherten Workspaces."
+
+msgid "Enter a name."
+msgstr "Bitte einen Namen eingeben."
+
+msgid "Nothing to save."
+msgstr "Nichts zum Speichern."
+
+msgid "Could not save."
+msgstr "Speichern fehlgeschlagen."
+
+msgid "Streaming alerts are not available on this instance."
+msgstr "Streaming-Alarme sind auf dieser Instanz nicht verfügbar."
+
+msgid "A streaming alert needs a metric series."
+msgstr "Ein Streaming-Alarm benötigt eine Metrikreihe."
+
+msgid "Unknown aggregation."
+msgstr "Unbekannte Aggregation."
+
+msgid "Open a metric, event, or dataset chart first."
+msgstr "Öffne zuerst ein Metrik-, Ereignis- oder Datensatz-Diagramm."
+
+msgid "That workspace cannot be opened."
+msgstr "Dieser Workspace kann nicht geöffnet werden."
+
+msgid "Adding panels to an existing dashboard works for Classic dashboards. Create a new Dashboard Studio dashboard."
+msgstr "Panels lassen sich nur zu klassischen Dashboards hinzufügen. Erstelle ein neues Dashboard Studio-Dashboard."
+
+msgid "Saved report"
+msgstr "Bericht gespeichert"
+
+msgid "Added the charts to"
+msgstr "Diagramme hinzugefügt zu"
+
+msgid "Saved dashboard"
+msgstr "Dashboard gespeichert"
+
+msgid "Saved streaming alert"
+msgstr "Streaming-Alarm gespeichert"
+
+msgid "Saved scheduled alert"
+msgstr "Geplanter Alarm gespeichert"
+
+msgid "Saved base search"
+msgstr "Basissuche gespeichert"
+
+msgid "Saved workspace"
+msgstr "Workspace gespeichert"
+
+msgid "Chart actions"
+msgstr "Diagrammaktionen"
+
+msgid "Remove chart"
+msgstr "Diagramm entfernen"
+
+msgid "Reset zoom to enable refresh."
+msgstr "Zoom zurücksetzen, um zu aktualisieren."
+
+msgid "Statistics table"
+msgstr "Statistiktabelle"
+
+msgid "Heatmap"
+msgstr "Heatmap"

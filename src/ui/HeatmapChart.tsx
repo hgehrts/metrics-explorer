@@ -4,6 +4,7 @@ import { variables } from '@splunk/themes';
 import { LineTable } from '../chart/columns';
 import { formatHeatTick, heatColor, heatRange } from '../chart/heatmap';
 import { formatTimeCell } from '../chart/stats';
+import { t } from '../i18n';
 
 const Frame = styled.div`
     display: grid;
@@ -83,7 +84,7 @@ export function HeatmapChart(props: { table: LineTable; locale?: string }): Reac
     );
 
     return (
-        <Frame aria-label="Heatmap">
+        <Frame aria-label={t('Heatmap')}>
             <Rows>
                 {series.map((field) => (
                     <Label key={field.name} title={field.name}>

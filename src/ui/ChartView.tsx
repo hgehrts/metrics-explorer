@@ -31,9 +31,9 @@ const Card = styled.section<{ $selected: boolean }>`
         css`
             border-color: ${variables.interactiveColorPrimary};
         `}
-    border-radius: 8px;
+    border-radius: 2px;
     background: ${variables.backgroundColorSection};
-    min-height: 280px;
+    min-height: 220px;
 `;
 
 const TitleRow = styled.div`
@@ -404,10 +404,10 @@ export function ChartView(props: {
                     >
                         {props.maximized ? 'Restore' : 'Maximize'}
                     </SmallButton>
-                    <SmallButton type="button" aria-label="Chart actions" onClick={() => setMenu((open) => !open)}>
+                    <SmallButton type="button" aria-label={t('Chart actions')} onClick={() => setMenu((open) => !open)}>
                         Actions
                     </SmallButton>
-                    <SmallButton type="button" aria-label="Remove chart" onClick={props.onRemove}>
+                    <SmallButton type="button" aria-label={t('Remove chart')} onClick={props.onRemove}>
                         Remove
                     </SmallButton>
                     {menu ? (
@@ -529,7 +529,7 @@ export function ChartView(props: {
                     <SmallButton type="button" onClick={() => setZoom(null)}>
                         Zoom out
                     </SmallButton>
-                    <span>Reset zoom to enable refresh.</span>
+                    <span>{t('Reset zoom to enable refresh.')}</span>
                 </ZoomBar>
             ) : null}
             {results.map((result, index) =>
@@ -630,7 +630,7 @@ export function ChartView(props: {
             ) : null}
             {showTable ? (
                 <Grid>
-                    <Stats aria-label="Statistics table">
+                    <Stats aria-label={t('Statistics table')}>
                         <thead>
                             <tr>
                                 {stats.fields.map((field) => (

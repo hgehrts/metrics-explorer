@@ -108,7 +108,7 @@ const RANGES = [
 
 const Shell = styled.div<{ $left: boolean; $right: boolean }>`
     display: grid;
-    grid-template-columns: ${(props) => (props.$left ? '300px' : '40px')} minmax(0, 1fr) ${(props) => (props.$right ? '300px' : '40px')};
+    grid-template-columns: ${(props) => (props.$left ? '260px' : '36px')} minmax(0, 1fr) ${(props) => (props.$right ? '280px' : '36px')};
     height: 100%;
     background: ${variables.backgroundColorPage};
     color: ${variables.contentColorDefault};
@@ -132,8 +132,8 @@ const PaneHeader = styled.div`
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 16px 8px;
-    font-size: 16px;
+    padding: 8px 12px;
+    font-size: 13px;
     font-weight: 600;
 `;
 
@@ -163,11 +163,12 @@ const IconButton = styled.button`
 
 const SearchBox = styled.input`
     margin: 0 12px 8px;
-    padding: 8px 10px;
-    border-radius: 6px;
+    padding: 4px 8px;
+    border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
+    font-size: 12px;
 `;
 
 const FilterBox = styled.div`
@@ -220,15 +221,22 @@ const FilterInput = styled.input`
 const GroupRow = styled.div`
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     margin: 0 12px 8px;
+
+    select {
+        flex: 1 1 0;
+        min-width: 0;
+        font-size: 12px;
+    }
 `;
 
 const SectionButton = styled.button`
     display: block;
     width: 100%;
     margin: 0;
-    padding: 8px 12px;
+    padding: 6px 12px;
+    font-size: 12px;
     border: 0;
     border-top: 1px solid ${variables.neutral200};
     background: transparent;
@@ -309,19 +317,21 @@ const RowButton = styled.button<{ $depth: number }>`
 const SeriesHeader = styled.button<{ $open: boolean }>`
     display: flex;
     gap: 8px;
-    width: calc(100% - 32px);
-    margin: 0 16px 8px;
-    padding: 8px;
+    width: 100%;
+    margin: 0;
+    padding: 6px 12px;
     text-align: left;
     border: 0;
-    border-radius: 6px;
+    border-bottom: 1px solid ${variables.neutral200};
+    border-radius: 0;
     background: transparent;
     color: ${variables.contentColorDefault};
     cursor: pointer;
+    font-size: 12px;
     ${(props) =>
         props.$open &&
         css`
-            background: ${variables.interactiveColorOverlaySelected};
+            background: ${variables.interactiveColorOverlayHover};
         `}
 `;
 
@@ -334,11 +344,39 @@ const Stage = styled.main`
 
 const Toolbar = styled.div`
     display: flex;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
-    flex-wrap: wrap;
-    padding: 10px 16px;
+    flex-wrap: nowrap;
+    padding: 6px 12px;
     border-bottom: 1px solid ${variables.neutral200};
+    font-size: 12px;
+    overflow-x: auto;
+
+    select,
+    input {
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+`;
+
+const Overflow = styled.div`
+    position: relative;
+    margin-left: auto;
+`;
+
+const OverflowMenu = styled.div`
+    position: absolute;
+    right: 0;
+    top: 28px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 220px;
+    padding: 8px;
+    border: 1px solid ${variables.neutral200};
+    border-radius: 4px;
+    background: ${variables.backgroundColorSection};
 `;
 
 const ToolButton = styled.button<{ $pressed?: boolean }>`
@@ -350,8 +388,9 @@ const ToolButton = styled.button<{ $pressed?: boolean }>`
             background: ${variables.interactiveColorOverlaySelected};
         `}
     color: ${variables.contentColorDefault};
-    border-radius: 6px;
-    padding: 6px 10px;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
     cursor: pointer;
     &:disabled {
         cursor: default;
@@ -377,14 +416,15 @@ const Empty = styled.div`
 const Field = styled.label`
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 0 16px 16px;
+    gap: 4px;
+    padding: 8px 12px 0;
     font-size: 12px;
 `;
 
 const Select = styled.select`
-    padding: 8px 10px;
-    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
@@ -410,17 +450,40 @@ const FilterChoices = styled.div`
 `;
 
 const TextInput = styled.input`
-    padding: 8px 10px;
-    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
 `;
 
 const Note = styled.p`
-    margin: 8px 16px;
+    margin: 4px 12px;
     color: ${variables.contentColorMuted};
     font-size: 12px;
+`;
+
+const TextLink = styled.button`
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: ${variables.contentColorActive};
+    cursor: pointer;
+    font-size: 12px;
+    text-align: left;
+`;
+
+const SettingsFold = styled.details`
+    margin-top: 8px;
+    border-top: 1px solid ${variables.neutral200};
+
+    > summary {
+        cursor: pointer;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
 `;
 
 const Footer = styled.div`
@@ -592,6 +655,11 @@ export function Explorer(): React.ReactElement {
     const [defaultsReady, setDefaultsReady] = useState(false);
     const [filterKind, setFilterKind] = useState<DataFilter['kind']>('exclude');
     const [filterText, setFilterText] = useState('');
+    const [metricsOpen, setMetricsOpen] = useState(true);
+    const [toolbarMore, setToolbarMore] = useState(false);
+    const [dataFilterOpen, setDataFilterOpen] = useState(false);
+    const [globalFilterOpen, setGlobalFilterOpen] = useState(false);
+    const [percentileOpen, setPercentileOpen] = useState(false);
     const [filterError, setFilterError] = useState('');
 
     /** The series as its header shows it: a split only counts when the metric has that dimension. */
@@ -632,6 +700,7 @@ export function Explorer(): React.ReactElement {
         setGlobalFilters((current) => [...current, candidate]);
         setGlobalValues('');
         setGlobalFilterError('');
+        setGlobalFilterOpen(false);
     }
 
     function addDataFilter(): void {
@@ -648,6 +717,7 @@ export function Explorer(): React.ReactElement {
         setDataFilters((current) => [...current, candidate]);
         setFilterText('');
         setFilterError('');
+        setDataFilterOpen(false);
     }
 
     useEffect(() => {
@@ -1027,7 +1097,7 @@ export function Explorer(): React.ReactElement {
         setCharts((current) => [...current, chart]);
         setSelectedId(chart.id);
         setSelectedSeriesId(chart.series[0].id);
-        setExpandedSeriesId(chart.series[0].id);
+        setExpandedSeriesId('');
         refreshNow();
     }
 
@@ -1040,7 +1110,7 @@ export function Explorer(): React.ReactElement {
         setCharts((current) => [...current, chart]);
         setSelectedId(chart.id);
         setSelectedSeriesId(chart.series[0].id);
-        setExpandedSeriesId(chart.series[0].id);
+        setExpandedSeriesId('');
         refreshNow();
     }
 
@@ -1056,7 +1126,7 @@ export function Explorer(): React.ReactElement {
             )
         );
         setSelectedSeriesId(created.id);
-        setExpandedSeriesId(created.id);
+        setExpandedSeriesId('');
     }
 
     function toggleSeries(id: string): void {
@@ -1202,11 +1272,22 @@ export function Explorer(): React.ReactElement {
             {leftOpen ? (
             <Pane>
                 <PaneHeader>
-                    Data
-                    <IconButton type="button" aria-label="Hide data" onClick={() => setLeftOpen(false)}>
+                    <span>{t('Data')}</span>
+                    <IconButton type="button" aria-label={t('Hide data')} onClick={() => setLeftOpen(false)}>
                         «
                     </IconButton>
                 </PaneHeader>
+                <SearchBox
+                    value={query}
+                    placeholder={t('Search data to analyze')}
+                    aria-label={t('Search data to analyze')}
+                    onChange={(event) => setQuery(event.target.value)}
+                />
+                <SectionButton type="button" aria-expanded={metricsOpen} onClick={() => setMetricsOpen((open) => !open)}>
+                    {metricsOpen ? '▾' : '▸'} {t('Metrics')}
+                </SectionButton>
+                {metricsOpen ? (
+                <>
                 <FilterBox aria-label="Data filters">
                     {dataFilters.map((filter) => (
                         <Chip key={`${filter.kind}:${filter.value}`}>
@@ -1222,89 +1303,86 @@ export function Explorer(): React.ReactElement {
                         </Chip>
                     ))}
                     {sameFilters(dataFilters, defaultFilters) ? null : (
-                        <ToolButton type="button" disabled={!defaultsReady} onClick={() => setDataFilters(defaultFilters)}>
-                            Reset to defaults
-                        </ToolButton>
+                        <TextLink type="button" disabled={!defaultsReady} onClick={() => setDataFilters(defaultFilters)}>
+                            {t('Reset to defaults')}
+                        </TextLink>
                     )}
-                    <FilterForm
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            addDataFilter();
-                        }}
-                    >
-                        <Select
-                            aria-label="New filter type"
-                            disabled={!defaultsReady}
-                            value={filterKind}
-                            onChange={(event) => setFilterKind(event.target.value === 'index' ? 'index' : 'exclude')}
+                    {dataFilterOpen ? (
+                        <FilterForm
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                addDataFilter();
+                            }}
                         >
-                            <option value="exclude">Metric name not</option>
-                            <option value="index">Index</option>
-                        </Select>
-                        <FilterInput
-                            aria-label="New filter value"
-                            disabled={!defaultsReady}
-                            value={filterText}
-                            placeholder={filterKind === 'index' ? 'e.g. metrics_lab' : 'e.g. itsi.*'}
-                            onChange={(event) => setFilterText(event.target.value)}
-                        />
-                        <ToolButton type="submit" disabled={!defaultsReady}>
-                            Add filter
-                        </ToolButton>
-                    </FilterForm>
+                            <Select
+                                aria-label={t('New filter type')}
+                                disabled={!defaultsReady}
+                                value={filterKind}
+                                onChange={(event) => setFilterKind(event.target.value === 'index' ? 'index' : 'exclude')}
+                            >
+                                <option value="exclude">{t('Metric name not')}</option>
+                                <option value="index">Index</option>
+                            </Select>
+                            <FilterInput
+                                aria-label={t('New filter value')}
+                                disabled={!defaultsReady}
+                                value={filterText}
+                                placeholder={filterKind === 'index' ? 'e.g. metrics_lab' : 'e.g. itsi.*'}
+                                onChange={(event) => setFilterText(event.target.value)}
+                            />
+                            <TextLink type="submit" disabled={!defaultsReady}>
+                                {t('Add')}
+                            </TextLink>
+                            <TextLink type="button" onClick={() => setDataFilterOpen(false)}>
+                                {t('Cancel')}
+                            </TextLink>
+                        </FilterForm>
+                    ) : (
+                        <TextLink type="button" disabled={!defaultsReady} onClick={() => setDataFilterOpen(true)}>
+                            {t('+ Add new filter')}
+                        </TextLink>
+                    )}
                     {filterError ? <Note role="alert">{filterError}</Note> : null}
                 </FilterBox>
-                <SearchBox
-                    value={query}
-                    placeholder="Search data to analyze"
-                    aria-label="Search data to analyze"
-                    onChange={(event) => setQuery(event.target.value)}
-                />
                 <GroupRow>
-                    <Field>
-                        Group by
-                        <Select
-                            aria-label="Group by"
-                            value={groupBy}
-                            onChange={(event) => {
-                                setGroupBy(event.target.value);
-                                setOpen(new Set());
-                            }}
-                        >
-                            <option value="metric_name">metric_name</option>
-                            <option value="index">index</option>
-                            {splitChoices(
-                                allDimensions.filter((name) => name !== 'metric_name' && name !== 'index'),
-                                groupBy === 'metric_name' || groupBy === 'index' ? '' : groupBy
-                            ).map((name) => (
-                                <option key={name} value={name}>
-                                    {name}
-                                </option>
-                            ))}
-                        </Select>
-                    </Field>
-                    <Field>
-                        Separator
-                        <Select
-                            aria-label="Group separator"
-                            value={separator}
-                            onChange={(event) => {
-                                setSeparator(event.target.value);
-                                setOpen(new Set());
-                            }}
-                        >
-                            {HIERARCHY_SEPARATORS.map((item) => (
-                                <option key={item} value={item}>
-                                    {item}
-                                </option>
-                            ))}
-                        </Select>
-                    </Field>
+                    <Select
+                        aria-label={t('Group by')}
+                        value={groupBy}
+                        onChange={(event) => {
+                            setGroupBy(event.target.value);
+                            setOpen(new Set());
+                        }}
+                    >
+                        <option value="metric_name">{t('Group by name')}</option>
+                        <option value="index">{t('Group by index')}</option>
+                        {splitChoices(
+                            allDimensions.filter((name) => name !== 'metric_name' && name !== 'index'),
+                            groupBy === 'metric_name' || groupBy === 'index' ? '' : groupBy
+                        ).map((name) => (
+                            <option key={name} value={name}>
+                                {name}
+                            </option>
+                        ))}
+                    </Select>
+                    <Select
+                        aria-label={t('Group separator')}
+                        value={separator}
+                        onChange={(event) => {
+                            setSeparator(event.target.value);
+                            setOpen(new Set());
+                        }}
+                    >
+                        {HIERARCHY_SEPARATORS.map((item) => (
+                            <option key={item} value={item}>
+                                {item}
+                            </option>
+                        ))}
+                    </Select>
                 </GroupRow>
                 <Tree>
                     {catalogError ? <Note>{catalogError}</Note> : null}
                     {catalogReady && !catalogError && tree.length === 0 ? (
-                        <Note>No metrics in this time range.</Note>
+                        <Note>{t('No metrics in this time range.')}</Note>
                     ) : null}
                     {catalogReady && !catalogError && (groupBy === 'metric_name' ? namesTruncated : valuesTruncated) ? (
                         <Note role="status">
@@ -1329,8 +1407,10 @@ export function Explorer(): React.ReactElement {
                         onAdd={addToSelected}
                     />
                 </Tree>
+                </>
+                ) : null}
                 <SectionButton type="button" aria-expanded={eventsOpen} onClick={() => setEventsOpen((open) => !open)}>
-                    {eventsOpen ? '▾' : '▸'} Events
+                    {eventsOpen ? '▾' : '▸'} {t('Events')}
                 </SectionButton>
                 {eventsOpen
                     ? sourcetypes.map((name) => (
@@ -1339,9 +1419,9 @@ export function Explorer(): React.ReactElement {
                           </SectionItem>
                       ))
                     : null}
-                {eventsOpen && sourcetypesReady && sourcetypes.length === 0 ? <Note>No sourcetypes in this time range.</Note> : null}
+                {eventsOpen && sourcetypesReady && sourcetypes.length === 0 ? <Note>{t('No sourcetypes in this time range.')}</Note> : null}
                 <SectionButton type="button" aria-expanded={datasetsOpen} onClick={() => setDatasetsOpen((open) => !open)}>
-                    {datasetsOpen ? '▾' : '▸'} Datasets
+                    {datasetsOpen ? '▾' : '▸'} {t('Datasets')}
                 </SectionButton>
                 {datasetsOpen
                     ? datamodels.map((name) => (
@@ -1350,27 +1430,27 @@ export function Explorer(): React.ReactElement {
                           </SectionItem>
                       ))
                     : null}
-                {datasetsOpen && datamodels.length === 0 ? <Note>No data models.</Note> : null}
+                {datasetsOpen && datamodels.length === 0 ? <Note>{t('No data models.')}</Note> : null}
                 <DataLists catalogRange={catalogRange} onAddBase={addBaseChart} />
                 <Footer>
-                    Data ingested from{' '}
+                    {t('Data ingested from')}{' '}
                     <select
-                        aria-label="Catalog time range"
+                        aria-label={t('Catalog time range')}
                         value={catalogRange}
                         onChange={(event) => setCatalogRange(event.target.value)}
                     >
                         {RANGES.map((item) => (
                             <option key={item.id} value={item.id}>
-                                {item.label}
+                                {t(item.label)}
                             </option>
                         ))}
                     </select>
-                    <div>Changing this time setting will affect performance.</div>
+                    <div>{t('Changing this time setting will affect performance.')}</div>
                 </Footer>
             </Pane>
             ) : (
                 <Rail $edge="left">
-                    <IconButton type="button" aria-label="Show data" onClick={() => setLeftOpen(true)}>
+                    <IconButton type="button" aria-label={t('Show data')} onClick={() => setLeftOpen(true)}>
                         »
                     </IconButton>
                 </Rail>
@@ -1378,7 +1458,7 @@ export function Explorer(): React.ReactElement {
             <Stage>
                 <Toolbar>
                     <select
-                        aria-label="Time range"
+                        aria-label={t('Time range')}
                         value={customTime ? 'custom' : range}
                         onChange={(event) => {
                             if (event.target.value === 'custom') {
@@ -1395,21 +1475,21 @@ export function Explorer(): React.ReactElement {
                     >
                         {RANGES.map((item) => (
                             <option key={item.id} value={item.id}>
-                                {item.label}
+                                {t(item.label)}
                             </option>
                         ))}
-                        <option value="custom">Custom…</option>
+                        <option value="custom">{t('Custom…')}</option>
                     </select>
                     {customTime ? (
                         <>
                             <TextInput
-                                aria-label="Custom time range start"
+                                aria-label={t('Custom time range start')}
                                 placeholder="-7d or 2026-11-06 14:00"
                                 value={customStart}
                                 onChange={(event) => setCustomStart(event.target.value)}
                             />
                             <TextInput
-                                aria-label="Custom time range end"
+                                aria-label={t('Custom time range end')}
                                 placeholder="now or 2026-11-06 18:00"
                                 value={customEnd}
                                 onChange={(event) => setCustomEnd(event.target.value)}
@@ -1427,70 +1507,91 @@ export function Explorer(): React.ReactElement {
                                     setLatest(result.latest);
                                 }}
                             >
-                                Apply time range
+                                {t('Apply time range')}
                             </ToolButton>
                             {customTimeError ? <Note role="alert">{customTimeError}</Note> : null}
                         </>
                     ) : null}
-                    <ToolButton type="button" aria-label="Refresh chart data" onClick={refreshNow} disabled={charts.length === 0}>
-                        Refresh <RefreshLabel refreshedAt={refreshedAt} auto={autoRefresh} />
+                    <ToolButton type="button" aria-label={t('Refresh chart data')} onClick={refreshNow} disabled={charts.length === 0}>
+                        {charts.length > 0 ? (
+                            <>
+                                {t('Refresh')} <RefreshLabel refreshedAt={refreshedAt} auto={autoRefresh} />
+                            </>
+                        ) : (
+                            '↻'
+                        )}
                     </ToolButton>
-                    <Select
-                        aria-label="Auto-refresh"
-                        value={autoRefresh ? 'on' : 'off'}
-                        onChange={(event) => {
-                            const enabled = event.target.value === 'on';
-                            setAutoRefresh(enabled);
-                            if (enabled) {
-                                refreshNow();
-                            }
-                        }}
-                    >
-                        <option value="off">Auto-refresh off</option>
-                        <option value="on">Auto-refresh on</option>
-                    </Select>
-                    <span>{charts.length > 0 ? `Time span=${span}` : ''}</span>
-                    <Select
-                        aria-label="Global split by"
-                        value={globalSplit}
-                        onChange={(event) => setGlobalSplit(event.target.value)}
-                    >
-                        <option value="">Split By</option>
-                        {splitChoices(allDimensions, globalSplit).map((name) => (
-                            <option key={name} value={name}>
-                                {name}
-                            </option>
-                        ))}
-                    </Select>
-                    <ToolButton type="button" disabled={globalSplit === ''} onClick={() => setGlobalSplit('')}>
-                        Clear Split By
+                    <ToolButton type="button" aria-label={t('Grid layout')} aria-pressed={layout === 'grid'} $pressed={layout === 'grid'} onClick={() => setLayout('grid')}>
+                        ▦
                     </ToolButton>
-                    <ToolButton type="button" aria-pressed={layout === 'grid'} $pressed={layout === 'grid'} onClick={() => setLayout('grid')}>
-                        Grid layout
+                    <ToolButton type="button" aria-label={t('Stack layout')} aria-pressed={layout === 'stack'} $pressed={layout === 'stack'} onClick={() => setLayout('stack')}>
+                        ☰
                     </ToolButton>
-                    <ToolButton type="button" aria-pressed={layout === 'stack'} $pressed={layout === 'stack'} onClick={() => setLayout('stack')}>
-                        Stack layout
-                    </ToolButton>
-                    <ToolButton type="button" disabled={charts.length === 0} onClick={() => setSaveMode('all')}>
-                        {t('Save all charts')}
-                    </ToolButton>
-                    <ToolButton type="button" onClick={() => setSaveMode('workspace')}>
-                        {t('Workspaces')}
-                    </ToolButton>
-                    <ToolButton
-                        type="button"
-                        disabled={charts.length === 0}
-                        onClick={() => {
-                            setCharts([]);
-                            setSelectedId('');
-                            setMaximizedId('');
-                            setMinimizedIds(new Set());
-                        }}
-                    >
-                        Remove all
-                    </ToolButton>
+                    {charts.length > 0 ? (
+                        <>
+                            <span>{t('Time span')}={span}</span>
+                            <Select
+                                aria-label={t('Global split by')}
+                                value={globalSplit}
+                                onChange={(event) => setGlobalSplit(event.target.value)}
+                            >
+                                <option value="">{t('Split By')}</option>
+                                {splitChoices(allDimensions, globalSplit).map((name) => (
+                                    <option key={name} value={name}>
+                                        {name}
+                                    </option>
+                                ))}
+                            </Select>
+                            {globalSplit ? (
+                                <ToolButton type="button" onClick={() => setGlobalSplit('')}>
+                                    {t('Clear Split By')}
+                                </ToolButton>
+                            ) : null}
+                            <ToolButton
+                                type="button"
+                                onClick={() => {
+                                    setCharts([]);
+                                    setSelectedId('');
+                                    setMaximizedId('');
+                                    setMinimizedIds(new Set());
+                                }}
+                            >
+                                {t('Remove all')}
+                            </ToolButton>
+                        </>
+                    ) : null}
+                    <Overflow>
+                        <ToolButton type="button" aria-label={t('More actions')} aria-expanded={toolbarMore} onClick={() => setToolbarMore((open) => !open)}>
+                            ⋯
+                        </ToolButton>
+                        {toolbarMore ? (
+                            <OverflowMenu>
+                                <Select
+                                    aria-label={t('Auto-refresh')}
+                                    value={autoRefresh ? 'on' : 'off'}
+                                    onChange={(event) => {
+                                        const enabled = event.target.value === 'on';
+                                        setAutoRefresh(enabled);
+                                        if (enabled) {
+                                            refreshNow();
+                                        }
+                                    }}
+                                >
+                                    <option value="off">{t('Auto-refresh off')}</option>
+                                    <option value="on">{t('Auto-refresh on')}</option>
+                                </Select>
+                                <ToolButton type="button" onClick={() => { setToolbarMore(false); setSaveMode('workspace'); }}>
+                                    {t('Workspaces')}
+                                </ToolButton>
+                                <ToolButton type="button" disabled={charts.length === 0} onClick={() => { setToolbarMore(false); setSaveMode('all'); }}>
+                                    {t('Save all charts')}
+                                </ToolButton>
+                            </OverflowMenu>
+                        ) : null}
+                    </Overflow>
                 </Toolbar>
-                <FilterBox aria-label="Global filters">
+                {charts.length > 0 || globalFilters.length > 0 ? (
+                <FilterBox aria-label={t('Global filters')}>
                     {globalFilters.map((filter) => (
                         <Chip key={`${filter.dimension}:${filter.mode}:${filter.values.join(',')}`}>
                             {filter.dimension} {filter.mode === 'include' ? 'includes' : 'excludes'} {filter.values.join(', ')}
@@ -1503,47 +1604,57 @@ export function Explorer(): React.ReactElement {
                             </ChipRemove>
                         </Chip>
                     ))}
-                    <FilterForm
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            addGlobalFilter();
-                        }}
-                    >
-                        <Select
-                            aria-label="Global filter dimension"
-                            value={globalDimension}
-                            onChange={(event) => setGlobalDimension(event.target.value)}
+                    {globalFilterOpen ? (
+                        <FilterForm
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                addGlobalFilter();
+                            }}
                         >
-                            <option value="">Select a dimension</option>
-                            {allDimensions.map((name) => (
-                                <option key={name} value={name}>
-                                    {name}
-                                </option>
-                            ))}
-                        </Select>
-                        <Select
-                            aria-label="Global filter mode"
-                            value={globalMode}
-                            onChange={(event) => setGlobalMode(event.target.value === 'exclude' ? 'exclude' : 'include')}
-                        >
-                            <option value="include">Include</option>
-                            <option value="exclude">Exclude</option>
-                        </Select>
-                        <FilterInput
-                            aria-label="Global filter values"
-                            value={globalValues}
-                            placeholder="Values, comma separated"
-                            onChange={(event) => setGlobalValues(event.target.value)}
-                        />
-                        <ToolButton type="submit">Add global filter</ToolButton>
-                    </FilterForm>
+                            <Select
+                                aria-label={t('Global filter dimension')}
+                                value={globalDimension}
+                                onChange={(event) => setGlobalDimension(event.target.value)}
+                            >
+                                <option value="">{t('Select a dimension')}</option>
+                                {allDimensions.map((name) => (
+                                    <option key={name} value={name}>
+                                        {name}
+                                    </option>
+                                ))}
+                            </Select>
+                            <Select
+                                aria-label={t('Global filter mode')}
+                                value={globalMode}
+                                onChange={(event) => setGlobalMode(event.target.value === 'exclude' ? 'exclude' : 'include')}
+                            >
+                                <option value="include">{t('Include')}</option>
+                                <option value="exclude">{t('Exclude')}</option>
+                            </Select>
+                            <FilterInput
+                                aria-label={t('Global filter values')}
+                                value={globalValues}
+                                placeholder={t('Values, comma separated')}
+                                onChange={(event) => setGlobalValues(event.target.value)}
+                            />
+                            <TextLink type="submit">{t('Add')}</TextLink>
+                            <TextLink type="button" onClick={() => setGlobalFilterOpen(false)}>
+                                {t('Cancel')}
+                            </TextLink>
+                        </FilterForm>
+                    ) : (
+                        <TextLink type="button" onClick={() => setGlobalFilterOpen(true)}>
+                            {t('+ Add global filter')}
+                        </TextLink>
+                    )}
                     {globalFilterError ? <Note role="alert">{globalFilterError}</Note> : null}
                 </FilterBox>
+                ) : null}
                 {recovered && charts.length > 0 ? (
                     <Note role="status">
-                        Your work has been recovered.{' '}
+                        {t('Your work has been recovered.')}{' '}
                         <ToolButton type="button" onClick={() => setRecovered(false)}>
-                            Dismiss
+                            {t('Dismiss')}
                         </ToolButton>
                     </Note>
                 ) : null}
@@ -1551,16 +1662,16 @@ export function Explorer(): React.ReactElement {
                     <Empty>
                         {savedSession ? (
                             <>
-                                <h1>Let&apos;s bring you up to speed!</h1>
-                                <p>Open your latest charts, or start by selecting data.</p>
+                                <h1>{t("Let's bring you up to speed!")}</h1>
+                                <p>{t('Open your latest charts, or start by selecting data.')}</p>
                                 <ToolButton type="button" onClick={openSaved}>
-                                    Open Charts
+                                    {t('Open Charts')}
                                 </ToolButton>
                             </>
                         ) : (
                             <>
-                                <h1>Start by selecting data.</h1>
-                                <p>Find something interesting? Save it to a dashboard, or create an alert.</p>
+                                <h1>{t('Start by selecting data.')}</h1>
+                                <p>{t('Find something interesting? Save it to a dashboard, or create an alert.')}</p>
                             </>
                         )}
                     </Empty>
@@ -1626,8 +1737,8 @@ export function Explorer(): React.ReactElement {
             {rightOpen ? (
             <Analysis>
                 <PaneHeader>
-                    Analysis
-                    <IconButton type="button" aria-label="Hide analysis" onClick={() => setRightOpen(false)}>
+                    {t('Analysis')}
+                    <IconButton type="button" aria-label={t('Hide analysis')} onClick={() => setRightOpen(false)}>
                         »
                     </IconButton>
                 </PaneHeader>
@@ -1678,14 +1789,14 @@ export function Explorer(): React.ReactElement {
                                     <option key={item.name} value={item.label} />
                                 ))}
                             </datalist>
-                            <span>Select or type an aggregation.</span>
+                            <span>{t('Select or type an aggregation.')}</span>
                             {(series.source ?? 'metric') !== 'metric' && needsField(chosen?.name ?? '') ? (
                                 <>
                                     <TextInput
-                                        aria-label="Event field"
+                                        aria-label={t('Event field')}
                                         value={series.field}
                                         list="source-fields"
-                                        placeholder="Indexed field, for example bytes"
+                                        placeholder={t('Indexed field, for example bytes')}
                                         onChange={(event) => patchSeries({ field: event.target.value.trim() })}
                                     />
                                     <datalist id="source-fields">
@@ -1696,27 +1807,37 @@ export function Explorer(): React.ReactElement {
                                 </>
                             ) : null}
                             {chosen?.rate ? <Note>{rateExplanation(chosen.name)}</Note> : null}
+                            <span>
+                                <input
+                                    type="checkbox"
+                                    aria-label={t('Overlay on right axis')}
+                                    checked={series.overlay}
+                                    onChange={(event) => patchSeries({ overlay: event.target.checked })}
+                                />{' '}
+                                {t('Overlay on right axis')}
+                            </span>
                         </Field>
+                        {percentileOpen || percentilePreset !== '' ? (
                         <Field>
-                            Percentile
+                            {t('Percentile')}
                             <Select
-                                aria-label="Percentile"
+                                aria-label={t('Percentile')}
                                 value={percentilePreset}
                                 onChange={(event) => choosePercentilePreset(event.target.value)}
                             >
                                 <option value="" disabled>
-                                    Not selected
+                                    {t('Not selected')}
                                 </option>
                                 {PERCENTILE_PRESETS.map((value) => (
                                     <option key={value} value={value}>
                                         {`p${value}`}
                                     </option>
                                 ))}
-                                <option value="custom">Custom</option>
+                                <option value="custom">{t('Custom')}</option>
                             </Select>
                             {percentilePreset !== '' ? (
                                 <Select
-                                    aria-label="Percentile method"
+                                    aria-label={t('Percentile method')}
                                     value={percentileKind}
                                     onChange={(event) =>
                                         changePercentileMethod(
@@ -1739,24 +1860,31 @@ export function Explorer(): React.ReactElement {
                             ) : null}
                             {percentilePreset === 'custom' ? (
                                 <TextInput
-                                    aria-label="Custom percentile"
+                                    aria-label={t('Custom percentile')}
                                     inputMode="decimal"
-                                    placeholder="0 to 99.999"
+                                    placeholder={t('0 to 99.999')}
                                     value={customValue}
                                     onChange={(event) => changeCustomPercentile(event.target.value)}
                                 />
                             ) : null}
                             {customError ? <span role="alert">{customError}</span> : null}
                         </Field>
+                        ) : (
+                            <Field>
+                                <TextLink type="button" onClick={() => setPercentileOpen(true)}>
+                                    {t('Percentile')}
+                                </TextLink>
+                            </Field>
+                        )}
                         <Field>
-                            Split by
+                            {t('Split by')}
                             <Select
-                                aria-label="Split by"
+                                aria-label={t('Split by')}
                                 value={series.splitBy}
                                 onChange={(event) => patchSeries({ splitBy: event.target.value })}
                             >
                                 <option value={INHERIT_SPLIT}>Inherit Global Split By</option>
-                                <option value="">None</option>
+                                <option value="">{t('None')}</option>
                                 {splitChoices(
                                     (series.source ?? 'metric') === 'metric' ? dimensions : sourceFields,
                                     series.splitBy === INHERIT_SPLIT ? '' : series.splitBy
@@ -1766,19 +1894,10 @@ export function Explorer(): React.ReactElement {
                                     </option>
                                 ))}
                             </Select>
-                            <span>
-                                {series.splitBy === INHERIT_SPLIT
-                                    ? !selected.useGlobalSplit
-                                        ? 'The global split is off for this chart.'
-                                        : globalSplit
-                                          ? `Uses the global split by ${globalSplit}.`
-                                          : 'No global split is set.'
-                                    : 'Display this series as separate values.'}
-                            </span>
                             {resolveSplit(series, globalSplit, selected.useGlobalSplit) ? (
                                 <SplitRow>
                                     <Select
-                                        aria-label="Split limit type"
+                                        aria-label={t('Split limit type')}
                                         value={series.splitDirection}
                                         onChange={(event) =>
                                             patchSeries({
@@ -1786,11 +1905,11 @@ export function Explorer(): React.ReactElement {
                                             })
                                         }
                                     >
-                                        <option value="highest">Highest</option>
-                                        <option value="lowest">Lowest</option>
+                                        <option value="highest">{t('Highest')}</option>
+                                        <option value="lowest">{t('Lowest')}</option>
                                     </Select>
                                     <Select
-                                        aria-label="Split limit"
+                                        aria-label={t('Split limit')}
                                         value={series.splitLimit}
                                         onChange={(event) => patchSeries({ splitLimit: Number(event.target.value) })}
                                     >
@@ -1804,8 +1923,8 @@ export function Explorer(): React.ReactElement {
                             ) : null}
                         </Field>
                         <Field>
-                            Time shift
-                            <Select aria-label="Time shift" value={shiftSelect} onChange={(event) => chooseShift(event.target.value)}>
+                            {t('Time shift')}
+                            <Select aria-label={t('Time shift')} value={shiftSelect} onChange={(event) => chooseShift(event.target.value)}>
                                 {SHIFTS.map((item) => (
                                     <option key={item.id || 'none'} value={item.id}>
                                         {item.label}
@@ -1815,14 +1934,14 @@ export function Explorer(): React.ReactElement {
                             {shiftSelect === 'custom' ? (
                                 <SplitRow>
                                     <TextInput
-                                        aria-label="Custom time shift"
+                                        aria-label={t('Custom time shift')}
                                         inputMode="numeric"
-                                        placeholder="Number"
+                                        placeholder={t('Number')}
                                         value={shiftFieldAmount}
                                         onChange={(event) => changeShiftAmount(event.target.value)}
                                     />
                                     <Select
-                                        aria-label="Time shift unit"
+                                        aria-label={t('Time shift unit')}
                                         value={shiftFieldUnit}
                                         onChange={(event) => changeShiftUnit(event.target.value as ShiftUnit)}
                                     >
@@ -1835,11 +1954,9 @@ export function Explorer(): React.ReactElement {
                                 </SplitRow>
                             ) : null}
                             {shiftError ? <span role="alert">{shiftError}</span> : null}
-                            <span>Display an earlier time range.</span>
                         </Field>
                         <Field>
                             Filter
-                            <span>Include or exclude dimension values.</span>
                             {series.filters.map((filter) => (
                                 <SplitRow key={`${filter.dimension}-${filter.mode}`}>
                                     <span>
@@ -1855,18 +1972,18 @@ export function Explorer(): React.ReactElement {
                                             })
                                         }
                                     >
-                                        Remove
+                                        {t('Remove')}
                                     </button>
                                 </SplitRow>
                             ))}
                             {filterOpen ? (
                                 <>
                                     <Select
-                                        aria-label="Filter dimension"
+                                        aria-label={t('Filter dimension')}
                                         value={filterDimension}
                                         onChange={(event) => setFilterDimension(event.target.value)}
                                     >
-                                        <option value="">Select a dimension</option>
+                                        <option value="">{t('Select a dimension')}</option>
                                         {dimensions.map((name) => (
                                             <option key={name} value={name}>
                                                 {name}
@@ -1874,14 +1991,14 @@ export function Explorer(): React.ReactElement {
                                         ))}
                                     </Select>
                                     <Select
-                                        aria-label="Filter mode"
+                                        aria-label={t('Filter mode')}
                                         value={filterMode}
                                         onChange={(event) =>
                                             setFilterMode(event.target.value === 'exclude' ? 'exclude' : 'include')
                                         }
                                     >
-                                        <option value="include">Include</option>
-                                        <option value="exclude">Exclude</option>
+                                        <option value="include">{t('Include')}</option>
+                                        <option value="exclude">{t('Exclude')}</option>
                                     </Select>
                                     <FilterChoices>
                                         {filterChoices.map((value) => (
@@ -1917,22 +2034,21 @@ export function Explorer(): React.ReactElement {
                                                 setFilterPicked([]);
                                             }}
                                         >
-                                            Add
+                                            {t('Add')}
                                         </button>
                                         <button type="button" onClick={() => setFilterOpen(false)}>
-                                            Cancel
+                                            {t('Cancel')}
                                         </button>
                                     </SplitRow>
                                 </>
                             ) : (
                                 <button type="button" onClick={() => setFilterOpen(true)}>
-                                    Add filter
+                                    {t('Add filter')}
                                 </button>
                             )}
                         </Field>
                         <Field>
-                            Reference lines
-                            <span>Add a horizontal line for a threshold or a value from this chart.</span>
+                            {t('Reference lines')}
                             {series.referenceLines.map((line, index) => (
                                 <SplitRow key={`${line.kind}-${line.label}-${line.earliest ?? ''}-${index}`}>
                                     <span>{referenceSummary(line)}</span>
@@ -1945,14 +2061,14 @@ export function Explorer(): React.ReactElement {
                                             })
                                         }
                                     >
-                                        Remove
+                                        {t('Remove')}
                                     </button>
                                 </SplitRow>
                             ))}
                             {referenceOpen ? (
                                 <>
                                     <Select
-                                        aria-label="Reference calculation"
+                                        aria-label={t('Reference calculation')}
                                         value={referenceKind}
                                         onChange={(event) => {
                                             const kind = event.target.value === 'constant' ? 'constant' : 'aggregation';
@@ -1961,56 +2077,56 @@ export function Explorer(): React.ReactElement {
                                             setReferenceLabel(kind === 'constant' ? '' : 'Avg');
                                         }}
                                     >
-                                        <option value="aggregation">Raw data</option>
-                                        <option value="constant">Constant value</option>
+                                        <option value="aggregation">{t('Raw data')}</option>
+                                        <option value="constant">{t('Constant value')}</option>
                                     </Select>
                                     <TextInput
-                                        aria-label="Reference value"
+                                        aria-label={t('Reference value')}
                                         value={referenceValue}
                                         placeholder={referenceKind === 'constant' ? '25' : 'Avg'}
                                         onChange={(event) => setReferenceValue(event.target.value)}
                                     />
                                     <TextInput
-                                        aria-label="Reference label"
+                                        aria-label={t('Reference label')}
                                         value={referenceLabel}
-                                        placeholder="Label"
+                                        placeholder={t('Label')}
                                         onChange={(event) => setReferenceLabel(event.target.value)}
                                     />
                                     <span>
                                         <input
                                             type="checkbox"
-                                            aria-label="Include value"
+                                            aria-label={t('Include value')}
                                             checked={referenceInclude}
                                             onChange={(event) => setReferenceInclude(event.target.checked)}
                                         />{' '}
-                                        Include value
+                                        {t('Include value')}
                                     </span>
                                     {referenceKind === 'aggregation' ? (
                                         <>
                                             <Select
-                                                aria-label="Reference line time range"
+                                                aria-label={t('Reference line time range')}
                                                 value={referenceRange}
                                                 onChange={(event) => setReferenceRange(event.target.value)}
                                             >
-                                                <option value="">Chart</option>
+                                                <option value="">{t('Chart')}</option>
                                                 {RANGES.map((item) => (
                                                     <option key={item.id} value={item.id}>
                                                         {item.label}
                                                     </option>
                                                 ))}
-                                                <option value="custom">Custom</option>
+                                                <option value="custom">{t('Custom')}</option>
                                             </Select>
                                             {referenceRange === 'custom' ? (
                                                 <>
                                                     <SplitRow>
                                                         <TextInput
-                                                            aria-label="Reference earliest"
+                                                            aria-label={t('Reference earliest')}
                                                             inputMode="numeric"
                                                             value={referenceEarliestAmount}
                                                             onChange={(event) => setReferenceEarliestAmount(event.target.value)}
                                                         />
                                                         <Select
-                                                            aria-label="Reference earliest unit"
+                                                            aria-label={t('Reference earliest unit')}
                                                             value={referenceEarliestUnit}
                                                             onChange={(event) => setReferenceEarliestUnit(event.target.value as ShiftUnit)}
                                                         >
@@ -2023,23 +2139,23 @@ export function Explorer(): React.ReactElement {
                                                     </SplitRow>
                                                     <SplitRow>
                                                         <Select
-                                                            aria-label="Reference latest"
+                                                            aria-label={t('Reference latest')}
                                                             value={referenceLatestMode}
                                                             onChange={(event) => setReferenceLatestMode(event.target.value === 'ago' ? 'ago' : 'now')}
                                                         >
-                                                            <option value="now">Now</option>
-                                                            <option value="ago">Ago</option>
+                                                            <option value="now">{t('Now')}</option>
+                                                            <option value="ago">{t('Ago')}</option>
                                                         </Select>
                                                         {referenceLatestMode === 'ago' ? (
                                                             <>
                                                                 <TextInput
-                                                                    aria-label="Reference latest amount"
+                                                                    aria-label={t('Reference latest amount')}
                                                                     inputMode="numeric"
                                                                     value={referenceLatestAmount}
                                                                     onChange={(event) => setReferenceLatestAmount(event.target.value)}
                                                                 />
                                                                 <Select
-                                                                    aria-label="Reference latest unit"
+                                                                    aria-label={t('Reference latest unit')}
                                                                     value={referenceLatestUnit}
                                                                     onChange={(event) => setReferenceLatestUnit(event.target.value as ShiftUnit)}
                                                                 >
@@ -2075,10 +2191,10 @@ export function Explorer(): React.ReactElement {
                                                 setReferenceOpen(false);
                                             }}
                                         >
-                                            Add
+                                            {t('Add')}
                                         </button>
                                         <button type="button" onClick={() => setReferenceOpen(false)}>
-                                            Cancel
+                                            {t('Cancel')}
                                         </button>
                                     </SplitRow>
                                 </>
@@ -2094,42 +2210,30 @@ export function Explorer(): React.ReactElement {
                                         setReferenceOpen(true);
                                     }}
                                 >
-                                    Add reference line
+                                    {t('Add reference line')}
                                 </button>
                             )}
-                        </Field>
-                        <Field>
-                            <span>
-                                <input
-                                    type="checkbox"
-                                    aria-label="Overlay on right axis"
-                                    checked={series.overlay}
-                                    onChange={(event) => patchSeries({ overlay: event.target.checked })}
-                                />{' '}
-                                Overlay on right axis
-                            </span>
                         </Field>
                     </>
                 )}
                 {selected ? (
-                    <Field as="div">
-                        <details>
-                            <summary>Chart settings</summary>
+                    <SettingsFold>
+                            <summary>{t('Chart settings')}</summary>
                             <Field as="div">
                                 <label>
                                     <input
                                         type="checkbox"
-                                        aria-label="Use global split by for this chart"
+                                        aria-label={t('Use global split by for this chart')}
                                         checked={selected.useGlobalSplit}
                                         onChange={(event) => patchChart({ useGlobalSplit: event.target.checked })}
                                     />{' '}
-                                    Use global split by for this chart
+                                    {t('Use global split by for this chart')}
                                 </label>
                             </Field>
                             <Field as="div">
-                                Chart type
+                                {t('Chart type')}
                                 <Select
-                                    aria-label="Chart type"
+                                    aria-label={t('Chart type')}
                                     value={selected.settings.type}
                                     onChange={(event) =>
                                         patchSettings({ type: event.target.value as ChartSettings['type'] })
@@ -2143,9 +2247,9 @@ export function Explorer(): React.ReactElement {
                                 </Select>
                             </Field>
                             <Field as="div">
-                                Show
+                                {t('Show')}
                                 <Select
-                                    aria-label="Chart content"
+                                    aria-label={t('Chart content')}
                                     value={selected.settings.content}
                                     onChange={(event) => {
                                         const content = event.target.value;
@@ -2162,17 +2266,17 @@ export function Explorer(): React.ReactElement {
                                 </Select>
                             </Field>
                             <Field as="div">
-                                Time span = {selected.settings.span || 'Auto'}
-                                <span>Refer to the time range to set an appropriate time span.</span>
+                                {t('Time span')} = {selected.settings.span || 'Auto'}
+                                <span>{t('Refer to the time range to set an appropriate time span.')}</span>
                                 <SplitRow>
                                     <TextInput
-                                        aria-label="Span count"
+                                        aria-label={t('Span count')}
                                         value={spanCount}
                                         inputMode="numeric"
                                         onChange={(event) => setSpanCount(event.target.value)}
                                     />
                                     <Select
-                                        aria-label="Span unit"
+                                        aria-label={t('Span unit')}
                                         value={spanUnit}
                                         onChange={(event) => setSpanUnit(event.target.value)}
                                     >
@@ -2189,7 +2293,7 @@ export function Explorer(): React.ReactElement {
                                         disabled={buildSpan(spanCount, spanUnit) === null}
                                         onClick={() => patchSettings({ span: buildSpan(spanCount, spanUnit) ?? '' })}
                                     >
-                                        Apply span
+                                        {t('Apply span')}
                                     </button>
                                     <button
                                         type="button"
@@ -2199,40 +2303,40 @@ export function Explorer(): React.ReactElement {
                                             setSpanCount('');
                                         }}
                                     >
-                                        Revert span
+                                        {t('Revert span')}
                                     </button>
                                 </SplitRow>
                             </Field>
                             {selected.settings.content === 'table' || selected.settings.type === 'heatmap' ? null : (
                             <Field as="div">
-                                Y-axis
+                                {t('Y-axis')}
                                 <span>Set the minimum and maximum, for example 1000, 1k or 3m.</span>
                                 <SplitRow>
                                     <TextInput
-                                        aria-label="Y-axis minimum"
+                                        aria-label={t('Y-axis minimum')}
                                         placeholder="Min"
                                         value={selected.settings.yMin}
                                         onChange={(event) => patchSettings({ yMin: event.target.value })}
                                     />
                                     <TextInput
-                                        aria-label="Y-axis maximum"
+                                        aria-label={t('Y-axis maximum')}
                                         placeholder="Max"
                                         value={selected.settings.yMax}
                                         onChange={(event) => patchSettings({ yMax: event.target.value })}
                                     />
                                 </SplitRow>
                                 <Select
-                                    aria-label="Y-axis scale"
+                                    aria-label={t('Y-axis scale')}
                                     value={selected.settings.yScale}
                                     onChange={(event) =>
                                         patchSettings({ yScale: event.target.value === 'log' ? 'log' : 'linear' })
                                     }
                                 >
                                     <option value="linear">Linear</option>
-                                    <option value="log">Log</option>
+                                    <option value="log">{t('Log')}</option>
                                 </Select>
                                 <Select
-                                    aria-label="Tooltip decimal places"
+                                    aria-label={t('Tooltip decimal places')}
                                     value={String(selected.settings.decimals ?? 4)}
                                     onChange={(event) => patchSettings({ decimals: Number(event.target.value) })}
                                 >
@@ -2249,24 +2353,23 @@ export function Explorer(): React.ReactElement {
                                         checked={selected.settings.abbreviate !== false}
                                         onChange={(event) => patchSettings({ abbreviate: event.target.checked })}
                                     />{' '}
-                                    Abbreviate numbers on the axis
+                                    {t('Abbreviate numbers on the axis')}
                                 </label>
                                 {validateAxis(selected.settings) ? <span role="alert">{validateAxis(selected.settings)}</span> : null}
                                 <button
                                     type="button"
                                     onClick={() => patchSettings({ yMin: '', yMax: '', yScale: 'linear' })}
                                 >
-                                    Revert y-axis
+                                    {t('Revert y-axis')}
                                 </button>
                             </Field>
                             )}
-                        </details>
-                    </Field>
+                    </SettingsFold>
                 ) : null}
             </Analysis>
             ) : (
                 <Rail $edge="right">
-                    <IconButton type="button" aria-label="Show analysis" onClick={() => setRightOpen(true)}>
+                    <IconButton type="button" aria-label={t('Show analysis')} onClick={() => setRightOpen(true)}>
                         «
                     </IconButton>
                 </Rail>

@@ -118,7 +118,7 @@ export function SaveDialog(props: {
     const [views, setViews] = useState<string[]>([]);
     const [baseMode, setBaseMode] = useState<'live' | 'cached'>('live');
     const [sharing, setSharing] = useState<'private' | 'app'>('private');
-    const [comparator, setComparator] = useState('greater than');
+    const [comparator, setComparator] = useState(t('greater than'));
     const [threshold, setThreshold] = useState('');
     const [cron, setCron] = useState<string>(ALERT_SCHEDULES[1].id);
     const [severity, setSeverity] = useState('3');
@@ -190,7 +190,7 @@ export function SaveDialog(props: {
         setDone('');
         const title = name.trim();
         if (props.mode !== 'panel' && props.mode !== 'all' ? !title : !existing && !title) {
-            setError('Enter a name.');
+            setError(t('Enter a name.'));
             return;
         }
         if (!existing && title && (props.mode === 'panel' || props.mode === 'all' || props.mode === 'workspace' || props.mode === 'base')) {
@@ -215,7 +215,7 @@ export function SaveDialog(props: {
                     props.metricIndexes
                 );
                 if (panels.length === 0) {
-                    throw new Error('Nothing to save.');
+                    throw new Error(t('Nothing to save.'));
                 }
                 if (props.mode === 'report') {
                     await splunkPost('saved/searches', {
@@ -225,7 +225,7 @@ export function SaveDialog(props: {
                         'dispatch.latest_time': panels[0].latest,
                         description: description.trim(),
                     });
-                    setDone(`Saved report ${title}.`);
+                    setDone(`${t('Saved report')} ${title}.`);
                 } else if (props.mode === 'alert') {
                     await saveAlert(panels[0], title);
                 } else {
@@ -237,7 +237,7 @@ export function SaveDialog(props: {
                 await saveWorkspace(title);
             }
         } catch (caught) {
-            setError(caught instanceof Error ? caught.message : 'Could not save.');
+            setError(caught instanceof Error ? caught.message : t('Could not save.'));
         } finally {
             setBusy(false);
         }
@@ -247,33 +247,33 @@ export function SaveDialog(props: {
         const label = title || existing;
         if (existing) {
             if (format === 'studio') {
-                throw new Error('Adding panels to an existing dashboard works for Classic dashboards. Create a new Dashboard Studio dashboard.');
+                throw new Error(t('Adding panels to an existing dashboard works for Classic dashboards. Create a new Dashboard Studio dashboard.'));
             }
             const body = await splunkGet(`data/ui/views/${encodeURIComponent(existing)}`);
             const entry = restEntries(body)[0];
             const current = typeof entry?.content['eai:data'] === 'string' ? entry.content['eai:data'] : '';
             const next = appendClassicPanels(current, panels);
             await splunkPost(`data/ui/views/${encodeURIComponent(existing)}`, { 'eai:data': next });
-            setDone(`Added the charts to ${existing}.`);
+            setDone(`${t('Added the charts to')} ${existing}.`);
             return;
         }
         const xml = format === 'studio' ? studioDashboard(label, panels) : classicDashboard(label, panels);
         await splunkPost('data/ui/views', { name: label, 'eai:data': xml });
-        setDone(`Saved dashboard ${label}.`);
+        setDone(`${t('Saved dashboard')} ${label}.`);
     }
 
     async function saveAlert(panel: PanelSpec, title: string): Promise<void> {
         const series = chart?.series[0];
         if (alertKind === 'streaming') {
             if (!streamingOk) {
-                throw new Error('Streaming alerts are not available on this instance.');
+                throw new Error(t('Streaming alerts are not available on this instance.'));
             }
             if (!series || (series.source ?? 'metric') !== 'metric') {
-                throw new Error('A streaming alert needs a metric series.');
+                throw new Error(t('A streaming alert needs a metric series.'));
             }
             const aggregation = resolveForSource('metric', series.aggregation);
             if (!aggregation) {
-                throw new Error('Unknown aggregation.');
+                throw new Error(t('Unknown aggregation.'));
             }
             await splunkPost('alerts/metric_alerts', {
                 name: title,
@@ -283,7 +283,7 @@ export function SaveDialog(props: {
                 'trigger.evaluation_per': '1m',
                 'trigger.threshold': '1',
             });
-            setDone(`Saved streaming alert ${title}.`);
+            setDone(`${t('Saved streaming alert')} ${title}.`);
             return;
         }
         await splunkPost(
@@ -299,13 +299,13 @@ export function SaveDialog(props: {
                 throttle,
             })
         );
-        setDone(`Saved scheduled alert ${title}.`);
+        setDone(`${t('Saved scheduled alert')} ${title}.`);
     }
 
     async function saveBase(title: string): Promise<void> {
         const series = chart?.series[0];
         if (!series || series.source === 'base') {
-            throw new Error('Open a metric, event, or dataset chart first.');
+            throw new Error(t('Open a metric, event, or dataset chart first.'));
         }
         const source = series.source === 'dataset' ? 'dataset' : series.source === 'event' ? 'event' : 'metric';
         const search = buildBaseSearchSpl({
@@ -349,7 +349,7 @@ export function SaveDialog(props: {
             created: new Date().toISOString(),
             updated: new Date().toISOString(),
         });
-        setDone(`Saved base search ${title}.`);
+        setDone(`${t('Saved base search')} ${title}.`);
     }
 
     async function saveWorkspace(title: string): Promise<void> {
@@ -374,7 +374,7 @@ export function SaveDialog(props: {
             sharing,
             updated: new Date().toISOString(),
         });
-        setDone(`Saved workspace ${title}.`);
+        setDone(`${t('Saved workspace')} ${title}.`);
         reloadWorkspaces();
     }
 
@@ -384,7 +384,7 @@ export function SaveDialog(props: {
     return (
         <Backdrop onMouseDown={props.onClose}>
             <Dialog
-                aria-label="Save"
+                aria-label={t('Save')}
                 onMouseDown={(event) => event.stopPropagation()}
                 onSubmit={(event) => {
                     void save(event);
@@ -405,8 +405,8 @@ export function SaveDialog(props: {
                 </strong>
                 {props.mode === 'panel' || props.mode === 'all' ? (
                     <Row>
-                        Format
-                        <select aria-label="Dashboard format" value={format} onChange={(event) => setFormat(event.target.value === 'studio' ? 'studio' : 'classic')}>
+                        {t('Format')}
+                        <select aria-label={t('Dashboard format')} value={format} onChange={(event) => setFormat(event.target.value === 'studio' ? 'studio' : 'classic')}>
                             <option value="classic">{t('Classic')}</option>
                             <option value="studio">{t('Dashboard Studio')}</option>
                         </select>
@@ -414,9 +414,9 @@ export function SaveDialog(props: {
                 ) : null}
                 {props.mode === 'panel' || props.mode === 'all' ? (
                     <Row>
-                        Existing dashboard
-                        <select aria-label="Existing dashboard" value={existing} onChange={(event) => setExisting(event.target.value)}>
-                            <option value="">New dashboard</option>
+                        {t('Existing dashboard')}
+                        <select aria-label={t('Existing dashboard')} value={existing} onChange={(event) => setExisting(event.target.value)}>
+                            <option value="">{t('New dashboard')}</option>
                             {views.map((view) => (
                                 <option key={view} value={view}>
                                     {view}
@@ -428,9 +428,9 @@ export function SaveDialog(props: {
                 {props.mode === 'alert' ? (
                     <>
                         <Row>
-                            Alert type
+                            {t('Alert type')}
                             <select
-                                aria-label="Alert type"
+                                aria-label={t('Alert type')}
                                 value={alertKind}
                                 onChange={(event) => setAlertKind(event.target.value === 'streaming' ? 'streaming' : 'scheduled')}
                             >
@@ -439,22 +439,22 @@ export function SaveDialog(props: {
                             </select>
                         </Row>
                         <Row>
-                            Condition
-                            <select aria-label="Alert comparator" value={comparator} onChange={(event) => setComparator(event.target.value)}>
-                                <option value="greater than">greater than</option>
-                                <option value="less than">less than</option>
-                                <option value="equal to">equal to</option>
+                            {t('Condition')}
+                            <select aria-label={t('Alert comparator')} value={comparator} onChange={(event) => setComparator(event.target.value)}>
+                                <option value="greater than">{t('greater than')}</option>
+                                <option value="less than">{t('less than')}</option>
+                                <option value="equal to">{t('equal to')}</option>
                             </select>
                         </Row>
                         <Row>
-                            Threshold
-                            <input aria-label="Alert threshold" value={threshold} onChange={(event) => setThreshold(event.target.value)} />
+                            {t('Threshold')}
+                            <input aria-label={t('Alert threshold')} value={threshold} onChange={(event) => setThreshold(event.target.value)} />
                         </Row>
                         {alertKind === 'scheduled' ? (
                             <>
                                 <Row>
-                                    Frequency
-                                    <select aria-label="Alert frequency" value={cron} onChange={(event) => setCron(event.target.value)}>
+                                    {t('Frequency')}
+                                    <select aria-label={t('Alert frequency')} value={cron} onChange={(event) => setCron(event.target.value)}>
                                         {ALERT_SCHEDULES.map((item) => (
                                             <option key={item.id} value={item.id}>
                                                 {item.label}
@@ -463,18 +463,18 @@ export function SaveDialog(props: {
                                     </select>
                                 </Row>
                                 <Row>
-                                    Severity
-                                    <select aria-label="Alert severity" value={severity} onChange={(event) => setSeverity(event.target.value)}>
-                                        <option value="1">Info</option>
-                                        <option value="2">Low</option>
-                                        <option value="3">Medium</option>
-                                        <option value="4">High</option>
-                                        <option value="5">Critical</option>
+                                    {t('Severity')}
+                                    <select aria-label={t('Alert severity')} value={severity} onChange={(event) => setSeverity(event.target.value)}>
+                                        <option value="1">{t('Info')}</option>
+                                        <option value="2">{t('Low')}</option>
+                                        <option value="3">{t('Medium')}</option>
+                                        <option value="4">{t('High')}</option>
+                                        <option value="5">{t('Critical')}</option>
                                     </select>
                                 </Row>
                                 <Row>
-                                    Throttle
-                                    <input aria-label="Alert throttle" placeholder="1h, or empty" value={throttle} onChange={(event) => setThrottle(event.target.value)} />
+                                    {t('Throttle')}
+                                    <input aria-label={t('Alert throttle')} placeholder={t('1h, or empty')} value={throttle} onChange={(event) => setThrottle(event.target.value)} />
                                 </Row>
                             </>
                         ) : null}
@@ -482,26 +482,26 @@ export function SaveDialog(props: {
                 ) : null}
                 {props.mode === 'base' ? (
                     <Row>
-                        Mode
-                        <select aria-label="Base search mode" value={baseMode} onChange={(event) => setBaseMode(event.target.value === 'cached' ? 'cached' : 'live')}>
-                            <option value="live">Live</option>
-                            <option value="cached">Cached</option>
+                        {t('Mode')}
+                        <select aria-label={t('Base search mode')} value={baseMode} onChange={(event) => setBaseMode(event.target.value === 'cached' ? 'cached' : 'live')}>
+                            <option value="live">{t('Live')}</option>
+                            <option value="cached">{t('Cached')}</option>
                         </select>
                     </Row>
                 ) : null}
                 {props.mode === 'base' || props.mode === 'workspace' ? (
                     <Row>
-                        Sharing
-                        <select aria-label="Sharing" value={sharing} onChange={(event) => setSharing(event.target.value === 'app' ? 'app' : 'private')}>
-                            <option value="private">Private</option>
-                            <option value="app">App</option>
+                        {t('Sharing')}
+                        <select aria-label={t('Sharing')} value={sharing} onChange={(event) => setSharing(event.target.value === 'app' ? 'app' : 'private')}>
+                            <option value="private">{t('Private')}</option>
+                            <option value="app">{t('App')}</option>
                         </select>
                     </Row>
                 ) : null}
                 {props.mode === 'base' && baseMode === 'cached' ? (
                     <Row>
-                        Schedule
-                        <select aria-label="Base search schedule" value={cron} onChange={(event) => setCron(event.target.value)}>
+                        {t('Schedule')}
+                        <select aria-label={t('Base search schedule')} value={cron} onChange={(event) => setCron(event.target.value)}>
                             {ALERT_SCHEDULES.map((item) => (
                                 <option key={item.id} value={item.id}>
                                     {item.label}
@@ -512,21 +512,21 @@ export function SaveDialog(props: {
                 ) : null}
                 {!existing || (props.mode !== 'panel' && props.mode !== 'all') ? (
                     <Row>
-                        Name
-                        <input aria-label="Save name" value={name} onChange={(event) => setName(event.target.value)} />
+                        {t('Name')}
+                        <input aria-label={t('Save name')} value={name} onChange={(event) => setName(event.target.value)} />
                     </Row>
                 ) : null}
                 {props.mode === 'report' || props.mode === 'base' || props.mode === 'workspace' ? (
                     <Row>
-                        Description
-                        <input aria-label="Save description" value={description} onChange={(event) => setDescription(event.target.value)} />
+                        {t('Description')}
+                        <input aria-label={t('Save description')} value={description} onChange={(event) => setDescription(event.target.value)} />
                     </Row>
                 ) : null}
                 {error ? <span role="alert">{error}</span> : null}
                 {done ? <span role="status">{done}</span> : null}
                 {props.mode === 'workspace' ? (
                     <div>
-                        {visibleWorkspaces.length === 0 ? <span>No saved workspaces.</span> : null}
+                        {visibleWorkspaces.length === 0 ? <span>{t('No saved workspaces.')}</span> : null}
                         {visibleWorkspaces.map((item) => (
                             <div key={item._key ?? item.name}>
                                 <button
@@ -534,7 +534,7 @@ export function SaveDialog(props: {
                                     onClick={() => {
                                         const session = parseSession(typeof item.state === 'string' ? item.state : null);
                                         if (!session) {
-                                            setError('That workspace cannot be opened.');
+                                            setError(t('That workspace cannot be opened.'));
                                             return;
                                         }
                                         props.onOpenWorkspace(session);
@@ -551,7 +551,7 @@ export function SaveDialog(props: {
                                             void splunkDelete(`storage/collections/data/mx_workspaces/${encodeURIComponent(item._key ?? '')}`).then(reloadWorkspaces);
                                         }}
                                     >
-                                        Delete
+                                        {t('Delete')}
                                     </button>
                                 ) : null}
                             </div>
@@ -560,10 +560,10 @@ export function SaveDialog(props: {
                 ) : null}
                 <Actions>
                     <button type="button" onClick={props.onClose}>
-                        Close
+                        {t('Close')}
                     </button>
                     <button type="submit" disabled={busy}>
-                        {busy ? 'Saving…' : 'Save'}
+                        {busy ? t('Saving…') : t('Save')}
                     </button>
                 </Actions>
             </Dialog>
