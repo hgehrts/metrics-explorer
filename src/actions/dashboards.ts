@@ -173,8 +173,8 @@ export function chartKind(type: string): { chart: PanelSpec['chart']; stacked: b
     if (type === 'area') {
         return { chart: 'area', stacked: false };
     }
-    if (type === 'column' || type === 'stacked' || type === 'heatmap') {
-        return { chart: 'column', stacked: type === 'stacked' };
+    if (type === 'column' || type === 'stacked' || type === 'heatmap' || type === 'category' || type === 'stackCategory') {
+        return { chart: 'column', stacked: type === 'stacked' || type === 'stackCategory' };
     }
     return { chart: 'line', stacked: false };
 }

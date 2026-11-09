@@ -8,7 +8,7 @@ msgid "Save as report"
 msgstr "Als Bericht speichern"
 
 msgid "Save as dashboard panel"
-msgstr "Als Dashboard-Panel speichern"
+msgstr "Als Dashboard-Teilfenster speichern"
 
 msgid "Save all charts"
 msgstr "Alle Diagramme speichern"
@@ -482,7 +482,7 @@ msgid "Condition"
 msgstr "Bedingung"
 
 msgid "Throttle"
-msgstr "Drosselung"
+msgstr "Einschränkung"
 
 msgid "Info"
 msgstr "Info"
@@ -530,22 +530,22 @@ msgid "Dashboard format"
 msgstr "Dashboard-Format"
 
 msgid "Alert type"
-msgstr "Alarmtyp"
+msgstr "Benachrichtigungstyp"
 
 msgid "Alert comparator"
-msgstr "Alarm-Vergleich"
+msgstr "Vergleich"
 
 msgid "Alert threshold"
-msgstr "Alarm-Schwellenwert"
+msgstr "Schwellenwert"
 
 msgid "Alert frequency"
-msgstr "Alarm-Häufigkeit"
+msgstr "Häufigkeit"
 
 msgid "Alert severity"
-msgstr "Alarm-Schweregrad"
+msgstr "Schweregrad"
 
 msgid "Alert throttle"
-msgstr "Alarm-Drosselung"
+msgstr "Einschränkung"
 
 msgid "Base search mode"
 msgstr "Modus der Basissuche"
@@ -575,10 +575,10 @@ msgid "Could not save."
 msgstr "Speichern fehlgeschlagen."
 
 msgid "Streaming alerts are not available on this instance."
-msgstr "Streaming-Alarme sind auf dieser Instanz nicht verfügbar."
+msgstr "Streaming-Benachrichtigungen sind auf dieser Instanz nicht verfügbar."
 
 msgid "A streaming alert needs a metric series."
-msgstr "Ein Streaming-Alarm benötigt eine Metrikreihe."
+msgstr "Eine Streaming-Benachrichtigung benötigt eine Metrikreihe."
 
 msgid "Unknown aggregation."
 msgstr "Unbekannte Aggregation."
@@ -593,25 +593,25 @@ msgid "Adding panels to an existing dashboard works for Classic dashboards. Crea
 msgstr "Panels lassen sich nur zu klassischen Dashboards hinzufügen. Erstelle ein neues Dashboard Studio-Dashboard."
 
 msgid "Saved report"
-msgstr "Bericht gespeichert"
+msgstr "Bericht gespeichert:"
 
 msgid "Added the charts to"
 msgstr "Diagramme hinzugefügt zu"
 
 msgid "Saved dashboard"
-msgstr "Dashboard gespeichert"
+msgstr "Dashboard gespeichert:"
 
 msgid "Saved streaming alert"
-msgstr "Streaming-Alarm gespeichert"
+msgstr "Streaming-Benachrichtigung gespeichert:"
 
 msgid "Saved scheduled alert"
-msgstr "Geplanter Alarm gespeichert"
+msgstr "Geplante Benachrichtigung gespeichert:"
 
 msgid "Saved base search"
-msgstr "Basissuche gespeichert"
+msgstr "Base Search gespeichert:"
 
 msgid "Saved workspace"
-msgstr "Workspace gespeichert"
+msgstr "Arbeitsbereich gespeichert:"
 
 msgid "Chart actions"
 msgstr "Diagrammaktionen"
@@ -625,8 +625,26 @@ msgstr "Zoom zurücksetzen, um zu aktualisieren."
 msgid "Statistics table"
 msgstr "Statistiktabelle"
 
+msgid "Chart and statistics table"
+msgstr "Diagramm und Statistiktabelle"
+
 msgid "Heatmap"
 msgstr "Heatmap"
+
+msgid "by"
+msgstr "nach"
+
+msgid "{0} ago"
+msgstr "vor {0}"
+
+msgid "Refresh in {0}"
+msgstr "Aktualisierung in {0}"
+
+msgid "Refreshing…"
+msgstr "Wird aktualisiert…"
+
+msgid "No results found."
+msgstr "Keine Ergebnisse gefunden."
 
 msgid "(No alerts available)"
 msgstr "(Nein Benachrichtigungen verfügbar)"
@@ -1113,6 +1131,21 @@ msgstr "Einheit der Einschränkung"
 
 msgid "Time charts"
 msgstr "Zeitdiagramme"
+
+msgid "Categorical charts"
+msgstr "Kategorische Diagramme"
+
+msgid "Column chart"
+msgstr "Spaltendiagramm"
+
+msgid "Stacked column chart"
+msgstr "Gestapelte Säule"
+
+msgid "Area chart"
+msgstr "Flächendiagramm"
+
+msgid "Rate aggregations are not available for a categorical chart."
+msgstr "Rate-Aggregationen sind für ein kategorisches Diagramm nicht verfügbar."
 
 msgid "Time range picker"
 msgstr "Zeitspannenauswahl"

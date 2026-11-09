@@ -13,6 +13,63 @@ function seriesNames(row: SearchRow): string[] {
     return Object.keys(row).filter((key) => key !== '_time' && !key.startsWith('_'));
 }
 
+/** One value per category. Without a split, the single total is one row named after the series. */
+export function toCategoryTable(rows: SearchRow[], seriesName: string, splitBy?: string): LineTable {
+    if (splitBy) {
+        const categories: string[] = [];
+        const values: string[] = [];
+        for (const row of rows) {
+            const category = text(row[splitBy]);
+            if (!category) {
+                continue;
+            }
+            const valueKey = seriesNames(row).find((name) => name !== splitBy);
+            categories.push(category);
+            values.push(text(valueKey ? row[valueKey] : ''));
+        }
+        return { fields: [{ name: splitBy }, { name: seriesName }], columns: [categories, values] };
+    }
+    const row = rows.find((item) => seriesNames(item).length > 0);
+    const valueKey = row ? seriesNames(row)[0] : '';
+    return {
+        fields: [{ name: 'category' }, { name: seriesName }],
+        columns: [[seriesName], [text(row && valueKey ? row[valueKey] : '')]],
+    };
+}
+
+/**
+ * Joins categorical tables on the category, keeping the order of the first table.
+ * The category column is not named `_time`, so the chart does not read it as a time axis.
+ */
+export function mergeCategoryTables(tables: LineTable[]): LineTable {
+    const order: string[] = [];
+    const seen = new Set<string>();
+    for (const table of tables) {
+        for (const key of table.columns[0] ?? []) {
+            if (key && !seen.has(key)) {
+                seen.add(key);
+                order.push(key);
+            }
+        }
+    }
+    const counts = new Map<string, number>();
+    tables.forEach((table) => {
+        table.fields.slice(1).forEach((field) => counts.set(field.name, (counts.get(field.name) ?? 0) + 1));
+    });
+    const fields = [{ name: 'category' }];
+    const columns: string[][] = [order];
+    tables.forEach((table, tableIndex) => {
+        const index = new Map((table.columns[0] ?? []).map((key, position) => [key, position]));
+        table.fields.slice(1).forEach((field, fieldIndex) => {
+            const name = (counts.get(field.name) ?? 0) > 1 ? `${tableIndex + 1} ${field.name}` : field.name;
+            fields.push({ name });
+            const source = table.columns[fieldIndex + 1] ?? [];
+            columns.push(order.map((key) => source[index.get(key) ?? -1] ?? ''));
+        });
+    });
+    return { fields, columns };
+}
+
 export function toLineTable(rows: SearchRow[], seriesName: string, splitBy?: string): LineTable {
     if (splitBy && rows.some((row) => row[splitBy] !== undefined && row[splitBy] !== null && row[splitBy] !== '')) {
         const times: string[] = [];

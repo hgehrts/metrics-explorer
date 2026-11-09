@@ -1,4 +1,4 @@
-import { toLineTable } from '../src/chart/columns';
+import { mergeCategoryTables, toCategoryTable, toLineTable } from '../src/chart/columns';
 
 test('names a single series after the aggregation', () => {
     expect(
@@ -49,6 +49,27 @@ test('pivots a split search into one column per value', () => {
             ['2', ''],
         ],
     });
+});
+
+test('a categorical table is one bar per split value, joined across series', () => {
+    expect(toCategoryTable([{ value: '12' }], 'Avg')).toEqual({
+        fields: [{ name: 'category' }, { name: 'Avg' }],
+        columns: [['Avg'], ['12']],
+    });
+    const merged = mergeCategoryTables([
+        toCategoryTable(
+            [
+                { server: 'web-1', value: '30' },
+                { server: 'db-1', value: '10' },
+            ],
+            'Avg',
+            'server'
+        ),
+        toCategoryTable([{ server: 'web-1', value: '4' }], 'Max', 'server'),
+    ]);
+    expect(merged.fields.map((field) => field.name)).toEqual(['category', 'Avg', 'Max']);
+    expect(merged.columns[0]).toEqual(['web-1', 'db-1']);
+    expect(merged.columns[2]).toEqual(['4', '']);
 });
 
 test('keeps wide chart results as separate series', () => {

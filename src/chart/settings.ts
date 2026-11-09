@@ -1,14 +1,19 @@
-export type ChartType = 'line' | 'area' | 'column' | 'stacked' | 'heatmap';
+export type ChartType = 'line' | 'area' | 'column' | 'stacked' | 'heatmap' | 'category' | 'stackCategory';
+
+/** Categorical charts aggregate the whole time range into one value per series or split value. */
+export function isCategorical(type: string): boolean {
+    return type === 'category' || type === 'stackCategory';
+}
 
 /** Which visualization draws a chart type. Stacked columns use the column visualization in stacked mode. */
 export function visualFor(type: ChartType): { kind: 'line' | 'area' | 'column' | 'heatmap'; stacked: boolean } {
     if (type === 'area') {
         return { kind: 'area', stacked: false };
     }
-    if (type === 'column') {
+    if (type === 'column' || type === 'category') {
         return { kind: 'column', stacked: false };
     }
-    if (type === 'stacked') {
+    if (type === 'stacked' || type === 'stackCategory') {
         return { kind: 'column', stacked: true };
     }
     if (type === 'heatmap') {
@@ -40,6 +45,8 @@ export const CHART_TYPES: { id: ChartType; label: string }[] = [
     { id: 'column', label: 'Column chart' },
     { id: 'stacked', label: 'Stacked column chart' },
     { id: 'heatmap', label: 'Heatmap' },
+    { id: 'category', label: 'Column chart' },
+    { id: 'stackCategory', label: 'Stacked column chart' },
 ];
 
 export const CHART_CONTENT: { id: ChartContent; label: string }[] = [

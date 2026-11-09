@@ -100,6 +100,17 @@ function filterClause(filters: MetricFilter[] | undefined): string {
     return parts.join(' AND ');
 }
 
+/** ` BY dim | sort -value | head N`. Categorical charts rank split values over the whole time range. */
+function categoryTail(input: { splitBy?: string; splitLimit?: number; splitDirection?: 'highest' | 'lowest' }): string {
+    const field = input.splitBy ?? '';
+    assertIdentifier(field, 'Split field');
+    const limit = input.splitLimit ?? 5;
+    if (!SPLIT_LIMITS.includes(limit as (typeof SPLIT_LIMITS)[number])) {
+        throw new Error('Split limit is not allowed.');
+    }
+    return ` BY ${field} | sort ${input.splitDirection === 'lowest' ? '' : '-'}value | head ${limit}`;
+}
+
 export function buildMstats(input: {
     aggregation: string;
     metric: string;
@@ -112,13 +123,18 @@ export function buildMstats(input: {
     filters?: MetricFilter[];
     /** Metric indexes the user may search. Omitted keeps `index=*`. */
     indexes?: string[];
+    /** One value for the whole time range, per split value. The original categorical charts search this way. */
+    categorical?: boolean;
 }): string {
     const aggregation = resolveMetricFunction(input.aggregation);
     if (!aggregation) {
         throw new Error('Unknown aggregation.');
     }
+    if (input.categorical && aggregation.rate) {
+        throw new Error('Rate aggregations are not available for a categorical chart.');
+    }
     assertIdentifier(input.metric, 'Metric name');
-    if (!SPAN.test(input.span)) {
+    if (!input.categorical && !SPAN.test(input.span)) {
         throw new Error('Span is not allowed.');
     }
     const index = input.index ?? '*';
@@ -130,6 +146,10 @@ export function buildMstats(input: {
     const base = `| mstats ${aggregation.name}(${metric})`;
     const extra = filterClause(input.filters);
     const where = extra ? `${indexClause} AND ${extra}` : indexClause;
+    if (input.categorical) {
+        const aggregate = `${base} AS value WHERE ${where}`;
+        return input.splitBy ? `${aggregate}${categoryTail(input)}` : aggregate;
+    }
     if (!input.splitBy) {
         return `${base} WHERE ${where} span=${input.span}${timeShiftClause(input.timeShift)}`;
     }
@@ -187,12 +207,13 @@ export function buildTstats(input: {
     timeShift?: string;
     filters?: MetricFilter[];
     indexes?: string[];
+    categorical?: boolean;
 }): string {
     const aggregation = resolveEventFunction(input.aggregation);
     if (!aggregation) {
         throw new Error('Unknown aggregation.');
     }
-    if (!SPAN.test(input.span)) {
+    if (!input.categorical && !SPAN.test(input.span)) {
         throw new Error('Span is not allowed.');
     }
     const field = (input.field ?? '').trim();
@@ -213,6 +234,9 @@ export function buildTstats(input: {
         from = `where ${where}`;
     }
     const base = `| tstats ${call} AS value ${from}`;
+    if (input.categorical) {
+        return input.splitBy ? `${base}${categoryTail(input)}` : base;
+    }
     if (!input.splitBy) {
         return `${base} by _time span=${input.span}${timeShiftClause(input.timeShift)}`;
     }
@@ -323,12 +347,13 @@ export function buildBaseChartSearch(input: {
     splitBy?: string;
     splitLimit?: number;
     splitDirection?: 'highest' | 'lowest';
+    categorical?: boolean;
 }): string {
     const aggregation = resolveEventFunction(input.aggregation);
     if (!aggregation) {
         throw new Error('Unknown aggregation.');
     }
-    if (!SPAN.test(input.span)) {
+    if (!input.categorical && !SPAN.test(input.span)) {
         throw new Error('Span is not allowed.');
     }
     const field = input.field.trim();
@@ -344,6 +369,10 @@ export function buildBaseChartSearch(input: {
             ? `| loadjob savedsearch=${quoteSpl(`${input.owner}:metrics_explorer:${saved}`)}`
             : `| savedsearch ${quoteSpl(saved)}`;
     const call = aggregation.name === 'count' ? 'count' : `${aggregation.name}(${quoteSpl(field)})`;
+    if (input.categorical) {
+        const aggregate = `${head} | stats ${call} AS value`;
+        return input.splitBy ? `${aggregate}${categoryTail(input)}` : aggregate;
+    }
     if (!input.splitBy) {
         return `${head} | timechart span=${input.span} ${call} AS value`;
     }

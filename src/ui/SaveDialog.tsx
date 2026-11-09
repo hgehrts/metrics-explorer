@@ -23,6 +23,7 @@ import {
     PanelSpec,
     studioDashboard,
 } from '../actions/dashboards';
+import { isCategorical } from '../chart/settings';
 import { t } from '../i18n';
 import { parseSession, SavedSession, serializeSession } from '../model/session';
 import { ChartModel, GlobalSplitLimit, globalFiltersFor, resolveSeries, SeriesFilter } from '../model/workspace';
@@ -136,7 +137,15 @@ function panelsFor(
         if (!item || resolveForSource(item.source, item.aggregation)?.chart === 'table') {
             continue;
         }
-        const query = buildSeriesSearch(item, chart.settings.span || span, range, latest, indexes, metricIndexes);
+        const query = buildSeriesSearch(
+            item,
+            chart.settings.span || span,
+            range,
+            latest,
+            indexes,
+            metricIndexes,
+            isCategorical(chart.settings.type)
+        );
         const kind = chartKind(chart.settings.type);
         panels.push({
             title: item.metric,

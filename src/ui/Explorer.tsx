@@ -33,7 +33,7 @@ import { boundForInput } from '../spl/timeRange';
 import { isSeriesFilter } from '../model/session';
 import { collectDimensions, collectFieldValues, collectMetricNames, collectValueMetrics, runSearch } from '../search/runSearch';
 import { ReferenceLine, referenceSummary, referenceWindow } from '../chart/reference';
-import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, SPAN_UNITS, splitSpan, validateAxis } from '../chart/settings';
+import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, isCategorical, SPAN_UNITS, splitSpan, validateAxis } from '../chart/settings';
 import {
     AUTO_REFRESH_MS,
     ChartModel,
@@ -125,6 +125,7 @@ type Section = 'metrics' | 'events' | 'datasets' | ListSection;
 /** The chart type picker groups types as the original does. */
 const CHART_GROUPS: Array<{ label: string; types: string[] }> = [
     { label: 'Time charts', types: ['line', 'area', 'column', 'stacked', 'heatmap'] },
+    { label: 'Categorical charts', types: ['category', 'stackCategory'] },
 ];
 
 function axisSummary(settings: Pick<ChartSettings, 'yMin' | 'yMax' | 'yScale'>): string {
@@ -2615,7 +2616,24 @@ export function Explorer(): React.ReactElement {
                                     <Select
                                         aria-label={t('Chart type')}
                                         value={selected.settings.type}
-                                        onChange={(event) => patchSettings({ type: event.target.value as ChartSettings['type'] })}
+                                        onChange={(event) => {
+                                            const type = event.target.value as ChartSettings['type'];
+                                            setCharts((current) =>
+                                                current.map((chart) => {
+                                                    if (chart.id !== selected.id) {
+                                                        return chart;
+                                                    }
+                                                    const series = isCategorical(type)
+                                                        ? chart.series.map((item) =>
+                                                              resolveForSource(item.source, item.aggregation)?.rate
+                                                                  ? { ...item, aggregation: (item.source ?? 'metric') === 'metric' ? 'Avg' : 'Count' }
+                                                                  : item
+                                                          )
+                                                        : chart.series;
+                                                    return { ...chart, series, settings: { ...chart.settings, type } };
+                                                })
+                                            );
+                                        }}
                                     >
                                         {CHART_GROUPS.map((group) => (
                                             <optgroup key={group.label} label={t(group.label)}>
@@ -2654,6 +2672,7 @@ export function Explorer(): React.ReactElement {
                                         {t('Use global split by for this chart')}
                                     </label>
                                 </Field>
+                                {isCategorical(selected.settings.type) ? null : (
                                 <Field as="div">
                                     <SectionTitle>{t('Time span')}</SectionTitle>
                                     <Help>{t('Refer to the time range to set an appropriate time span.')}</Help>
@@ -2725,6 +2744,7 @@ export function Explorer(): React.ReactElement {
                                         </SplitRow>
                                     )}
                                 </Field>
+                                )}
                                 {selected.settings.content === 'table' || selected.settings.type === 'heatmap' ? null : (
                                     <Field as="div">
                                         <SectionTitle>{t('Y-axis')}</SectionTitle>
@@ -2844,7 +2864,9 @@ export function Explorer(): React.ReactElement {
                 )}
                 {series ? (
                     <datalist id="metric-aggregations">
-                        {functionsFor(series.source ?? 'metric').map((item) => (
+                        {functionsFor(series.source ?? 'metric')
+                            .filter((item) => !isCategorical(selected?.settings.type ?? '') || !item.rate)
+                            .map((item) => (
                             <option key={item.name} value={item.label} />
                         ))}
                     </datalist>

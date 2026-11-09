@@ -12,7 +12,8 @@ export function buildSeriesSearch(
     earliest: string,
     latest: string,
     indexes: string[],
-    metricIndexes?: string[]
+    metricIndexes?: string[],
+    categorical = false
 ): SeriesQuery {
     const chosen = resolveForSource(item.source, item.aggregation);
     if (!chosen) {
@@ -30,6 +31,7 @@ export function buildSeriesSearch(
                   timeShift: item.timeShift || undefined,
                   filters: item.filters,
                   indexes: metricIndexes,
+                  categorical,
               })
             : item.source === 'base'
               ? buildBaseChartSearch({
@@ -42,6 +44,7 @@ export function buildSeriesSearch(
                     splitBy: item.splitBy || undefined,
                     splitDirection: item.splitDirection,
                     splitLimit: item.splitLimit,
+                    categorical,
                 })
               : buildTstats({
                     source: item.source === 'dataset' ? 'dataset' : 'event',
@@ -55,6 +58,7 @@ export function buildSeriesSearch(
                     timeShift: item.timeShift || undefined,
                     filters: item.filters,
                     indexes,
+                    categorical,
                 });
     const bounds = searchWindow(earliest, item.timeShift, latest);
     return { search, earliest: bounds.earliest, latest: bounds.latest };

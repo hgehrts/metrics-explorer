@@ -117,6 +117,26 @@ test('rejects a filter value that breaks out of the quotes', () => {
     ).toThrow('Line breaks are not allowed.');
 });
 
+test('a categorical chart aggregates the whole range and ranks a split', () => {
+    expect(buildMstats({ aggregation: 'Avg', metric: 'lab.cpu.user', span: '10s', categorical: true })).toBe(
+        '| mstats avg("lab.cpu.user") AS value WHERE index=*'
+    );
+    expect(
+        buildMstats({
+            aggregation: 'Avg',
+            metric: 'lab.cpu.user',
+            span: '10s',
+            categorical: true,
+            splitBy: 'server',
+            splitDirection: 'lowest',
+            splitLimit: 3,
+        })
+    ).toBe('| mstats avg("lab.cpu.user") AS value WHERE index=* BY server | sort value | head 3');
+    expect(() => buildMstats({ aggregation: 'Rate (Avg)', metric: 'lab.cpu.user', span: '10s', categorical: true })).toThrow(
+        'categorical'
+    );
+});
+
 test('rejects an unknown aggregation', () => {
     expect(() =>
         buildMstats({ aggregation: 'delete', metric: 'lab.cpu.user', span: '10s' })

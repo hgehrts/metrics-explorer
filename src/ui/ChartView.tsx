@@ -4,9 +4,9 @@ import Column from '@splunk/visualizations/Column';
 import Line from '@splunk/visualizations/Line';
 import styled, { css } from 'styled-components';
 import { variables } from '@splunk/themes';
-import { toLineTable } from '../chart/columns';
+import { mergeCategoryTables, toCategoryTable, toLineTable } from '../chart/columns';
 import { addReferenceLines, referenceWindow } from '../chart/reference';
-import { axisOptions, visualFor } from '../chart/settings';
+import { axisOptions, isCategorical, visualFor } from '../chart/settings';
 import { heatmapTable } from '../chart/heatmap';
 import { formatStatColumns, formatTimeCell } from '../chart/stats';
 import { HeatmapChart } from './HeatmapChart';
@@ -222,6 +222,7 @@ export function ChartView(props: {
         filters: [...globalFiltersFor(item, props.globalFilters, props.metricDims), ...item.filters],
     }));
     const signature = JSON.stringify(series);
+    const categorical = isCategorical(props.chart.settings.type);
     const timeWindow = zoom ?? { earliest: props.range, latest: props.latest };
     const span = props.chart.settings.span || (zoom ? spanForRange(zoom.earliest, zoom.latest) : props.span);
     // The global refresh waits while the charts are zoomed. Zooming out makes the next refresh count again.
@@ -242,7 +243,8 @@ export function ChartView(props: {
                     timeWindow.earliest,
                     timeWindow.latest,
                     props.eventIndexes,
-                    props.metricIndexes
+                    props.metricIndexes,
+                    categorical
                 );
                 search = built.search;
                 earliest = built.earliest;
@@ -280,7 +282,7 @@ export function ChartView(props: {
             setLoading(false);
         }
         return () => stops.forEach((stop) => stop());
-    }, [signature, timeWindow.earliest, timeWindow.latest, span, refreshToken, props.eventIndexes, props.metricIndexes]);
+    }, [signature, categorical, timeWindow.earliest, timeWindow.latest, span, refreshToken, props.eventIndexes, props.metricIndexes]);
 
     const referenceJobs = props.chart.series.flatMap((item) =>
         (item.source ?? 'metric') === 'metric'
@@ -351,12 +353,11 @@ export function ChartView(props: {
         // A split charted wide has one column per value. With only one value, that value names the line.
         const rows = results[index]?.rows ?? [];
         const values = series[index].splitBy && !item.splitBy ? [...new Set(rows.flatMap((row) => Object.keys(row).filter((key) => !key.startsWith('_'))))] : [];
-        const label = values.length === 1 ? values[0] : seriesLegend(item, shown);
-        return formatStatColumns(
-            toLineTable(results[index]?.rows ?? [], label, item.splitBy || undefined),
-            item.aggregation,
-            locale
-        );
+        const label = !categorical && values.length === 1 ? values[0] : seriesLegend(item, shown);
+        const table = categorical
+            ? toCategoryTable(rows, label, item.splitBy || undefined)
+            : toLineTable(rows, label, item.splitBy || undefined);
+        return formatStatColumns(table, item.aggregation, locale);
     });
     const hasRows = (table: (typeof tables)[number]): boolean => (table.columns[0]?.length ?? 0) > 0;
     const plotIndexes = shown.flatMap((item, index) =>
@@ -369,7 +370,8 @@ export function ChartView(props: {
     const tableIndexes = content === 'chart' ? tableOnly : shown.map((_, index) => index);
     const showChart = content !== 'table' && plotIndexes.some((index) => hasRows(tables[index]));
     const showTable = tableIndexes.some((index) => hasRows(tables[index]));
-    const merged = mergeTables(plotIndexes.map((index) => tables[index]).filter(hasRows));
+    const plotTables = plotIndexes.map((index) => tables[index]).filter(hasRows);
+    const merged = categorical ? mergeCategoryTables(plotTables) : mergeTables(plotTables);
     const data = addReferenceLines(
         merged,
         referenceJobs.map((job) => job.line),
@@ -384,8 +386,9 @@ export function ChartView(props: {
         fieldCursor += table.fields.length - 1;
         return overlay ? names.filter((name) => name !== '') : [];
     });
-    const stats = mergeTables(tableIndexes.map((index) => tables[index]).filter(hasRows));
-    if (stats.columns[0]) {
+    const statTables = tableIndexes.map((index) => tables[index]).filter(hasRows);
+    const stats = categorical ? mergeCategoryTables(statTables) : mergeTables(statTables);
+    if (!categorical && stats.columns[0]) {
         stats.columns[0] = stats.columns[0].map((value) => formatTimeCell(value, locale));
     }
     const title = [...new Set(props.chart.series.map((item) => item.metric))].join(', ');
@@ -398,7 +401,7 @@ export function ChartView(props: {
             <TitleRow>
                 <Title>
                     <h2>{title}</h2>
-                    <span>({t('Time span')}={span})</span>
+                    {categorical ? null : <span>({t('Time span')}={span})</span>}
                 </Title>
                 <Actions onClick={(event) => event.stopPropagation()}>
                     <IconAction
@@ -542,7 +545,7 @@ export function ChartView(props: {
             {props.minimized ? null : (
                 <>
             {results.map((result, index) =>
-                result.error ? <Note key={`${index}-${result.error}`}>{result.error}</Note> : null
+                result.error ? <Note key={`${index}-${result.error}`}>{t(result.error)}</Note> : null
             )}
             {loading ? <Note>{results.some((result) => result.rows.length > 0) ? t('Refreshing…') : t('Loading…')}</Note> : null}
             {!loading && results.length > 0 && results.every((result) => !result.error && result.rows.length === 0) ? (
@@ -597,7 +600,7 @@ export function ChartView(props: {
                         },
                     }}
                     hasEventHandlers
-                    eventHandlers={[{ type: 'zoom', options: { events: ['range.select'] } }]}
+                    eventHandlers={categorical ? [] : [{ type: 'zoom', options: { events: ['range.select'] } }]}
                     onEventTrigger={(event: { type?: string; payload?: Record<string, unknown> }) => {
                         if (event?.type === 'point.mouseover') {
                             setHover(hoverPoint(event.payload));
@@ -623,6 +626,7 @@ export function ChartView(props: {
                         yAxisTitleVisibility: 'collapsed',
                         ...axisOptions(props.chart.settings),
                         ...(visual.stacked ? { stackMode: 'stacked' } : {}),
+                        ...(categorical ? { showDataLabels: 'all' } : {}),
                     }}
                 />
                 {hover ? (
