@@ -9,6 +9,27 @@ test('names a single series after the aggregation', () => {
     });
 });
 
+test('keeps every series of a sparse chart result, where Splunk drops empty fields per row', () => {
+    expect(
+        toLineTable(
+            [
+                { _time: 't1', 'lab-a': '1' },
+                { _time: 't2', 'lab-b': '2' },
+                { _time: 't3', 'lab-c': '3', 'lab-a': '4' },
+            ],
+            'Avg'
+        )
+    ).toEqual({
+        fields: [{ name: '_time' }, { name: 'lab-a' }, { name: 'lab-b' }, { name: 'lab-c' }],
+        columns: [
+            ['t1', 't2', 't3'],
+            ['1', '', '4'],
+            ['', '2', ''],
+            ['', '', '3'],
+        ],
+    });
+});
+
 test('pivots a split search into one column per value', () => {
     expect(
         toLineTable(

@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { ReferenceLine } from '../chart/reference';
 import { ChartSettings, defaultSettings } from '../chart/settings';
 import { resolveEventFunction, resolveMetricFunction, SeriesSource } from '../spl/functions';
@@ -60,9 +61,28 @@ export function hasSplitValues(rows: Array<Record<string, unknown>>, field: stri
     return rows.some((row) => row[field] !== undefined && row[field] !== null && row[field] !== '');
 }
 
+/** How many values the global split shows, and from which end. Series that inherit the split use it. */
+export type GlobalSplitLimit = { direction: 'highest' | 'lowest'; limit: number };
+
+export const DEFAULT_GLOBAL_LIMIT: GlobalSplitLimit = { direction: 'highest', limit: 5 };
+
 /** Series with their resolved split, for searches, legends and the signature of a chart. */
-export function resolveSeries(series: Series[], globalSplit: string, useGlobalSplit = true): Series[] {
-    return series.map((item) => ({ ...item, splitBy: resolveSplit(item, globalSplit, useGlobalSplit) }));
+export function resolveSeries(
+    series: Series[],
+    globalSplit: string,
+    useGlobalSplit = true,
+    globalLimit: GlobalSplitLimit = DEFAULT_GLOBAL_LIMIT
+): Series[] {
+    return series.map((item) =>
+        item.splitBy === INHERIT_SPLIT && useGlobalSplit && globalSplit
+            ? { ...item, splitBy: globalSplit, splitDirection: globalLimit.direction, splitLimit: globalLimit.limit }
+            : { ...item, splitBy: resolveSplit(item, globalSplit, useGlobalSplit) }
+    );
+}
+
+/** A copy of one series with a new id, placed right after the original. */
+export function cloneSeries(item: Series): Series {
+    return { ...item, id: nextId('series'), filters: item.filters.map((filter) => ({ ...filter, values: [...filter.values] })), referenceLines: [...item.referenceLines] };
 }
 
 /** The global filters a series gets: all of them for a metric with those dimensions, none for events and datasets. */
@@ -94,7 +114,7 @@ export function seriesLegend(
     const aggregation = chosen?.label ?? series.aggregation;
     const severalMetrics = new Set(siblings.map((item) => item.metric)).size > 1;
     const base = series.splitBy
-        ? `${aggregation} by ${series.splitBy}`
+        ? `${aggregation} ${t('by')} ${series.splitBy}`
         : severalMetrics
           ? `${series.metric} ${aggregation}`
           : aggregation;

@@ -4,7 +4,9 @@ import { variables } from '@splunk/themes';
 import {
     buildMetricTree,
     buildValueTree,
+    countLeaves,
     filterMetricTree,
+    matchesQuery,
     HIERARCHY_SEPARATORS,
     limitMetricNames,
     limitValueRows,
@@ -27,16 +29,19 @@ import {
 import { parseTimeShift, SHIFT_UNITS, ShiftUnit, timeShiftToken } from '../spl/timeShift';
 import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, buildFieldSearch, buildSourcetypeSearch, readableFields, SPLIT_LIMITS } from '../spl/buildMstats';
 import { spanForRange } from '../spl/span';
-import { boundForInput, customRange } from '../spl/timeRange';
+import { boundForInput } from '../spl/timeRange';
 import { isSeriesFilter } from '../model/session';
-import { collectFieldValues, collectMetricNames, collectValueMetrics, runSearch } from '../search/runSearch';
+import { collectDimensions, collectFieldValues, collectMetricNames, collectValueMetrics, runSearch } from '../search/runSearch';
 import { ReferenceLine, referenceSummary, referenceWindow } from '../chart/reference';
-import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, SPAN_UNITS, validateAxis } from '../chart/settings';
+import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, SPAN_UNITS, splitSpan, validateAxis } from '../chart/settings';
 import {
     AUTO_REFRESH_MS,
     ChartModel,
     cloneChart,
+    cloneSeries,
     createChart,
+    DEFAULT_GLOBAL_LIMIT,
+    GlobalSplitLimit,
     reviveChart,
     createSeries,
     INHERIT_SPLIT,
@@ -47,14 +52,19 @@ import {
     seriesLegend,
 } from '../model/workspace';
 import { ChartView } from './ChartView';
-import { DataLists } from './DataLists';
+import { DataLists, ListSection } from './DataLists';
+import { DataFilterForm } from './DataFilterForm';
+import { DropdownMenu, MenuHeading, MenuItem } from './Menu';
 import { SaveDialog, SaveMode } from './SaveDialog';
+import { SplitDialog } from './SplitDialog';
+import { TimeRangeDialog } from './TimeRangeDialog';
 import { t } from '../i18n';
 import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
 import { splunkGet } from '../api/splunkd';
-import { buildCatalogSearch, DataFilter, filterLabel, indexFromSearch, validateFilter } from '../model/dataFilters';
+import { buildCatalogSearch, DataFilter, filterLabel, indexFromSearch } from '../model/dataFilters';
 import { loadAllowedMetricIndexes } from '../model/metricIndexes';
 import { DEFAULT_MAX_METRICS, loadSettings } from '../model/loadDefaults';
+import { formatZoomRange } from '../spl/zoomLabel';
 
 /** The filter a tree leaf adds: a metric under a dimension value only shows that value. */
 function seriesFilters(filter: MetricNode['filter']): SeriesFilter[] {
@@ -99,12 +109,56 @@ const SHIFTS = [
 
 const RANGES = [
     { id: '-15m', label: 'Last 15 minutes' },
-    { id: '-60m', label: 'Last 60 minutes' },
-    { id: '-4h', label: 'Last 4 hours' },
+    { id: '-30m', label: 'Last 30 minutes' },
+    { id: '-60m', label: 'Last 1 hour' },
+    { id: '-3h', label: 'Last 3 hours' },
+    { id: '-6h', label: 'Last 6 hours' },
+    { id: '-12h', label: 'Last 12 hours' },
     { id: '-24h', label: 'Last 24 hours' },
+    { id: '-48h', label: 'Last 48 hours' },
     { id: '-7d', label: 'Last 7 days' },
-    { id: '-2d', label: 'Last 2 days' },
+    { id: '-30d', label: 'Last 30 days' },
 ];
+
+type Section = 'metrics' | 'events' | 'datasets' | ListSection;
+
+/** The chart type picker groups types as the original does. */
+const CHART_GROUPS: Array<{ label: string; types: string[] }> = [
+    { label: 'Time charts', types: ['line', 'area', 'column', 'stacked', 'heatmap'] },
+];
+
+function axisSummary(settings: Pick<ChartSettings, 'yMin' | 'yMax' | 'yScale'>): string {
+    if (!settings.yMin && !settings.yMax) {
+        return settings.yScale === 'log' ? `${t('Auto')} (${t('Log')})` : t('Auto');
+    }
+    const range = `${settings.yMin || t('Auto')} – ${settings.yMax || t('Auto')}`;
+    return settings.yScale === 'log' ? `${range} (${t('Log')})` : range;
+}
+
+/** Label of a time range: the preset name, or the custom bounds. */
+function rangeLabel(range: string, latest: string): string {
+    const preset = latest === 'now' ? RANGES.find((item) => item.id === range) : undefined;
+    if (preset) {
+        return t(preset.label);
+    }
+    return latest === 'now' ? `${boundForInput(range)} ${t('to now')}` : `${boundForInput(range)} - ${boundForInput(latest)}`;
+}
+
+/** The parts of a label that match the search, in bold, as the original highlights them. */
+function Highlight(props: { text: string; query: string }): React.ReactElement {
+    const needle = props.query.trim().toLowerCase();
+    const at = needle && !needle.includes('*') ? props.text.toLowerCase().indexOf(needle) : -1;
+    if (at < 0) {
+        return <>{props.text}</>;
+    }
+    return (
+        <>
+            {props.text.slice(0, at)}
+            <Mark>{props.text.slice(at, at + needle.length)}</Mark>
+            {props.text.slice(at + needle.length)}
+        </>
+    );
+}
 
 const Shell = styled.div<{ $left: boolean; $right: boolean }>`
     display: grid;
@@ -161,14 +215,68 @@ const IconButton = styled.button`
     line-height: 1;
 `;
 
-const SearchBox = styled.input`
+const SearchWrap = styled.div`
+    position: relative;
     margin: 0 12px 8px;
-    padding: 4px 8px;
+`;
+
+const SearchBox = styled.input`
+    box-sizing: border-box;
+    width: 100%;
+    padding: 5px 28px 5px 8px;
     border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
     font-size: 12px;
+`;
+
+const SearchIcon = styled.button`
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    background: transparent;
+    color: ${variables.contentColorMuted};
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+`;
+
+const Mark = styled.strong`
+    color: ${variables.contentColorActive};
+`;
+
+const SectionBody = styled.div`
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+`;
+
+const Count = styled.span`
+    margin-left: auto;
+    color: ${variables.contentColorMuted};
+    font-weight: 400;
+`;
+
+const Divider = styled.span`
+    align-self: stretch;
+    width: 1px;
+    margin: 0 4px;
+    background: ${variables.neutral200};
+`;
+
+const Help = styled.span`
+    display: block;
+    color: ${variables.contentColorMuted};
+    font-size: 11px;
+`;
+
+const SectionTitle = styled.span`
+    font-weight: 600;
 `;
 
 const FilterBox = styled.div`
@@ -232,14 +340,17 @@ const GroupRow = styled.div`
 `;
 
 const SectionButton = styled.button`
-    display: block;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex: 0 0 auto;
     width: 100%;
     margin: 0;
-    padding: 6px 12px;
+    padding: 7px 12px;
     font-size: 12px;
     border: 0;
     border-top: 1px solid ${variables.neutral200};
-    background: transparent;
+    background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
     text-align: left;
     cursor: pointer;
@@ -335,6 +446,55 @@ const SeriesHeader = styled.button<{ $open: boolean }>`
         `}
 `;
 
+const SeriesRow = styled.div<{ $open: boolean }>`
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid ${variables.neutral200};
+    background: ${(props) => (props.$open ? variables.interactiveColorOverlayHover : 'transparent')};
+
+    > button:first-child {
+        border-bottom: 0;
+        background: transparent;
+    }
+`;
+
+const SeriesActions = styled.span`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 14px;
+`;
+
+/** A form that takes over the analysis pane, as the filter and reference line forms do in the original. */
+const SubPanel = styled.section`
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+`;
+
+const SubHead = styled.div`
+    padding: 4px 12px 8px;
+    border-bottom: 1px solid ${variables.neutral200};
+    font-size: 12px;
+
+    strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+    }
+`;
+
+const SubFoot = styled.div`
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: auto;
+    padding: 10px 12px;
+    border-top: 1px solid ${variables.neutral200};
+`;
+
 const Stage = styled.main`
     display: flex;
     flex-direction: column;
@@ -396,6 +556,33 @@ const ToolButton = styled.button<{ $pressed?: boolean }>`
         cursor: default;
         opacity: 0.45;
     }
+`;
+
+/** Toolbar buttons are flat, with an icon and a label, as in the original toolbar. */
+const Bar = styled.button<{ $pressed?: boolean }>`
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 4px;
+    background: ${(props) => (props.$pressed ? variables.interactiveColorOverlaySelected : 'transparent')};
+    color: ${variables.contentColorDefault};
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    &:hover:not(:disabled) {
+        background: ${variables.interactiveColorOverlayHover};
+    }
+    &:disabled {
+        color: ${variables.contentColorDisabled};
+        cursor: default;
+    }
+`;
+
+const Muted = styled.span`
+    color: ${variables.contentColorMuted};
+    font-size: 11px;
 `;
 
 const ChartList = styled.div<{ $grid: boolean }>`
@@ -507,18 +694,24 @@ function RefreshLabel(props: { refreshedAt: number; auto: boolean }): React.Reac
         const timer = window.setInterval(() => setNow(Date.now()), 1000);
         return () => window.clearInterval(timer);
     }, []);
-    return <>{refreshStatus(now, props.refreshedAt, props.auto)}</>;
+    const text = refreshStatus(now, props.refreshedAt, props.auto);
+    const ago = /^(\d+[sm]) ago$/.exec(text);
+    const next = /^(\d+s) to refresh$/.exec(text);
+    return <>{ago ? `(${t('{0} ago').replace('{0}', ago[1])})` : next ? `(${t('Refresh in {0}').replace('{0}', next[1])})` : text}</>;
 }
 
 function TreeRows(props: {
     nodes: MetricNode[];
     depth: number;
     open: Set<string>;
+    /** While searching, every folder with a match is open. */
+    query: string;
     selected: Set<string>;
     onToggle: (id: string) => void;
     onSelect: (metricName: string, filter?: MetricNode['filter']) => void;
     onAdd: (metricName: string, filter?: MetricNode['filter']) => void;
 }): React.ReactElement {
+    const isOpen = (id: string): boolean => props.query.trim() !== '' || props.open.has(id);
     return (
         <>
             {props.nodes.map((node) => (
@@ -534,14 +727,16 @@ function TreeRows(props: {
                             $depth={props.depth}
                             onClick={() => (node.folder ? props.onToggle(node.id) : props.onSelect(node.metricName ?? '', node.filter))}
                         >
-                            <span>{node.folder ? (props.open.has(node.id) ? '▾' : '▸') : ''}</span>
-                            <span>{node.label}</span>
+                            <span aria-hidden>{node.folder ? (isOpen(node.id) ? '▾' : '▸') : ''}</span>
+                            <span>
+                                <Highlight text={node.label} query={props.query} />
+                            </span>
                         </RowButton>
                         {node.folder ? null : (
                             <AddButton
                                 type="button"
-                                aria-label="Add to selected chart"
-                                title="Add to selected chart"
+                                aria-label={`${node.label}, ${t('Add to selected chart')}`}
+                                title={t('Add to selected chart')}
                                 onClick={() => props.onAdd(node.metricName ?? '', node.filter)}
                             >
                                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
@@ -552,11 +747,12 @@ function TreeRows(props: {
                             </AddButton>
                         )}
                     </Row>
-                    {node.folder && props.open.has(node.id) ? (
+                    {node.folder && isOpen(node.id) ? (
                         <TreeRows
                             nodes={node.children}
                             depth={props.depth + 1}
                             open={props.open}
+                            query={props.query}
                             selected={props.selected}
                             onToggle={props.onToggle}
                             onSelect={props.onSelect}
@@ -616,6 +812,9 @@ export function Explorer(): React.ReactElement {
     const [shiftUnit, setShiftUnit] = useState<ShiftUnit>('h');
     const [spanCount, setSpanCount] = useState('');
     const [spanUnit, setSpanUnit] = useState('m');
+    const [spanEdit, setSpanEdit] = useState(false);
+    const [axisEdit, setAxisEdit] = useState(false);
+    const [axisDraft, setAxisDraft] = useState<Pick<ChartSettings, 'yMin' | 'yMax' | 'yScale'>>({ yMin: '', yMax: '', yScale: 'linear' });
     const [referenceOpen, setReferenceOpen] = useState(false);
     const [referenceKind, setReferenceKind] = useState<ReferenceLine['kind']>('aggregation');
     const [referenceValue, setReferenceValue] = useState('Avg');
@@ -630,13 +829,17 @@ export function Explorer(): React.ReactElement {
     const [range, setRange] = useState('-60m');
     /** The end of the chart range. `now` for presets; a custom range can end at a fixed time. */
     const [latest, setLatest] = useState('now');
-    const [customTime, setCustomTime] = useState(false);
-    const [customStart, setCustomStart] = useState('');
-    const [customEnd, setCustomEnd] = useState('');
-    const [customTimeError, setCustomTimeError] = useState('');
-    const [catalogRange, setCatalogRange] = useState('-2d');
-    const [eventsOpen, setEventsOpen] = useState(false);
-    const [datasetsOpen, setDatasetsOpen] = useState(false);
+    const [timeDialog, setTimeDialog] = useState(false);
+    /** A drag across any chart zooms every chart to that window, until the user zooms out or picks a new range. */
+    const [zoom, setZoom] = useState<{ earliest: string; latest: string } | null>(null);
+    const [splitDialog, setSplitDialog] = useState(false);
+    const [globalLimit, setGlobalLimit] = useState<GlobalSplitLimit>(DEFAULT_GLOBAL_LIMIT);
+    const [catalogRange, setCatalogRange] = useState('-24h');
+    /** One section of the data pane is open at a time, as in the original. */
+    const [section, setSection] = useState<Section | ''>('metrics');
+    const eventsOpen = section === 'events';
+    const datasetsOpen = section === 'datasets';
+    const metricsOpen = section === 'metrics';
     const [sourcetypes, setSourcetypes] = useState<string[]>([]);
     const [sourcetypesReady, setSourcetypesReady] = useState(false);
     const [eventIndexes, setEventIndexes] = useState<string[]>([]);
@@ -653,14 +856,12 @@ export function Explorer(): React.ReactElement {
     const [valueRows, setValueRows] = useState<ValueRow[]>([]);
     const [dataFilters, setDataFilters] = useState<DataFilter[]>([]);
     const [defaultsReady, setDefaultsReady] = useState(false);
-    const [filterKind, setFilterKind] = useState<DataFilter['kind']>('exclude');
-    const [filterText, setFilterText] = useState('');
-    const [metricsOpen, setMetricsOpen] = useState(true);
-    const [toolbarMore, setToolbarMore] = useState(false);
     const [dataFilterOpen, setDataFilterOpen] = useState(false);
     const [globalFilterOpen, setGlobalFilterOpen] = useState(false);
     const [percentileOpen, setPercentileOpen] = useState(false);
-    const [filterError, setFilterError] = useState('');
+    /** The chart settings fold. Opening it closes the series, as the original analysis pane does. */
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [filterSort, setFilterSort] = useState<'asc' | 'desc'>('asc');
 
     /** The series as its header shows it: a split only counts when the metric has that dimension. */
     function headerSeries(item: Series): Series {
@@ -703,23 +904,6 @@ export function Explorer(): React.ReactElement {
         setGlobalFilterOpen(false);
     }
 
-    function addDataFilter(): void {
-        const candidate: DataFilter = { kind: filterKind, value: filterText.trim() };
-        const problem = validateFilter(candidate);
-        if (problem) {
-            setFilterError(problem);
-            return;
-        }
-        if (dataFilters.some((item) => item.kind === candidate.kind && item.value === candidate.value)) {
-            setFilterError('This filter is already active.');
-            return;
-        }
-        setDataFilters((current) => [...current, candidate]);
-        setFilterText('');
-        setFilterError('');
-        setDataFilterOpen(false);
-    }
-
     useEffect(() => {
         let alive = true;
         loadSettings()
@@ -728,6 +912,7 @@ export function Explorer(): React.ReactElement {
                 hierarchySource: 'metric_name',
                 hierarchySeparator: '.',
                 maxMetrics: DEFAULT_MAX_METRICS,
+                catalogRange: '-24h',
             }))
             .then((settings) => {
                 if (!alive) {
@@ -741,6 +926,7 @@ export function Explorer(): React.ReactElement {
                     : settings.filters;
                 setDefaultFilters(settings.filters);
                 setMaxMetrics(settings.maxMetrics);
+                setCatalogRange(settings.catalogRange);
                 setDataFilters(start);
                 setGroupBy(settings.hierarchySource);
                 setSeparator(settings.hierarchySeparator);
@@ -808,7 +994,7 @@ export function Explorer(): React.ReactElement {
             return;
         }
         const session = serializeSession(
-            { charts, layout, range, latest, catalogRange, globalSplit, globalFilters },
+            { charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit },
             Date.now()
         );
         try {
@@ -817,7 +1003,12 @@ export function Explorer(): React.ReactElement {
         } catch {
             // Storage can be full or disabled; the workspace still works without it.
         }
-    }, [charts, layout, range, latest, catalogRange, globalSplit, globalFilters]);
+    }, [charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit]);
+
+    useEffect(() => {
+        // A new range replaces the zoom, because the zoom lies inside the old range.
+        setZoom(null);
+    }, [range, latest]);
 
     function applySession(saved: SavedSession): void {
         const revived = saved.charts.map(reviveChart);
@@ -828,14 +1019,10 @@ export function Explorer(): React.ReactElement {
         setLayout(saved.layout);
         setRange(saved.range);
         setLatest(saved.latest);
-        const preset = RANGES.some((item) => item.id === saved.range) && saved.latest === 'now';
-        setCustomTime(!preset);
-        setCustomStart(boundForInput(saved.range));
-        setCustomEnd(boundForInput(saved.latest));
-        setCustomTimeError('');
         setCatalogRange(saved.catalogRange);
         setGlobalSplit(saved.globalSplit);
         setGlobalFilters(saved.globalFilters);
+        setGlobalLimit(saved.globalLimit);
         setRecovered(false);
     }
 
@@ -878,7 +1065,7 @@ export function Explorer(): React.ReactElement {
         return runSearch(
             buildAllDimensionSearch(metricIndexes),
             catalogRange,
-            (payload) => setAllDimensions(collectFieldValues(payload, '_dims')),
+            (payload) => setAllDimensions(collectDimensions(payload)),
             () => setAllDimensions([])
         );
     }, [catalogRange, metricIndexes, metricIndexesReady]);
@@ -985,6 +1172,17 @@ export function Explorer(): React.ReactElement {
             ),
         [names, valueRows, groupBy, separator, query]
     );
+    const shownSourcetypes = sourcetypes.filter((name) => matchesQuery(name, query));
+    const shownDatamodels = datamodels.filter((name) => matchesQuery(name, query));
+
+    function toggleSection(next: Section): void {
+        setSection((current) => (current === next ? '' : next));
+    }
+
+    function matchCount(count: number): string {
+        return count === 1 ? t('1 match found') : `${count} ${t('matches found')}`;
+    }
+
     const selected = charts.find((chart) => chart.id === selectedId) ?? charts[0];
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
 
@@ -1010,6 +1208,7 @@ export function Explorer(): React.ReactElement {
     }, [series?.id, series?.source, series?.metric, catalogRange, eventIndexes]);
     const chosen = resolveForSource(series?.source, series?.aggregation ?? '');
     const span = spanForRange(range, latest);
+    const locale = window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1];
     const selectedMetrics = new Set(selected?.series.map((item) => item.metric) ?? []);
 
     useEffect(() => {
@@ -1042,7 +1241,7 @@ export function Explorer(): React.ReactElement {
                 buildDimensionSearch(metric, metricIndexes),
                 range,
                 (payload) =>
-                    setMetricDims((current) => ({ ...current, [metric]: collectFieldValues(payload, '_dims') })),
+                    setMetricDims((current) => ({ ...current, [metric]: collectDimensions(payload) })),
                 () => setMetricDims((current) => ({ ...current, [metric]: [] })),
                 latest
             )
@@ -1059,7 +1258,7 @@ export function Explorer(): React.ReactElement {
             return runSearch(
                 buildDimensionSearch(series.metric, metricIndexes),
                 range,
-                (payload) => setDimensions(collectFieldValues(payload, '_dims')),
+                (payload) => setDimensions(collectDimensions(payload)),
                 () => setDimensions([]),
                 latest
             );
@@ -1094,10 +1293,16 @@ export function Explorer(): React.ReactElement {
 
     function addChart(metricName: string, filter?: MetricNode['filter'], source: SeriesSource = 'metric'): void {
         const chart = createChart(metricName, seriesFilters(filter), source);
-        setCharts((current) => [...current, chart]);
+        showNewChart(chart);
+    }
+
+    /** New charts go on top and open their series in the analysis pane, as in the original. */
+    function showNewChart(chart: ChartModel): void {
+        setCharts((current) => [chart, ...current]);
         setSelectedId(chart.id);
         setSelectedSeriesId(chart.series[0].id);
-        setExpandedSeriesId('');
+        setExpandedSeriesId(chart.series[0].id);
+        setSettingsOpen(false);
         refreshNow();
     }
 
@@ -1107,11 +1312,7 @@ export function Explorer(): React.ReactElement {
         chart.series[0].aggregation = 'Avg';
         chart.series[0].baseMode = mode;
         chart.series[0].baseOwner = owner;
-        setCharts((current) => [...current, chart]);
-        setSelectedId(chart.id);
-        setSelectedSeriesId(chart.series[0].id);
-        setExpandedSeriesId('');
-        refreshNow();
+        showNewChart(chart);
     }
 
     function addToSelected(metricName: string, filter?: MetricNode['filter'], source: SeriesSource = 'metric'): void {
@@ -1126,12 +1327,69 @@ export function Explorer(): React.ReactElement {
             )
         );
         setSelectedSeriesId(created.id);
-        setExpandedSeriesId('');
+        setExpandedSeriesId(created.id);
+        setSettingsOpen(false);
     }
 
     function toggleSeries(id: string): void {
         setSelectedSeriesId(id);
         setExpandedSeriesId((current) => (current === id ? '' : id));
+        setSettingsOpen(false);
+    }
+
+    /** Copies a series of the selected chart and puts the copy right after it. */
+    function duplicateSeries(id: string): void {
+        if (!selected) {
+            return;
+        }
+        const original = selected.series.find((item) => item.id === id);
+        if (!original) {
+            return;
+        }
+        const copy = cloneSeries(original);
+        setCharts((current) =>
+            current.map((chart) =>
+                chart.id === selected.id
+                    ? { ...chart, series: chart.series.flatMap((item) => (item.id === id ? [item, copy] : [item])) }
+                    : chart
+            )
+        );
+        setSelectedSeriesId(copy.id);
+        setExpandedSeriesId(copy.id);
+        setSettingsOpen(false);
+    }
+
+    /** Removes a series. A chart without series is removed with it. */
+    function removeSeries(id: string): void {
+        if (!selected) {
+            return;
+        }
+        const rest = selected.series.filter((item) => item.id !== id);
+        if (rest.length === 0) {
+            removeChart(selected.id);
+            return;
+        }
+        setCharts((current) => current.map((chart) => (chart.id === selected.id ? { ...chart, series: rest } : chart)));
+        if (selectedSeriesId === id || expandedSeriesId === id) {
+            setSelectedSeriesId(rest[0].id);
+            setExpandedSeriesId('');
+        }
+    }
+
+    function removeChart(id: string): void {
+        setCharts((current) => current.filter((item) => item.id !== id));
+        setMaximizedId((current) => (current === id ? '' : current));
+        if (selected?.id === id) {
+            setSelectedId('');
+        }
+    }
+
+    function removeAll(): void {
+        setCharts([]);
+        setSelectedId('');
+        setMaximizedId('');
+        setMinimizedIds(new Set());
+        setZoom(null);
     }
 
     function patchChart(patch: Partial<Pick<ChartModel, 'useGlobalSplit'>>): void {
@@ -1277,24 +1535,51 @@ export function Explorer(): React.ReactElement {
                         «
                     </IconButton>
                 </PaneHeader>
-                <SearchBox
-                    value={query}
-                    placeholder={t('Search data to analyze')}
-                    aria-label={t('Search data to analyze')}
-                    onChange={(event) => setQuery(event.target.value)}
-                />
-                <SectionButton type="button" aria-expanded={metricsOpen} onClick={() => setMetricsOpen((open) => !open)}>
-                    {metricsOpen ? '▾' : '▸'} {t('Metrics')}
+                {dataFilterOpen ? (
+                    <DataFilterForm
+                        filters={dataFilters}
+                        indexes={metricIndexes ?? []}
+                        dimensions={allDimensions}
+                        metricIndexes={metricIndexes}
+                        range={catalogRange}
+                        onCancel={() => setDataFilterOpen(false)}
+                        onApply={(next) => {
+                            setDataFilters(next);
+                            setDataFilterOpen(false);
+                        }}
+                    />
+                ) : (
+                    <>
+                <SearchWrap>
+                    <SearchBox
+                        value={query}
+                        placeholder={t('Search data to analyze')}
+                        aria-label={t('Search data to analyze')}
+                        onChange={(event) => setQuery(event.target.value)}
+                    />
+                    {query ? (
+                        <SearchIcon type="button" aria-label={t('Clear search')} onClick={() => setQuery('')}>
+                            ×
+                        </SearchIcon>
+                    ) : (
+                        <SearchIcon as="span" aria-hidden="true">
+                            ⌕
+                        </SearchIcon>
+                    )}
+                </SearchWrap>
+                <SectionButton type="button" aria-expanded={metricsOpen} onClick={() => toggleSection('metrics')}>
+                    <span aria-hidden>{metricsOpen ? '▾' : '▸'}</span> <SectionTitle>{t('Metrics')}</SectionTitle>
+                    {query ? <Count>{matchCount(countLeaves(tree))}</Count> : null}
                 </SectionButton>
                 {metricsOpen ? (
-                <>
-                <FilterBox aria-label="Data filters">
+                <SectionBody>
+                <FilterBox aria-label={t('Data filters')}>
                     {dataFilters.map((filter) => (
                         <Chip key={`${filter.kind}:${filter.value}`}>
                             {filterLabel(filter)}
                             <ChipRemove
                                 type="button"
-                                aria-label={`Remove filter ${filterLabel(filter)}`}
+                                aria-label={`${t('Remove filter')} ${filterLabel(filter)}`}
                                 disabled={!defaultsReady}
                                 onClick={() => setDataFilters((current) => current.filter((item) => item !== filter))}
                             >
@@ -1307,42 +1592,9 @@ export function Explorer(): React.ReactElement {
                             {t('Reset to defaults')}
                         </TextLink>
                     )}
-                    {dataFilterOpen ? (
-                        <FilterForm
-                            onSubmit={(event) => {
-                                event.preventDefault();
-                                addDataFilter();
-                            }}
-                        >
-                            <Select
-                                aria-label={t('New filter type')}
-                                disabled={!defaultsReady}
-                                value={filterKind}
-                                onChange={(event) => setFilterKind(event.target.value === 'index' ? 'index' : 'exclude')}
-                            >
-                                <option value="exclude">{t('Metric name not')}</option>
-                                <option value="index">Index</option>
-                            </Select>
-                            <FilterInput
-                                aria-label={t('New filter value')}
-                                disabled={!defaultsReady}
-                                value={filterText}
-                                placeholder={filterKind === 'index' ? 'e.g. metrics_lab' : 'e.g. itsi.*'}
-                                onChange={(event) => setFilterText(event.target.value)}
-                            />
-                            <TextLink type="submit" disabled={!defaultsReady}>
-                                {t('Add')}
-                            </TextLink>
-                            <TextLink type="button" onClick={() => setDataFilterOpen(false)}>
-                                {t('Cancel')}
-                            </TextLink>
-                        </FilterForm>
-                    ) : (
-                        <TextLink type="button" disabled={!defaultsReady} onClick={() => setDataFilterOpen(true)}>
-                            {t('+ Add new filter')}
-                        </TextLink>
-                    )}
-                    {filterError ? <Note role="alert">{filterError}</Note> : null}
+                    <TextLink type="button" disabled={!defaultsReady} onClick={() => setDataFilterOpen(true)}>
+                        {t('+ Add new filter')}
+                    </TextLink>
                 </FilterBox>
                 <GroupRow>
                     <Select
@@ -1379,10 +1631,10 @@ export function Explorer(): React.ReactElement {
                         ))}
                     </Select>
                 </GroupRow>
-                <Tree>
+                <Tree role="list" aria-label={t('Data structure')}>
                     {catalogError ? <Note>{catalogError}</Note> : null}
                     {catalogReady && !catalogError && tree.length === 0 ? (
-                        <Note>{t('No metrics in this time range.')}</Note>
+                        <Note>{query ? t('No matches found.') : t('No metrics in this time range.')}</Note>
                     ) : null}
                     {catalogReady && !catalogError && (groupBy === 'metric_name' ? namesTruncated : valuesTruncated) ? (
                         <Note role="status">
@@ -1393,6 +1645,7 @@ export function Explorer(): React.ReactElement {
                         nodes={tree}
                         depth={0}
                         open={open}
+                        query={query}
                         selected={selectedMetrics}
                         onToggle={(id) => {
                             const next = new Set(open);
@@ -1407,44 +1660,80 @@ export function Explorer(): React.ReactElement {
                         onAdd={addToSelected}
                     />
                 </Tree>
-                </>
+                </SectionBody>
                 ) : null}
-                <SectionButton type="button" aria-expanded={eventsOpen} onClick={() => setEventsOpen((open) => !open)}>
-                    {eventsOpen ? '▾' : '▸'} {t('Events')}
+                <SectionButton type="button" aria-expanded={eventsOpen} onClick={() => toggleSection('events')}>
+                    <span aria-hidden>{eventsOpen ? '▾' : '▸'}</span> <SectionTitle>{t('Events')}</SectionTitle>
+                    {query && eventsOpen ? <Count>{matchCount(shownSourcetypes.length)}</Count> : null}
                 </SectionButton>
-                {eventsOpen
-                    ? sourcetypes.map((name) => (
-                          <SectionItem key={name} type="button" onClick={() => addChart(name, undefined, 'event')}>
-                              {name}
-                          </SectionItem>
-                      ))
-                    : null}
-                {eventsOpen && sourcetypesReady && sourcetypes.length === 0 ? <Note>{t('No sourcetypes in this time range.')}</Note> : null}
-                <SectionButton type="button" aria-expanded={datasetsOpen} onClick={() => setDatasetsOpen((open) => !open)}>
-                    {datasetsOpen ? '▾' : '▸'} {t('Datasets')}
-                </SectionButton>
-                {datasetsOpen
-                    ? datamodels.map((name) => (
-                          <SectionItem key={name} type="button" onClick={() => addChart(name, undefined, 'dataset')}>
-                              {name}
-                          </SectionItem>
-                      ))
-                    : null}
-                {datasetsOpen && datamodels.length === 0 ? <Note>{t('No data models.')}</Note> : null}
-                <DataLists catalogRange={catalogRange} onAddBase={addBaseChart} />
-                <Footer>
-                    {t('Data ingested from')}{' '}
-                    <select
-                        aria-label={t('Catalog time range')}
-                        value={catalogRange}
-                        onChange={(event) => setCatalogRange(event.target.value)}
-                    >
-                        {RANGES.map((item) => (
-                            <option key={item.id} value={item.id}>
-                                {t(item.label)}
-                            </option>
+                {eventsOpen ? (
+                    <SectionBody>
+                        {shownSourcetypes.map((name) => (
+                            <SectionItem key={name} type="button" onClick={() => addChart(name, undefined, 'event')}>
+                                <Highlight text={name} query={query} />
+                            </SectionItem>
                         ))}
-                    </select>
+                        {sourcetypesReady && shownSourcetypes.length === 0 ? <Note>{t('No sourcetypes in this time range.')}</Note> : null}
+                    </SectionBody>
+                ) : null}
+                <SectionButton type="button" aria-expanded={datasetsOpen} onClick={() => toggleSection('datasets')}>
+                    <span aria-hidden>{datasetsOpen ? '▾' : '▸'}</span> <SectionTitle>{t('Datasets')}</SectionTitle>
+                    {query && datasetsOpen ? <Count>{matchCount(shownDatamodels.length)}</Count> : null}
+                </SectionButton>
+                {datasetsOpen ? (
+                    <SectionBody>
+                        {shownDatamodels.map((name) => (
+                            <SectionItem key={name} type="button" onClick={() => addChart(name, undefined, 'dataset')}>
+                                <Highlight text={name} query={query} />
+                            </SectionItem>
+                        ))}
+                        {shownDatamodels.length === 0 ? <Note>{t('No data models.')}</Note> : null}
+                    </SectionBody>
+                ) : null}
+                <DataLists
+                    catalogRange={catalogRange}
+                    query={query}
+                    open={section}
+                    onToggle={toggleSection}
+                    onAddBase={addBaseChart}
+                    Header={SectionButton}
+                    Body={SectionBody}
+                    Title={SectionTitle}
+                    Count={Count}
+                    matchCount={matchCount}
+                />
+                    </>
+                )}
+                <Footer>
+                    <span aria-hidden="true">ⓘ</span> {t('Data ingested from')}{' '}
+                    <DropdownMenu
+                        label={t('Catalog time range')}
+                        trigger={(isOpen, toggle) => (
+                            <TextLink
+                                type="button"
+                                aria-label={`${t('Data ingested from')} ${rangeLabel(catalogRange, 'now')}`}
+                                aria-expanded={isOpen}
+                                onClick={toggle}
+                            >
+                                {rangeLabel(catalogRange, 'now')} ▾
+                            </TextLink>
+                        )}
+                    >
+                        {(close) =>
+                            RANGES.map((item) => (
+                                <MenuItem
+                                    key={item.id}
+                                    $checked={item.id === catalogRange}
+                                    onClick={() => {
+                                        setCatalogRange(item.id);
+                                        close();
+                                    }}
+                                >
+                                    {t(item.label)}
+                                </MenuItem>
+                            ))
+                        }
+                    </DropdownMenu>
                     <div>{t('Changing this time setting will affect performance.')}</div>
                 </Footer>
             </Pane>
@@ -1456,139 +1745,176 @@ export function Explorer(): React.ReactElement {
                 </Rail>
             )}
             <Stage>
-                <Toolbar>
-                    <select
-                        aria-label={t('Time range')}
-                        value={customTime ? 'custom' : range}
-                        onChange={(event) => {
-                            if (event.target.value === 'custom') {
-                                setCustomTime(true);
-                                setCustomStart(boundForInput(range));
-                                setCustomEnd(boundForInput(latest));
-                                return;
-                            }
-                            setCustomTime(false);
-                            setCustomTimeError('');
-                            setRange(event.target.value);
-                            setLatest('now');
-                        }}
-                    >
-                        {RANGES.map((item) => (
-                            <option key={item.id} value={item.id}>
-                                {t(item.label)}
-                            </option>
-                        ))}
-                        <option value="custom">{t('Custom…')}</option>
-                    </select>
-                    {customTime ? (
-                        <>
-                            <TextInput
-                                aria-label={t('Custom time range start')}
-                                placeholder="-7d or 2026-11-06 14:00"
-                                value={customStart}
-                                onChange={(event) => setCustomStart(event.target.value)}
-                            />
-                            <TextInput
-                                aria-label={t('Custom time range end')}
-                                placeholder="now or 2026-11-06 18:00"
-                                value={customEnd}
-                                onChange={(event) => setCustomEnd(event.target.value)}
-                            />
-                            <ToolButton
-                                type="button"
-                                onClick={() => {
-                                    const result = customRange(customStart, customEnd, Date.now() / 1000);
-                                    if ('error' in result) {
-                                        setCustomTimeError(result.error);
-                                        return;
-                                    }
-                                    setCustomTimeError('');
-                                    setRange(result.earliest);
-                                    setLatest(result.latest);
-                                }}
-                            >
-                                {t('Apply time range')}
-                            </ToolButton>
-                            {customTimeError ? <Note role="alert">{customTimeError}</Note> : null}
-                        </>
-                    ) : null}
-                    <ToolButton type="button" aria-label={t('Refresh chart data')} onClick={refreshNow} disabled={charts.length === 0}>
-                        {charts.length > 0 ? (
-                            <>
-                                {t('Refresh')} <RefreshLabel refreshedAt={refreshedAt} auto={autoRefresh} />
-                            </>
-                        ) : (
-                            '↻'
+                <Toolbar role="group" aria-label={t('Global controls')}>
+                    <Bar type="button" aria-label={t('Zoom out')} title={t('Zoom out')} disabled={!zoom} onClick={() => setZoom(null)}>
+                        ⤺
+                    </Bar>
+                    <DropdownMenu
+                        label={t('Time range')}
+                        trigger={(isOpen, toggle) => (
+                            <Bar type="button" aria-label={t('Time range')} aria-expanded={isOpen} onClick={toggle}>
+                                <span aria-hidden="true">◷</span>
+                                {zoom ? formatZoomRange(zoom.earliest, zoom.latest, locale) : rangeLabel(range, latest)} ▾
+                            </Bar>
                         )}
-                    </ToolButton>
-                    <ToolButton type="button" aria-label={t('Grid layout')} aria-pressed={layout === 'grid'} $pressed={layout === 'grid'} onClick={() => setLayout('grid')}>
-                        ▦
-                    </ToolButton>
-                    <ToolButton type="button" aria-label={t('Stack layout')} aria-pressed={layout === 'stack'} $pressed={layout === 'stack'} onClick={() => setLayout('stack')}>
-                        ☰
-                    </ToolButton>
-                    {charts.length > 0 ? (
-                        <>
-                            <span>{t('Time span')}={span}</span>
-                            <Select
-                                aria-label={t('Global split by')}
-                                value={globalSplit}
-                                onChange={(event) => setGlobalSplit(event.target.value)}
-                            >
-                                <option value="">{t('Split By')}</option>
-                                {splitChoices(allDimensions, globalSplit).map((name) => (
-                                    <option key={name} value={name}>
-                                        {name}
-                                    </option>
+                    >
+                        {(close) => (
+                            <>
+                                {RANGES.map((item) => (
+                                    <MenuItem
+                                        key={item.id}
+                                        $checked={!zoom && latest === 'now' && item.id === range}
+                                        onClick={() => {
+                                            setRange(item.id);
+                                            setLatest('now');
+                                            setZoom(null);
+                                            close();
+                                        }}
+                                    >
+                                        {t(item.label)}
+                                    </MenuItem>
                                 ))}
-                            </Select>
-                            {globalSplit ? (
-                                <ToolButton type="button" onClick={() => setGlobalSplit('')}>
-                                    {t('Clear Split By')}
-                                </ToolButton>
-                            ) : null}
-                            <ToolButton
-                                type="button"
-                                onClick={() => {
-                                    setCharts([]);
-                                    setSelectedId('');
-                                    setMaximizedId('');
-                                    setMinimizedIds(new Set());
-                                }}
-                            >
-                                {t('Remove all')}
-                            </ToolButton>
-                        </>
-                    ) : null}
-                    <Overflow>
-                        <ToolButton type="button" aria-label={t('More actions')} aria-expanded={toolbarMore} onClick={() => setToolbarMore((open) => !open)}>
-                            ⋯
-                        </ToolButton>
-                        {toolbarMore ? (
-                            <OverflowMenu>
-                                <Select
-                                    aria-label={t('Auto-refresh')}
-                                    value={autoRefresh ? 'on' : 'off'}
-                                    onChange={(event) => {
-                                        const enabled = event.target.value === 'on';
-                                        setAutoRefresh(enabled);
-                                        if (enabled) {
-                                            refreshNow();
-                                        }
+                                <MenuItem
+                                    $checked={!zoom && !(latest === 'now' && RANGES.some((item) => item.id === range))}
+                                    onClick={() => {
+                                        close();
+                                        setTimeDialog(true);
                                     }}
                                 >
-                                    <option value="off">{t('Auto-refresh off')}</option>
-                                    <option value="on">{t('Auto-refresh on')}</option>
-                                </Select>
-                                <ToolButton type="button" onClick={() => { setToolbarMore(false); setSaveMode('workspace'); }}>
+                                    {t('Custom…')}
+                                </MenuItem>
+                            </>
+                        )}
+                    </DropdownMenu>
+                    <Divider />
+                    <Bar
+                        type="button"
+                        aria-label={t('Refresh chart data')}
+                        title={zoom ? t('Reset zoom to enable refresh.') : t('Refresh chart data')}
+                        onClick={refreshNow}
+                        disabled={charts.length === 0 || Boolean(zoom)}
+                    >
+                        <span aria-hidden="true">↻</span> {t('Refresh')}
+                    </Bar>
+                    <DropdownMenu
+                        label={t('Auto-refresh settings')}
+                        trigger={(isOpen, toggle) => (
+                            <Bar
+                                type="button"
+                                aria-label={t('Auto-refresh settings')}
+                                title={t('Auto-refresh settings')}
+                                aria-expanded={isOpen}
+                                disabled={Boolean(zoom)}
+                                onClick={toggle}
+                            >
+                                ▾
+                            </Bar>
+                        )}
+                    >
+                        {(close) => (
+                            <>
+                                <MenuHeading>{t('Auto-refresh')}</MenuHeading>
+                                <MenuItem
+                                    $checked={!autoRefresh}
+                                    onClick={() => {
+                                        setAutoRefresh(false);
+                                        close();
+                                    }}
+                                >
+                                    {t('Off')}
+                                </MenuItem>
+                                <MenuItem
+                                    $checked={autoRefresh}
+                                    onClick={() => {
+                                        setAutoRefresh(true);
+                                        refreshNow();
+                                        close();
+                                    }}
+                                >
+                                    {t('On')}
+                                </MenuItem>
+                            </>
+                        )}
+                    </DropdownMenu>
+                    {charts.length > 0 ? (
+                        <Muted>
+                            {zoom ? t('Reset zoom to enable refresh.') : <RefreshLabel refreshedAt={refreshedAt} auto={autoRefresh} />}
+                        </Muted>
+                    ) : null}
+                    <Divider />
+                    <Bar type="button" aria-label={t('Split By')} onClick={() => setSplitDialog(true)}>
+                        <span aria-hidden="true">⑃</span>
+                        {globalSplit ? `${t('Split By')}: ${globalSplit}` : t('Split By')}
+                    </Bar>
+                    {globalSplit ? (
+                        <Bar type="button" aria-label={t('Clear Split By')} title={t('Clear Split By')} onClick={() => setGlobalSplit('')}>
+                            ×
+                        </Bar>
+                    ) : null}
+                    <Bar type="button" style={{ marginLeft: 'auto' }} disabled={charts.length === 0} onClick={removeAll}>
+                        <span aria-hidden="true">⌫</span> {t('Remove all')}
+                    </Bar>
+                    <Divider />
+                    <Bar
+                        type="button"
+                        aria-label={t('Grid layout')}
+                        title={t('Grid layout')}
+                        aria-pressed={layout === 'grid'}
+                        $pressed={layout === 'grid'}
+                        onClick={() => setLayout('grid')}
+                    >
+                        ▦
+                    </Bar>
+                    <Bar
+                        type="button"
+                        aria-label={t('Stack layout')}
+                        title={t('Stack layout')}
+                        aria-pressed={layout === 'stack'}
+                        $pressed={layout === 'stack'}
+                        onClick={() => setLayout('stack')}
+                    >
+                        ☰
+                    </Bar>
+                    <DropdownMenu
+                        label={t('Global actions')}
+                        alignRight
+                        trigger={(isOpen, toggle) => (
+                            <Bar type="button" aria-label={t('Global actions')} title={t('Global actions')} aria-expanded={isOpen} onClick={toggle}>
+                                ⋯
+                            </Bar>
+                        )}
+                    >
+                        {(close) => (
+                            <>
+                                <MenuItem
+                                    disabled={charts.length === 0}
+                                    onClick={() => {
+                                        close();
+                                        setSaveMode('all-classic');
+                                    }}
+                                >
+                                    {t('Save all charts to Classic Dashboards')}
+                                </MenuItem>
+                                <MenuItem
+                                    disabled={charts.length === 0}
+                                    onClick={() => {
+                                        close();
+                                        setSaveMode('all-studio');
+                                    }}
+                                >
+                                    {t('Save all charts to Dashboard Studio')}
+                                </MenuItem>
+                                <MenuItem
+                                    onClick={() => {
+                                        close();
+                                        setSaveMode('workspace');
+                                    }}
+                                >
                                     {t('Workspaces')}
-                                </ToolButton>
-                                <ToolButton type="button" disabled={charts.length === 0} onClick={() => { setToolbarMore(false); setSaveMode('all'); }}>
-                                    {t('Save all charts')}
-                                </ToolButton>
-                            </OverflowMenu>
-                        ) : null}
-                    </Overflow>
+                                </MenuItem>
+                            </>
+                        )}
+                    </DropdownMenu>
                 </Toolbar>
                 {charts.length > 0 || globalFilters.length > 0 ? (
                 <FilterBox aria-label={t('Global filters')}>
@@ -1700,23 +2026,29 @@ export function Explorer(): React.ReactElement {
                                 span={span}
                                 refreshToken={refreshToken}
                                 globalSplit={globalSplit}
+                                globalLimit={globalLimit}
                                 globalFilters={globalFilters}
                                 metricDims={metricDims}
                                 eventIndexes={eventIndexes}
                                 metricIndexes={metricIndexes}
+                                zoom={zoom}
+                                onZoom={setZoom}
                                 selected={chart.id === selected?.id}
-                                onSelect={() => setSelectedId(chart.id)}
-                                onRemove={() => {
-                                    setCharts((current) => current.filter((item) => item.id !== chart.id));
-                                    setMaximizedId((current) => (current === chart.id ? '' : current));
-                                    if (selected?.id === chart.id) {
-                                        setSelectedId('');
+                                onSelect={() => {
+                                    if (chart.id !== selected?.id) {
+                                        setSelectedId(chart.id);
+                                        setSelectedSeriesId(chart.series[0]?.id ?? '');
+                                        setExpandedSeriesId(chart.series[0]?.id ?? '');
+                                        setSettingsOpen(false);
                                     }
                                 }}
+                                onRemove={() => removeChart(chart.id)}
                                 onClone={() => {
                                     const copy = cloneChart(chart);
-                                    setCharts((current) => [...current, copy]);
+                                    setCharts((current) => current.flatMap((item) => (item.id === chart.id ? [item, copy] : [item])));
                                     setSelectedId(copy.id);
+                                    setSelectedSeriesId(copy.series[0]?.id ?? '');
+                                    setExpandedSeriesId(copy.series[0]?.id ?? '');
                                 }}
                                 onWidenSpan={(next) =>
                                     setCharts((current) =>
@@ -1735,39 +2067,284 @@ export function Explorer(): React.ReactElement {
                 )}
             </Stage>
             {rightOpen ? (
-            <Analysis>
+            <Analysis role="group" aria-label={t('Analysis')}>
                 <PaneHeader>
                     {t('Analysis')}
                     <IconButton type="button" aria-label={t('Hide analysis')} onClick={() => setRightOpen(false)}>
                         »
                     </IconButton>
                 </PaneHeader>
+                {selected && series && filterOpen ? (
+                    <SubPanel aria-label={t('Add new filter')}>
+                        <SubHead>
+                            {series.metric}
+                            <strong>{t('Add new filter')}</strong>
+                        </SubHead>
+                        <Field as="div">
+                            <Select aria-label={t('Filter dimension')} value={filterDimension} onChange={(event) => setFilterDimension(event.target.value)}>
+                                <option value="">{t('Select a dimension')}</option>
+                                {((series.source ?? 'metric') === 'metric' ? dimensions : sourceFields).map((name) => (
+                                    <option key={name} value={name}>
+                                        {name}
+                                    </option>
+                                ))}
+                            </Select>
+                            <span role="radiogroup" aria-label={t('Filter mode')}>
+                                <label>
+                                    <input type="radio" checked={filterMode === 'include'} onChange={() => setFilterMode('include')} /> {t('Include')}
+                                </label>{' '}
+                                <label>
+                                    <input type="radio" checked={filterMode === 'exclude'} onChange={() => setFilterMode('exclude')} /> {t('Exclude')}
+                                </label>
+                            </span>
+                            <SplitRow style={{ justifyContent: 'flex-end' }}>
+                                <TextLink
+                                    type="button"
+                                    style={{ flex: '0 0 auto' }}
+                                    aria-label={filterSort === 'asc' ? t('Sort descending') : t('Sort ascending')}
+                                    title={filterSort === 'asc' ? t('Sort descending') : t('Sort ascending')}
+                                    onClick={() => setFilterSort((current) => (current === 'asc' ? 'desc' : 'asc'))}
+                                >
+                                    {filterSort === 'asc' ? 'A→Z' : 'Z→A'}
+                                </TextLink>
+                                <TextLink
+                                    type="button"
+                                    style={{ flex: '0 0 auto' }}
+                                    aria-label={t('Clear selections')}
+                                    title={t('Clear selections')}
+                                    disabled={filterPicked.length === 0}
+                                    onClick={() => setFilterPicked([])}
+                                >
+                                    ×
+                                </TextLink>
+                            </SplitRow>
+                            <FilterChoices>
+                                {[...filterChoices]
+                                    .sort((left, right) => (filterSort === 'asc' ? left.localeCompare(right) : right.localeCompare(left)))
+                                    .map((value) => (
+                                        <label key={value}>
+                                            <input
+                                                type="checkbox"
+                                                checked={filterPicked.includes(value)}
+                                                onChange={(event) =>
+                                                    setFilterPicked((current) =>
+                                                        event.target.checked ? [...current, value] : current.filter((item) => item !== value)
+                                                    )
+                                                }
+                                            />{' '}
+                                            {value}
+                                        </label>
+                                    ))}
+                                {filterDimension && filterChoices.length === 0 ? <span>{t('Loading…')}</span> : null}
+                            </FilterChoices>
+                        </Field>
+                        <SubFoot>
+                            <ToolButton type="button" onClick={() => setFilterOpen(false)}>
+                                {t('Cancel')}
+                            </ToolButton>
+                            <ToolButton
+                                type="button"
+                                disabled={filterPicked.length === 0 || !filterDimension}
+                                onClick={() => {
+                                    patchSeries({
+                                        filters: [
+                                            ...series.filters.filter((item) => item.dimension !== filterDimension),
+                                            { dimension: filterDimension, mode: filterMode, values: filterPicked },
+                                        ],
+                                    });
+                                    setFilterOpen(false);
+                                    setFilterDimension('');
+                                    setFilterPicked([]);
+                                }}
+                            >
+                                {t('Add')}
+                            </ToolButton>
+                        </SubFoot>
+                    </SubPanel>
+                ) : selected && series && referenceOpen ? (
+                    <SubPanel aria-label={t('Add new reference line')}>
+                        <SubHead>
+                            {series.metric}
+                            <strong>{t('Add new reference line')}</strong>
+                        </SubHead>
+                        <Field as="div">
+                            {t('Calculation')}
+                            <span role="radiogroup" aria-label={t('Calculation')}>
+                                <label>
+                                    <input
+                                        type="radio"
+                                        checked={referenceKind === 'aggregation'}
+                                        onChange={() => {
+                                            setReferenceKind('aggregation');
+                                            setReferenceValue('Avg');
+                                            setReferenceLabel('Avg');
+                                        }}
+                                    />{' '}
+                                    {t('Raw data')}
+                                </label>{' '}
+                                <label>
+                                    <input
+                                        type="radio"
+                                        checked={referenceKind === 'constant'}
+                                        onChange={() => {
+                                            setReferenceKind('constant');
+                                            setReferenceValue('');
+                                            setReferenceLabel('');
+                                        }}
+                                    />{' '}
+                                    {t('Constant value')}
+                                </label>
+                            </span>
+                        </Field>
+                        <Field>
+                            {t('Value')}
+                            <Help>{referenceKind === 'constant' ? t('Enter a constant here.') : t('Select or type an aggregation.')}</Help>
+                            <TextInput
+                                aria-label={t('Reference value')}
+                                list={referenceKind === 'constant' ? undefined : 'metric-aggregations'}
+                                value={referenceValue}
+                                placeholder={referenceKind === 'constant' ? '25' : 'Avg'}
+                                onChange={(event) => setReferenceValue(event.target.value)}
+                            />
+                        </Field>
+                        {referenceKind === 'aggregation' ? (
+                            <Field as="div">
+                                {t('Time range')}
+                                <Help>{t('Select a time range.')}</Help>
+                                <Select aria-label={t('Reference line time range')} value={referenceRange} onChange={(event) => setReferenceRange(event.target.value)}>
+                                    <option value="">{t('Current chart')}</option>
+                                    {RANGES.map((item) => (
+                                        <option key={item.id} value={item.id}>
+                                            {t(item.label)}
+                                        </option>
+                                    ))}
+                                    <option value="custom">{t('Custom…')}</option>
+                                </Select>
+                                {referenceRange === 'custom' ? (
+                                    <>
+                                        <SplitRow>
+                                            <TextInput
+                                                aria-label={t('Reference earliest')}
+                                                inputMode="numeric"
+                                                value={referenceEarliestAmount}
+                                                onChange={(event) => setReferenceEarliestAmount(event.target.value)}
+                                            />
+                                            <Select
+                                                aria-label={t('Reference earliest unit')}
+                                                value={referenceEarliestUnit}
+                                                onChange={(event) => setReferenceEarliestUnit(event.target.value as ShiftUnit)}
+                                            >
+                                                {SHIFT_UNITS.map((unit) => (
+                                                    <option key={unit.id} value={unit.id}>
+                                                        {unit.label}
+                                                    </option>
+                                                ))}
+                                            </Select>
+                                        </SplitRow>
+                                        <SplitRow>
+                                            <Select
+                                                aria-label={t('Reference latest')}
+                                                value={referenceLatestMode}
+                                                onChange={(event) => setReferenceLatestMode(event.target.value === 'ago' ? 'ago' : 'now')}
+                                            >
+                                                <option value="now">{t('Now')}</option>
+                                                <option value="ago">{t('Ago')}</option>
+                                            </Select>
+                                            {referenceLatestMode === 'ago' ? (
+                                                <>
+                                                    <TextInput
+                                                        aria-label={t('Reference latest amount')}
+                                                        inputMode="numeric"
+                                                        value={referenceLatestAmount}
+                                                        onChange={(event) => setReferenceLatestAmount(event.target.value)}
+                                                    />
+                                                    <Select
+                                                        aria-label={t('Reference latest unit')}
+                                                        value={referenceLatestUnit}
+                                                        onChange={(event) => setReferenceLatestUnit(event.target.value as ShiftUnit)}
+                                                    >
+                                                        {SHIFT_UNITS.map((unit) => (
+                                                            <option key={unit.id} value={unit.id}>
+                                                                {unit.label}
+                                                            </option>
+                                                        ))}
+                                                    </Select>
+                                                </>
+                                            ) : null}
+                                        </SplitRow>
+                                    </>
+                                ) : null}
+                                {referenceError ? <span role="alert">{referenceError}</span> : null}
+                            </Field>
+                        ) : null}
+                        <Field>
+                            {t('Label')}
+                            <Help>{t('Customize the label (optional).')}</Help>
+                            <TextInput aria-label={t('Reference label')} value={referenceLabel} onChange={(event) => setReferenceLabel(event.target.value)} />
+                        </Field>
+                        <Field as="div">
+                            <label>
+                                <input type="checkbox" aria-label={t('Include value')} checked={referenceInclude} onChange={(event) => setReferenceInclude(event.target.checked)} />{' '}
+                                {t('Include value')}
+                            </label>
+                        </Field>
+                        <SubFoot>
+                            <ToolButton type="button" onClick={() => setReferenceOpen(false)}>
+                                {t('Cancel')}
+                            </ToolButton>
+                            <ToolButton
+                                type="button"
+                                disabled={!referenceValueReady(referenceKind, referenceValue) || (referenceRange !== '' && !referenceBounds)}
+                                onClick={() => {
+                                    const line: ReferenceLine = {
+                                        kind: referenceKind,
+                                        value: referenceValue.trim(),
+                                        label: referenceLabel.trim(),
+                                        includeValue: referenceInclude,
+                                        ...(referenceBounds ? { earliest: referenceBounds.earliest, latest: referenceBounds.latest } : {}),
+                                    };
+                                    patchSeries({ referenceLines: [...series.referenceLines, line] });
+                                    setReferenceOpen(false);
+                                }}
+                            >
+                                {t('Add')}
+                            </ToolButton>
+                        </SubFoot>
+                    </SubPanel>
+                ) : (
+                    <>
                 {(selected?.series ?? []).map((item) => (
-                    <SeriesHeader
-                        key={item.id}
-                        type="button"
-                        $open={item.id === expandedSeriesId}
-                        aria-expanded={item.id === expandedSeriesId}
-                        aria-label={`Settings for ${item.metric}`}
-                        onClick={() => toggleSeries(item.id)}
-                    >
-                        <span>{item.id === expandedSeriesId ? '▾' : '▸'}</span>
-                        <span>
-                            {item.metric}
-                            <br />
-                            {seriesLegend(
-                                headerSeries(item),
-                                (selected?.series ?? []).map(headerSeries)
-                            )}
-                        </span>
-                    </SeriesHeader>
+                    <SeriesRow key={item.id} $open={item.id === expandedSeriesId}>
+                        <SeriesHeader
+                            type="button"
+                            $open={item.id === expandedSeriesId}
+                            aria-expanded={item.id === expandedSeriesId}
+                            aria-label={`${t('Settings for')} ${item.metric}`}
+                            onClick={() => toggleSeries(item.id)}
+                        >
+                            <span aria-hidden>{item.id === expandedSeriesId ? '▾' : '▸'}</span>
+                            <span>
+                                {item.metric}
+                                <Help>{seriesLegend(headerSeries(item), (selected?.series ?? []).map(headerSeries))}</Help>
+                            </span>
+                        </SeriesHeader>
+                        <SeriesActions>
+                            <TextLink type="button" aria-label={`${t('Clone')} ${item.metric}`} title={t('Clone')} onClick={() => duplicateSeries(item.id)}>
+                                ⧉
+                            </TextLink>
+                            <TextLink type="button" aria-label={`${t('Remove')} ${item.metric}`} title={t('Remove')} onClick={() => removeSeries(item.id)}>
+                                ×
+                            </TextLink>
+                        </SeriesActions>
+                    </SeriesRow>
                 ))}
-                {!series || series.id !== expandedSeriesId ? null : (
+                {!series || series.id !== expandedSeriesId || settingsOpen ? null : (
                     <>
                         <Field>
-                            Aggregation
+                            <SectionTitle>{t('Aggregation')}</SectionTitle>
+                            <Help>{t('Select or type an aggregation.')}</Help>
                             <TextInput
-                                aria-label="Aggregation"
+                                aria-label={t('Aggregation')}
                                 list="metric-aggregations"
                                 value={series.aggregation}
                                 onChange={(event) => {
@@ -1784,12 +2361,6 @@ export function Explorer(): React.ReactElement {
                                     }
                                 }}
                             />
-                            <datalist id="metric-aggregations">
-                                {functionsFor(series.source ?? 'metric').map((item) => (
-                                    <option key={item.name} value={item.label} />
-                                ))}
-                            </datalist>
-                            <span>{t('Select or type an aggregation.')}</span>
                             {(series.source ?? 'metric') !== 'metric' && needsField(chosen?.name ?? '') ? (
                                 <>
                                     <TextInput
@@ -1819,7 +2390,7 @@ export function Explorer(): React.ReactElement {
                         </Field>
                         {percentileOpen || percentilePreset !== '' ? (
                         <Field>
-                            {t('Percentile')}
+                            <SectionTitle>{t('Percentile')}</SectionTitle>
                             <Select
                                 aria-label={t('Percentile')}
                                 value={percentilePreset}
@@ -1872,19 +2443,20 @@ export function Explorer(): React.ReactElement {
                         ) : (
                             <Field>
                                 <TextLink type="button" onClick={() => setPercentileOpen(true)}>
-                                    {t('Percentile')}
+                                    {t('+ Percentile')}
                                 </TextLink>
                             </Field>
                         )}
                         <Field>
-                            {t('Split by')}
+                            <SectionTitle>{t('Split by')}</SectionTitle>
+                            <Help>{t('Split this series into separate values.')}</Help>
                             <Select
                                 aria-label={t('Split by')}
                                 value={series.splitBy}
                                 onChange={(event) => patchSeries({ splitBy: event.target.value })}
                             >
-                                <option value={INHERIT_SPLIT}>Inherit Global Split By</option>
                                 <option value="">{t('None')}</option>
+                                <option value={INHERIT_SPLIT}>Inherit Global Split By</option>
                                 {splitChoices(
                                     (series.source ?? 'metric') === 'metric' ? dimensions : sourceFields,
                                     series.splitBy === INHERIT_SPLIT ? '' : series.splitBy
@@ -1894,7 +2466,7 @@ export function Explorer(): React.ReactElement {
                                     </option>
                                 ))}
                             </Select>
-                            {resolveSplit(series, globalSplit, selected.useGlobalSplit) ? (
+                            {series.splitBy && series.splitBy !== INHERIT_SPLIT ? (
                                 <SplitRow>
                                     <Select
                                         aria-label={t('Split limit type')}
@@ -1923,11 +2495,12 @@ export function Explorer(): React.ReactElement {
                             ) : null}
                         </Field>
                         <Field>
-                            {t('Time shift')}
+                            <SectionTitle>{t('Time shift')}</SectionTitle>
+                            <Help>{t('Show an earlier time range.')}</Help>
                             <Select aria-label={t('Time shift')} value={shiftSelect} onChange={(event) => chooseShift(event.target.value)}>
                                 {SHIFTS.map((item) => (
                                     <option key={item.id || 'none'} value={item.id}>
-                                        {item.label}
+                                        {t(item.label)}
                                     </option>
                                 ))}
                             </Select>
@@ -1955,416 +2528,326 @@ export function Explorer(): React.ReactElement {
                             ) : null}
                             {shiftError ? <span role="alert">{shiftError}</span> : null}
                         </Field>
-                        <Field>
-                            Filter
+                        <Field as="div">
+                            <SectionTitle>{t('Filter')}</SectionTitle>
+                            <Help>{t('Include or exclude metrics from specific dimensions.')}</Help>
                             {series.filters.map((filter) => (
                                 <SplitRow key={`${filter.dimension}-${filter.mode}`}>
                                     <span>
-                                        {filter.dimension} {filter.mode === 'include' ? 'includes' : 'excludes'}{' '}
-                                        {filter.values.join(', ')}
+                                        {filter.dimension} {filter.mode === 'include' ? '=' : '!='} {filter.values.join(', ')}
                                     </span>
-                                    <button
+                                    <TextLink
                                         type="button"
-                                        aria-label={`Remove ${filter.dimension} filter`}
-                                        onClick={() =>
-                                            patchSeries({
-                                                filters: series.filters.filter((item) => item !== filter),
-                                            })
-                                        }
+                                        style={{ flex: '0 0 auto' }}
+                                        aria-label={`${t('Remove')} ${filter.dimension}`}
+                                        onClick={() => patchSeries({ filters: series.filters.filter((item) => item !== filter) })}
                                     >
-                                        {t('Remove')}
-                                    </button>
+                                        ×
+                                    </TextLink>
                                 </SplitRow>
                             ))}
-                            {filterOpen ? (
-                                <>
-                                    <Select
-                                        aria-label={t('Filter dimension')}
-                                        value={filterDimension}
-                                        onChange={(event) => setFilterDimension(event.target.value)}
-                                    >
-                                        <option value="">{t('Select a dimension')}</option>
-                                        {dimensions.map((name) => (
-                                            <option key={name} value={name}>
-                                                {name}
-                                            </option>
-                                        ))}
-                                    </Select>
-                                    <Select
-                                        aria-label={t('Filter mode')}
-                                        value={filterMode}
-                                        onChange={(event) =>
-                                            setFilterMode(event.target.value === 'exclude' ? 'exclude' : 'include')
-                                        }
-                                    >
-                                        <option value="include">{t('Include')}</option>
-                                        <option value="exclude">{t('Exclude')}</option>
-                                    </Select>
-                                    <FilterChoices>
-                                        {filterChoices.map((value) => (
-                                            <label key={value}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={filterPicked.includes(value)}
-                                                    onChange={(event) =>
-                                                        setFilterPicked((current) =>
-                                                            event.target.checked
-                                                                ? [...current, value]
-                                                                : current.filter((item) => item !== value)
-                                                        )
-                                                    }
-                                                />{' '}
-                                                {value}
-                                            </label>
-                                        ))}
-                                    </FilterChoices>
-                                    <SplitRow>
-                                        <button
-                                            type="button"
-                                            disabled={filterPicked.length === 0 || !filterDimension}
-                                            onClick={() => {
-                                                patchSeries({
-                                                    filters: [
-                                                        ...series.filters.filter((item) => item.dimension !== filterDimension),
-                                                        { dimension: filterDimension, mode: filterMode, values: filterPicked },
-                                                    ],
-                                                });
-                                                setFilterOpen(false);
-                                                setFilterDimension('');
-                                                setFilterPicked([]);
-                                            }}
-                                        >
-                                            {t('Add')}
-                                        </button>
-                                        <button type="button" onClick={() => setFilterOpen(false)}>
-                                            {t('Cancel')}
-                                        </button>
-                                    </SplitRow>
-                                </>
-                            ) : (
-                                <button type="button" onClick={() => setFilterOpen(true)}>
-                                    {t('Add filter')}
-                                </button>
-                            )}
+                            <TextLink
+                                type="button"
+                                onClick={() => {
+                                    setFilterDimension(dimensions.includes('host') ? 'host' : '');
+                                    setFilterMode('include');
+                                    setFilterPicked([]);
+                                    setFilterOpen(true);
+                                }}
+                            >
+                                {t('+ Add new filter')}
+                            </TextLink>
                         </Field>
-                        <Field>
-                            {t('Reference lines')}
+                        <Field as="div">
+                            <SectionTitle>{t('Reference lines')}</SectionTitle>
+                            <Help>{t('Add a horizontal line to show significant values or thresholds.')}</Help>
                             {series.referenceLines.map((line, index) => (
                                 <SplitRow key={`${line.kind}-${line.label}-${line.earliest ?? ''}-${index}`}>
                                     <span>{referenceSummary(line)}</span>
-                                    <button
+                                    <TextLink
                                         type="button"
-                                        aria-label={`Remove reference line ${line.label || line.value}`}
+                                        style={{ flex: '0 0 auto' }}
+                                        aria-label={`${t('Remove reference line')} ${line.label || line.value}`}
                                         onClick={() =>
                                             patchSeries({
                                                 referenceLines: series.referenceLines.filter((_, itemIndex) => itemIndex !== index),
                                             })
                                         }
                                     >
-                                        {t('Remove')}
-                                    </button>
+                                        ×
+                                    </TextLink>
                                 </SplitRow>
                             ))}
-                            {referenceOpen ? (
-                                <>
-                                    <Select
-                                        aria-label={t('Reference calculation')}
-                                        value={referenceKind}
-                                        onChange={(event) => {
-                                            const kind = event.target.value === 'constant' ? 'constant' : 'aggregation';
-                                            setReferenceKind(kind);
-                                            setReferenceValue(kind === 'constant' ? '' : 'Avg');
-                                            setReferenceLabel(kind === 'constant' ? '' : 'Avg');
-                                        }}
-                                    >
-                                        <option value="aggregation">{t('Raw data')}</option>
-                                        <option value="constant">{t('Constant value')}</option>
-                                    </Select>
-                                    <TextInput
-                                        aria-label={t('Reference value')}
-                                        value={referenceValue}
-                                        placeholder={referenceKind === 'constant' ? '25' : 'Avg'}
-                                        onChange={(event) => setReferenceValue(event.target.value)}
-                                    />
-                                    <TextInput
-                                        aria-label={t('Reference label')}
-                                        value={referenceLabel}
-                                        placeholder={t('Label')}
-                                        onChange={(event) => setReferenceLabel(event.target.value)}
-                                    />
-                                    <span>
-                                        <input
-                                            type="checkbox"
-                                            aria-label={t('Include value')}
-                                            checked={referenceInclude}
-                                            onChange={(event) => setReferenceInclude(event.target.checked)}
-                                        />{' '}
-                                        {t('Include value')}
-                                    </span>
-                                    {referenceKind === 'aggregation' ? (
-                                        <>
-                                            <Select
-                                                aria-label={t('Reference line time range')}
-                                                value={referenceRange}
-                                                onChange={(event) => setReferenceRange(event.target.value)}
-                                            >
-                                                <option value="">{t('Chart')}</option>
-                                                {RANGES.map((item) => (
-                                                    <option key={item.id} value={item.id}>
-                                                        {item.label}
-                                                    </option>
-                                                ))}
-                                                <option value="custom">{t('Custom')}</option>
-                                            </Select>
-                                            {referenceRange === 'custom' ? (
-                                                <>
-                                                    <SplitRow>
-                                                        <TextInput
-                                                            aria-label={t('Reference earliest')}
-                                                            inputMode="numeric"
-                                                            value={referenceEarliestAmount}
-                                                            onChange={(event) => setReferenceEarliestAmount(event.target.value)}
-                                                        />
-                                                        <Select
-                                                            aria-label={t('Reference earliest unit')}
-                                                            value={referenceEarliestUnit}
-                                                            onChange={(event) => setReferenceEarliestUnit(event.target.value as ShiftUnit)}
-                                                        >
-                                                            {SHIFT_UNITS.map((unit) => (
-                                                                <option key={unit.id} value={unit.id}>
-                                                                    {unit.label}
-                                                                </option>
-                                                            ))}
-                                                        </Select>
-                                                    </SplitRow>
-                                                    <SplitRow>
-                                                        <Select
-                                                            aria-label={t('Reference latest')}
-                                                            value={referenceLatestMode}
-                                                            onChange={(event) => setReferenceLatestMode(event.target.value === 'ago' ? 'ago' : 'now')}
-                                                        >
-                                                            <option value="now">{t('Now')}</option>
-                                                            <option value="ago">{t('Ago')}</option>
-                                                        </Select>
-                                                        {referenceLatestMode === 'ago' ? (
-                                                            <>
-                                                                <TextInput
-                                                                    aria-label={t('Reference latest amount')}
-                                                                    inputMode="numeric"
-                                                                    value={referenceLatestAmount}
-                                                                    onChange={(event) => setReferenceLatestAmount(event.target.value)}
-                                                                />
-                                                                <Select
-                                                                    aria-label={t('Reference latest unit')}
-                                                                    value={referenceLatestUnit}
-                                                                    onChange={(event) => setReferenceLatestUnit(event.target.value as ShiftUnit)}
-                                                                >
-                                                                    {SHIFT_UNITS.map((unit) => (
-                                                                        <option key={unit.id} value={unit.id}>
-                                                                            {unit.label}
-                                                                        </option>
-                                                                    ))}
-                                                                </Select>
-                                                            </>
-                                                        ) : null}
-                                                    </SplitRow>
-                                                </>
-                                            ) : null}
-                                            {referenceError ? <span role="alert">{referenceError}</span> : null}
-                                        </>
-                                    ) : null}
-                                    <SplitRow>
-                                        <button
-                                            type="button"
-                                            disabled={!referenceValueReady(referenceKind, referenceValue) || (referenceRange !== '' && !referenceBounds)}
-                                            onClick={() => {
-                                                const line: ReferenceLine = {
-                                                    kind: referenceKind,
-                                                    value: referenceValue.trim(),
-                                                    label: referenceLabel.trim(),
-                                                    includeValue: referenceInclude,
-                                                    ...(referenceBounds
-                                                        ? { earliest: referenceBounds.earliest, latest: referenceBounds.latest }
-                                                        : {}),
-                                                };
-                                                patchSeries({ referenceLines: [...series.referenceLines, line] });
-                                                setReferenceOpen(false);
-                                            }}
-                                        >
-                                            {t('Add')}
-                                        </button>
-                                        <button type="button" onClick={() => setReferenceOpen(false)}>
-                                            {t('Cancel')}
-                                        </button>
-                                    </SplitRow>
-                                </>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setReferenceKind('aggregation');
-                                        setReferenceValue('Avg');
-                                        setReferenceLabel('Avg');
-                                        setReferenceInclude(true);
-                                        setReferenceRange('');
-                                        setReferenceOpen(true);
-                                    }}
-                                >
-                                    {t('Add reference line')}
-                                </button>
-                            )}
+                            <TextLink
+                                type="button"
+                                onClick={() => {
+                                    setReferenceKind('aggregation');
+                                    setReferenceValue('Avg');
+                                    setReferenceLabel('Avg');
+                                    setReferenceInclude(true);
+                                    setReferenceRange('');
+                                    setReferenceOpen(true);
+                                }}
+                            >
+                                {t('+ Add new reference line')}
+                            </TextLink>
                         </Field>
                     </>
                 )}
                 {selected ? (
-                    <SettingsFold>
-                            <summary>{t('Chart settings')}</summary>
-                            <Field as="div">
-                                <label>
-                                    <input
-                                        type="checkbox"
-                                        aria-label={t('Use global split by for this chart')}
-                                        checked={selected.useGlobalSplit}
-                                        onChange={(event) => patchChart({ useGlobalSplit: event.target.checked })}
-                                    />{' '}
-                                    {t('Use global split by for this chart')}
-                                </label>
-                            </Field>
-                            <Field as="div">
-                                {t('Chart type')}
-                                <Select
-                                    aria-label={t('Chart type')}
-                                    value={selected.settings.type}
-                                    onChange={(event) =>
-                                        patchSettings({ type: event.target.value as ChartSettings['type'] })
-                                    }
-                                >
-                                    {CHART_TYPES.map((item) => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.label}
-                                        </option>
-                                    ))}
-                                </Select>
-                            </Field>
-                            <Field as="div">
-                                {t('Show')}
-                                <Select
-                                    aria-label={t('Chart content')}
-                                    value={selected.settings.content}
-                                    onChange={(event) => {
-                                        const content = event.target.value;
-                                        patchSettings({
-                                            content: content === 'table' || content === 'both' ? content : 'chart',
-                                        });
-                                    }}
-                                >
-                                    {CHART_CONTENT.map((item) => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.label}
-                                        </option>
-                                    ))}
-                                </Select>
-                            </Field>
-                            <Field as="div">
-                                {t('Time span')} = {selected.settings.span || 'Auto'}
-                                <span>{t('Refer to the time range to set an appropriate time span.')}</span>
-                                <SplitRow>
-                                    <TextInput
-                                        aria-label={t('Span count')}
-                                        value={spanCount}
-                                        inputMode="numeric"
-                                        onChange={(event) => setSpanCount(event.target.value)}
-                                    />
+                    <>
+                        <SeriesHeader
+                            type="button"
+                            $open={settingsOpen}
+                            aria-expanded={settingsOpen}
+                            onClick={() => {
+                                setSettingsOpen((current) => !current);
+                                setExpandedSeriesId('');
+                            }}
+                        >
+                            <span aria-hidden="true">⚙</span>
+                            <span>{t('Chart settings')}</span>
+                        </SeriesHeader>
+                        {settingsOpen ? (
+                            <>
+                                <Field as="div">
+                                    <SectionTitle>{t('Chart type')}</SectionTitle>
                                     <Select
-                                        aria-label={t('Span unit')}
-                                        value={spanUnit}
-                                        onChange={(event) => setSpanUnit(event.target.value)}
+                                        aria-label={t('Chart type')}
+                                        value={selected.settings.type}
+                                        onChange={(event) => patchSettings({ type: event.target.value as ChartSettings['type'] })}
                                     >
-                                        {SPAN_UNITS.map((item) => (
+                                        {CHART_GROUPS.map((group) => (
+                                            <optgroup key={group.label} label={t(group.label)}>
+                                                {CHART_TYPES.filter((item) => group.types.includes(item.id)).map((item) => (
+                                                    <option key={item.id} value={item.id}>
+                                                        {t(item.label)}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
+                                    </Select>
+                                </Field>
+                                <Field as="div">
+                                    <SectionTitle>{t('Show')}</SectionTitle>
+                                    <Select
+                                        aria-label={t('Chart content')}
+                                        value={selected.settings.content}
+                                        onChange={(event) => {
+                                            const content = event.target.value;
+                                            patchSettings({ content: content === 'table' || content === 'both' ? content : 'chart' });
+                                        }}
+                                    >
+                                        {CHART_CONTENT.map((item) => (
                                             <option key={item.id} value={item.id}>
-                                                {item.label}
+                                                {t(item.label)}
                                             </option>
                                         ))}
                                     </Select>
-                                </SplitRow>
-                                <SplitRow>
-                                    <button
-                                        type="button"
-                                        disabled={buildSpan(spanCount, spanUnit) === null}
-                                        onClick={() => patchSettings({ span: buildSpan(spanCount, spanUnit) ?? '' })}
-                                    >
-                                        {t('Apply span')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={!selected.settings.span}
-                                        onClick={() => {
-                                            patchSettings({ span: '' });
-                                            setSpanCount('');
-                                        }}
-                                    >
-                                        {t('Revert span')}
-                                    </button>
-                                </SplitRow>
-                            </Field>
-                            {selected.settings.content === 'table' || selected.settings.type === 'heatmap' ? null : (
-                            <Field as="div">
-                                {t('Y-axis')}
-                                <span>Set the minimum and maximum, for example 1000, 1k or 3m.</span>
-                                <SplitRow>
-                                    <TextInput
-                                        aria-label={t('Y-axis minimum')}
-                                        placeholder="Min"
-                                        value={selected.settings.yMin}
-                                        onChange={(event) => patchSettings({ yMin: event.target.value })}
-                                    />
-                                    <TextInput
-                                        aria-label={t('Y-axis maximum')}
-                                        placeholder="Max"
-                                        value={selected.settings.yMax}
-                                        onChange={(event) => patchSettings({ yMax: event.target.value })}
-                                    />
-                                </SplitRow>
-                                <Select
-                                    aria-label={t('Y-axis scale')}
-                                    value={selected.settings.yScale}
-                                    onChange={(event) =>
-                                        patchSettings({ yScale: event.target.value === 'log' ? 'log' : 'linear' })
-                                    }
-                                >
-                                    <option value="linear">Linear</option>
-                                    <option value="log">{t('Log')}</option>
-                                </Select>
-                                <Select
-                                    aria-label={t('Tooltip decimal places')}
-                                    value={String(selected.settings.decimals ?? 4)}
-                                    onChange={(event) => patchSettings({ decimals: Number(event.target.value) })}
-                                >
-                                    {[0, 1, 2, 3, 4].map((count) => (
-                                        <option key={count} value={count}>
-                                            {count} decimal places in tooltips
-                                        </option>
-                                    ))}
-                                </Select>
-                                <label>
-                                    <input
-                                        type="checkbox"
-                                        aria-label="Abbreviate axis numbers"
-                                        checked={selected.settings.abbreviate !== false}
-                                        onChange={(event) => patchSettings({ abbreviate: event.target.checked })}
-                                    />{' '}
-                                    {t('Abbreviate numbers on the axis')}
-                                </label>
-                                {validateAxis(selected.settings) ? <span role="alert">{validateAxis(selected.settings)}</span> : null}
-                                <button
-                                    type="button"
-                                    onClick={() => patchSettings({ yMin: '', yMax: '', yScale: 'linear' })}
-                                >
-                                    {t('Revert y-axis')}
-                                </button>
-                            </Field>
-                            )}
-                    </SettingsFold>
+                                    <label>
+                                        <input
+                                            type="checkbox"
+                                            aria-label={t('Use global split by for this chart')}
+                                            checked={selected.useGlobalSplit}
+                                            onChange={(event) => patchChart({ useGlobalSplit: event.target.checked })}
+                                        />{' '}
+                                        {t('Use global split by for this chart')}
+                                    </label>
+                                </Field>
+                                <Field as="div">
+                                    <SectionTitle>{t('Time span')}</SectionTitle>
+                                    <Help>{t('Refer to the time range to set an appropriate time span.')}</Help>
+                                    {spanEdit ? (
+                                        <>
+                                            <SplitRow>
+                                                <TextInput
+                                                    aria-label={t('Span count')}
+                                                    value={spanCount}
+                                                    inputMode="numeric"
+                                                    onChange={(event) => setSpanCount(event.target.value)}
+                                                />
+                                                <Select aria-label={t('Span unit')} value={spanUnit} onChange={(event) => setSpanUnit(event.target.value)}>
+                                                    {SPAN_UNITS.map((item) => (
+                                                        <option key={item.id} value={item.id}>
+                                                            {t(item.label)}
+                                                        </option>
+                                                    ))}
+                                                </Select>
+                                            </SplitRow>
+                                            <SplitRow>
+                                                <ToolButton type="button" onClick={() => setSpanEdit(false)}>
+                                                    {t('Cancel')}
+                                                </ToolButton>
+                                                <ToolButton
+                                                    type="button"
+                                                    disabled={buildSpan(spanCount, spanUnit) === null}
+                                                    onClick={() => {
+                                                        patchSettings({ span: buildSpan(spanCount, spanUnit) ?? '' });
+                                                        setSpanEdit(false);
+                                                    }}
+                                                >
+                                                    {t('Update')}
+                                                </ToolButton>
+                                            </SplitRow>
+                                        </>
+                                    ) : (
+                                        <SplitRow>
+                                            <span>
+                                                {t('Time span')} = {selected.settings.span || t('Auto')}
+                                            </span>
+                                            <TextLink
+                                                type="button"
+                                                style={{ flex: '0 0 auto' }}
+                                                aria-label={t('Revert span')}
+                                                title={t('Revert span')}
+                                                disabled={!selected.settings.span}
+                                                onClick={() => {
+                                                    patchSettings({ span: '' });
+                                                    setSpanCount('');
+                                                }}
+                                            >
+                                                ↺
+                                            </TextLink>
+                                            <TextLink
+                                                type="button"
+                                                style={{ flex: '0 0 auto' }}
+                                                aria-label={t('Edit span')}
+                                                title={t('Edit span')}
+                                                onClick={() => {
+                                                    const current = splitSpan(selected.settings.span || span);
+                                                    setSpanCount(current.count);
+                                                    setSpanUnit(current.unit);
+                                                    setSpanEdit(true);
+                                                }}
+                                            >
+                                                ✎
+                                            </TextLink>
+                                        </SplitRow>
+                                    )}
+                                </Field>
+                                {selected.settings.content === 'table' || selected.settings.type === 'heatmap' ? null : (
+                                    <Field as="div">
+                                        <SectionTitle>{t('Y-axis')}</SectionTitle>
+                                        <Help>{t('Set the minimum and maximum for the y-axis (e.g. 1000, 1k, 3m).')}</Help>
+                                        {axisEdit ? (
+                                            <>
+                                                <SplitRow>
+                                                    <TextInput
+                                                        aria-label={t('Y-axis minimum')}
+                                                        placeholder={t('Minimum')}
+                                                        value={axisDraft.yMin}
+                                                        onChange={(event) => setAxisDraft((current) => ({ ...current, yMin: event.target.value }))}
+                                                    />
+                                                    <TextInput
+                                                        aria-label={t('Y-axis maximum')}
+                                                        placeholder={t('Maximum')}
+                                                        value={axisDraft.yMax}
+                                                        onChange={(event) => setAxisDraft((current) => ({ ...current, yMax: event.target.value }))}
+                                                    />
+                                                </SplitRow>
+                                                <span role="radiogroup" aria-label={t('Scale')}>
+                                                    {t('Scale')}:{' '}
+                                                    <label>
+                                                        <input
+                                                            type="radio"
+                                                            checked={axisDraft.yScale === 'linear'}
+                                                            onChange={() => setAxisDraft((current) => ({ ...current, yScale: 'linear' }))}
+                                                        />{' '}
+                                                        Linear
+                                                    </label>{' '}
+                                                    <label>
+                                                        <input
+                                                            type="radio"
+                                                            checked={axisDraft.yScale === 'log'}
+                                                            onChange={() => setAxisDraft((current) => ({ ...current, yScale: 'log' }))}
+                                                        />{' '}
+                                                        {t('Log')}
+                                                    </label>
+                                                </span>
+                                                {validateAxis(axisDraft) ? <span role="alert">{validateAxis(axisDraft)}</span> : null}
+                                                <SplitRow>
+                                                    <ToolButton type="button" onClick={() => setAxisEdit(false)}>
+                                                        {t('Cancel')}
+                                                    </ToolButton>
+                                                    <ToolButton
+                                                        type="button"
+                                                        disabled={Boolean(validateAxis(axisDraft))}
+                                                        onClick={() => {
+                                                            patchSettings(axisDraft);
+                                                            setAxisEdit(false);
+                                                        }}
+                                                    >
+                                                        {t('Update')}
+                                                    </ToolButton>
+                                                </SplitRow>
+                                            </>
+                                        ) : (
+                                            <SplitRow>
+                                                <span>
+                                                    {t('Left')} = {axisSummary(selected.settings)}
+                                                </span>
+                                                <TextLink
+                                                    type="button"
+                                                    style={{ flex: '0 0 auto' }}
+                                                    aria-label={t('Revert y-axis')}
+                                                    title={t('Revert y-axis')}
+                                                    disabled={!selected.settings.yMin && !selected.settings.yMax && selected.settings.yScale === 'linear'}
+                                                    onClick={() => patchSettings({ yMin: '', yMax: '', yScale: 'linear' })}
+                                                >
+                                                    ↺
+                                                </TextLink>
+                                                <TextLink
+                                                    type="button"
+                                                    style={{ flex: '0 0 auto' }}
+                                                    aria-label={t('Edit y-axis')}
+                                                    title={t('Edit y-axis')}
+                                                    onClick={() => {
+                                                        setAxisDraft({
+                                                            yMin: selected.settings.yMin,
+                                                            yMax: selected.settings.yMax,
+                                                            yScale: selected.settings.yScale,
+                                                        });
+                                                        setAxisEdit(true);
+                                                    }}
+                                                >
+                                                    ✎
+                                                </TextLink>
+                                            </SplitRow>
+                                        )}
+                                        <Select
+                                            aria-label={t('Tooltip decimal places')}
+                                            value={String(selected.settings.decimals ?? 4)}
+                                            onChange={(event) => patchSettings({ decimals: Number(event.target.value) })}
+                                        >
+                                            {[0, 1, 2, 3, 4].map((count) => (
+                                                <option key={count} value={count}>
+                                                    {count} {t('decimal places in tooltips')}
+                                                </option>
+                                            ))}
+                                        </Select>
+                                        <label>
+                                            <input
+                                                type="checkbox"
+                                                aria-label={t('Abbreviate numbers on the axis')}
+                                                checked={selected.settings.abbreviate !== false}
+                                                onChange={(event) => patchSettings({ abbreviate: event.target.checked })}
+                                            />{' '}
+                                            {t('Abbreviate numbers on the axis')}
+                                        </label>
+                                    </Field>
+                                )}
+                            </>
+                        ) : null}
+                    </>
+                ) : null}
+                    </>
+                )}
+                {series ? (
+                    <datalist id="metric-aggregations">
+                        {functionsFor(series.source ?? 'metric').map((item) => (
+                            <option key={item.name} value={item.label} />
+                        ))}
+                    </datalist>
                 ) : null}
             </Analysis>
             ) : (
@@ -2374,8 +2857,35 @@ export function Explorer(): React.ReactElement {
                     </IconButton>
                 </Rail>
             )}
+            {timeDialog ? (
+                <TimeRangeDialog
+                    earliest={range}
+                    latest={latest}
+                    onClose={() => setTimeDialog(false)}
+                    onApply={(earliest, end) => {
+                        setRange(earliest);
+                        setLatest(end);
+                        setZoom(null);
+                        setTimeDialog(false);
+                    }}
+                />
+            ) : null}
+            {splitDialog ? (
+                <SplitDialog
+                    dimensions={allDimensions}
+                    split={globalSplit}
+                    limit={globalLimit}
+                    onClose={() => setSplitDialog(false)}
+                    onApply={(split, limit) => {
+                        setGlobalSplit(split);
+                        setGlobalLimit(limit);
+                        setSplitDialog(false);
+                    }}
+                />
+            ) : null}
             {saveMode ? (
                 <SaveDialog
+                    globalLimit={globalLimit}
                     mode={saveMode}
                     charts={charts}
                     chartId={selectedId}

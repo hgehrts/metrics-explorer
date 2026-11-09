@@ -7,6 +7,7 @@ import { quoteSpl } from '../spl/buildMstats';
 import { collectFieldValues, runSearch } from '../search/runSearch';
 import { readableFields } from '../spl/buildMstats';
 import { splunkSearchUrl } from '../export/table';
+import { matchesQuery } from '../catalog/metricTree';
 
 const Item = styled.button`
     display: block;
@@ -26,13 +27,26 @@ function locale(): string {
     return window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1] ?? 'en-US';
 }
 
-/** Numeric-looking fields from a fieldsummary, plus any name the sample returned. */
+export type ListSection = 'bases' | 'alerts';
+
+type Part = React.ComponentType<React.PropsWithChildren<Record<string, unknown>>>;
+
+/** Base searches and alerts of the data pane. The explorer decides which section is open and how headers look. */
 export function DataLists(props: {
     catalogRange: string;
+    query: string;
+    open: string;
+    onToggle: (section: ListSection) => void;
     onAddBase: (name: string, field: string, mode: 'live' | 'cached', owner: string) => void;
+    Header: Part;
+    Body: Part;
+    Title: Part;
+    Count: Part;
+    matchCount: (count: number) => string;
 }): React.ReactElement {
-    const [basesOpen, setBasesOpen] = useState(false);
-    const [alertsOpen, setAlertsOpen] = useState(false);
+    const basesOpen = props.open === 'bases';
+    const alertsOpen = props.open === 'alerts';
+    const { Header, Body, Title, Count } = props;
     const [bases, setBases] = useState<BaseRow[]>([]);
     const [openBase, setOpenBase] = useState('');
     const [measures, setMeasures] = useState<string[]>([]);
@@ -117,13 +131,18 @@ export function DataLists(props: {
         };
     }, [alertsOpen]);
 
+    const shownBases = bases.filter((item) => matchesQuery(item.name, props.query));
+    const shownAlerts = alerts.filter((item) => matchesQuery(item.name, props.query));
+
     return (
         <>
-            <Item type="button" aria-expanded={basesOpen} onClick={() => setBasesOpen((open) => !open)}>
-                {basesOpen ? '▾' : '▸'} {t('Base Searches')}
-            </Item>
-            {basesOpen
-                ? bases.map((item) => (
+            <Header type="button" aria-expanded={basesOpen} onClick={() => props.onToggle('bases')}>
+                <span aria-hidden>{basesOpen ? '▾' : '▸'}</span> <Title>{t('Base Searches')}</Title>
+                {props.query && basesOpen ? <Count>{props.matchCount(shownBases.length)}</Count> : null}
+            </Header>
+            {basesOpen ? (
+                <Body>
+            {shownBases.map((item) => (
                       <div key={item.saved}>
                           <Item type="button" onClick={() => setOpenBase((current) => (current === item.saved ? '' : item.saved))}>
                               {item.name}
@@ -141,14 +160,17 @@ export function DataLists(props: {
                               : null}
                           {openBase === item.saved && measures.length === 0 ? <Item as="div">No fields in the preview.</Item> : null}
                       </div>
-                  ))
-                : null}
-            {basesOpen && bases.length === 0 ? <Item as="div">No base searches.</Item> : null}
-            <Item type="button" aria-expanded={alertsOpen} onClick={() => setAlertsOpen((open) => !open)}>
-                {alertsOpen ? '▾' : '▸'} {t('Alerts')}
-            </Item>
-            {alertsOpen
-                ? alerts.map((item) => (
+                  ))}
+            {shownBases.length === 0 ? <Item as="div">{t('No base searches.')}</Item> : null}
+                </Body>
+            ) : null}
+            <Header type="button" aria-expanded={alertsOpen} onClick={() => props.onToggle('alerts')}>
+                <span aria-hidden>{alertsOpen ? '▾' : '▸'}</span> <Title>{t('Alerts')}</Title>
+                {props.query && alertsOpen ? <Count>{props.matchCount(shownAlerts.length)}</Count> : null}
+            </Header>
+            {alertsOpen ? (
+                <Body>
+            {shownAlerts.map((item) => (
                       <div key={`${item.streaming ? 's' : 'a'}-${item.name}`}>
                           <Item as="div">
                               {item.name}
@@ -177,9 +199,10 @@ export function DataLists(props: {
                               Delete
                           </Item>
                       </div>
-                  ))
-                : null}
-            {alertsOpen && alerts.length === 0 ? <Item as="div">No alerts.</Item> : null}
+                  ))}
+            {shownAlerts.length === 0 ? <Item as="div">{t('(No alerts available)')}</Item> : null}
+                </Body>
+            ) : null}
         </>
     );
 }

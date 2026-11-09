@@ -3,58 +3,115 @@ import styled from 'styled-components';
 import { variables } from '@splunk/themes';
 
 import { restEntries, splunkDelete, splunkGet, splunkPost, splunkPostJson } from '../api/splunkd';
-import { alertComparator, ALERT_SCHEDULES, metricAlertCondition, scheduledAlertFields } from '../actions/alerts';
-import { appendClassicPanels, chartKind, classicDashboard, dashboardNameError, PanelSpec, studioDashboard } from '../actions/dashboards';
+import {
+    alertComparator,
+    alertCron,
+    ALERT_SCHEDULES,
+    EveryUnit,
+    metricAlertCondition,
+    metricAlertFilter,
+    scheduledAlertFields,
+    streamingAlertFields,
+    timeAmount,
+} from '../actions/alerts';
+import {
+    appendClassicPanels,
+    chartKind,
+    classicDashboard,
+    dashboardIdError,
+    dashboardIdFromTitle,
+    PanelSpec,
+    studioDashboard,
+} from '../actions/dashboards';
 import { t } from '../i18n';
 import { parseSession, SavedSession, serializeSession } from '../model/session';
-import { ChartModel, globalFiltersFor, resolveSeries, SeriesFilter } from '../model/workspace';
+import { ChartModel, GlobalSplitLimit, globalFiltersFor, resolveSeries, SeriesFilter } from '../model/workspace';
 import { baseSavedName, buildBaseSearchSpl } from '../spl/buildMstats';
 import { resolveForSource } from '../spl/functions';
 import { buildSeriesSearch } from '../spl/seriesSearch';
+import { ChartSaveMode } from './ChartView';
+import { Button, FormRow, Hint, Inline, Input, Modal, Picker } from './Modal';
 
-const Backdrop = styled.div`
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.35);
-    z-index: 20;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 48px 16px;
-`;
-
-const Dialog = styled.form`
-    width: min(560px, 100%);
-    max-height: calc(100vh - 96px);
-    overflow: auto;
-    background: ${variables.backgroundColorSection};
-    color: ${variables.contentColorDefault};
-    border-radius: 8px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-`;
-
-const Row = styled.label`
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 12px;
-`;
-
-const Actions = styled.div`
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-`;
-
-export type SaveMode = 'report' | 'panel' | 'all' | 'base' | 'alert' | 'workspace';
+export type SaveMode = ChartSaveMode | 'all-classic' | 'all-studio' | 'workspace';
 
 type WorkspaceRow = { _key?: string; name?: string; description?: string; state?: string; owner?: string; sharing?: string };
+type Sharing = 'private' | 'app';
+
+const TITLES: Record<SaveMode, string> = {
+    report: 'Save as report',
+    'panel-classic': 'Save as dashboard panel',
+    'panel-studio': 'Save to Dashboard Studio',
+    'all-classic': 'Save all charts to Classic Dashboards',
+    'all-studio': 'Save all charts to Dashboard Studio',
+    base: 'Save as base search',
+    'alert-scheduled': 'Save as scheduled alert',
+    'alert-streaming': 'Save as streaming alert',
+    workspace: 'Workspaces',
+};
+
+const Area = styled.textarea`
+    padding: 5px 8px;
+    border: 1px solid ${variables.interactiveColorBorder};
+    border-radius: 4px;
+    background: ${variables.backgroundColorSection};
+    color: ${variables.contentColorDefault};
+    font: inherit;
+    min-height: 48px;
+    resize: vertical;
+`;
+
+const Column = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+`;
+
+const Section = styled.div`
+    padding-top: 6px;
+    border-top: 1px solid ${variables.neutral200};
+    font-weight: 600;
+`;
+
+const Message = styled.div<{ $error?: boolean }>`
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: ${(props) => (props.$error ? variables.accentColorNegative : variables.backgroundColorPage)};
+    color: ${(props) => (props.$error ? variables.contentColorInverted : variables.contentColorDefault)};
+`;
+
+const ActionBox = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid ${variables.neutral200};
+    border-radius: 4px;
+`;
 
 function currentUser(): string {
     return (window as unknown as { $C?: { USERNAME?: string } }).$C?.USERNAME ?? 'admin';
+}
+
+function locale(): string {
+    return window.location.pathname.split('/').filter(Boolean)[0] ?? 'en-US';
+}
+
+function Radio<T extends string>(props: {
+    name: string;
+    label: string;
+    value: T;
+    options: Array<[T, string]>;
+    onChange: (value: T) => void;
+}): React.ReactElement {
+    return (
+        <Inline role="radiogroup" aria-label={props.label}>
+            {props.options.map(([value, label]) => (
+                <label key={value}>
+                    <input type="radio" name={props.name} checked={props.value === value} onChange={() => props.onChange(value)} /> {label}
+                </label>
+            ))}
+        </Inline>
+    );
 }
 
 function panelsFor(
@@ -63,6 +120,7 @@ function panelsFor(
     range: string,
     latest: string,
     globalSplit: string,
+    globalLimit: GlobalSplitLimit,
     globalFilters: SeriesFilter[],
     metricDims: Record<string, string[]>,
     indexes: string[],
@@ -70,7 +128,7 @@ function panelsFor(
 ): PanelSpec[] {
     const panels: PanelSpec[] = [];
     for (const chart of charts) {
-        const series = resolveSeries(chart.series, globalSplit, chart.useGlobalSplit).map((item) => ({
+        const series = resolveSeries(chart.series, globalSplit, chart.useGlobalSplit, globalLimit).map((item) => ({
             ...item,
             filters: [...globalFiltersFor(item, globalFilters, metricDims), ...item.filters],
         }));
@@ -102,6 +160,7 @@ export function SaveDialog(props: {
     catalogRange: string;
     layout: 'stack' | 'grid';
     globalSplit: string;
+    globalLimit: GlobalSplitLimit;
     globalFilters: SeriesFilter[];
     metricDims: Record<string, string[]>;
     eventIndexes: string[];
@@ -109,37 +168,69 @@ export function SaveDialog(props: {
     onClose: () => void;
     onOpenWorkspace: (session: SavedSession) => void;
 }): React.ReactElement {
+    const { mode } = props;
     const chart = props.charts.find((item) => item.id === props.chartId) ?? props.charts[0];
-    const targets = props.mode === 'all' ? props.charts : chart ? [chart] : [];
+    const series = chart?.series[0];
+    const all = mode === 'all-classic' || mode === 'all-studio';
+    const classic = mode === 'panel-classic' || mode === 'all-classic';
+    const studio = mode === 'panel-studio' || mode === 'all-studio';
+    const alert = mode === 'alert-scheduled' || mode === 'alert-streaming';
+    const targets = all ? props.charts : chart ? [chart] : [];
+
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [format, setFormat] = useState<'classic' | 'studio'>('classic');
+    const [sharing, setSharing] = useState<Sharing>('private');
+    const [dashboard, setDashboard] = useState<'new' | 'existing'>('new');
+    const [dashboardId, setDashboardId] = useState('');
     const [existing, setExisting] = useState('');
-    const [views, setViews] = useState<string[]>([]);
+    const [views, setViews] = useState<Array<{ name: string; label: string }>>([]);
+    const [timeInput, setTimeInput] = useState(true);
+    const [panelTitle, setPanelTitle] = useState(series?.metric ?? '');
+    const [studioLayout, setStudioLayout] = useState<'absolute' | 'grid'>('absolute');
+    const [content, setContent] = useState<'both' | 'chart' | 'table'>('chart');
+    const [reportPicker, setReportPicker] = useState(false);
     const [baseMode, setBaseMode] = useState<'live' | 'cached'>('live');
-    const [sharing, setSharing] = useState<'private' | 'app'>('private');
-    const [comparator, setComparator] = useState(t('greater than'));
+    const [baseCron, setBaseCron] = useState<string>(ALERT_SCHEDULES[1].id);
+    const [every, setEvery] = useState('1');
+    const [everyUnit, setEveryUnit] = useState<EveryUnit>('h');
+    const [minute, setMinute] = useState(0);
+    const [comparator, setComparator] = useState('greater than');
     const [threshold, setThreshold] = useState('');
-    const [cron, setCron] = useState<string>(ALERT_SCHEDULES[1].id);
-    const [severity, setSeverity] = useState('3');
-    const [throttle, setThrottle] = useState('');
-    const [alertKind, setAlertKind] = useState<'scheduled' | 'streaming'>('scheduled');
-    const [streamingOk, setStreamingOk] = useState(false);
+    const [windowAmount, setWindowAmount] = useState('1');
+    const [windowUnit, setWindowUnit] = useState('h');
+    const [throttleOn, setThrottleOn] = useState(true);
+    const [throttleAmount, setThrottleAmount] = useState('10');
+    const [throttleUnit, setThrottleUnit] = useState(mode === 'alert-streaming' ? 'm' : 's');
+    const [track, setTrack] = useState(true);
+    const [severity, setSeverity] = useState('1');
+    const [email, setEmail] = useState(false);
+    const [emailTo, setEmailTo] = useState('');
+    const [streamingOk, setStreamingOk] = useState(true);
     const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
     const [error, setError] = useState('');
     const [done, setDone] = useState('');
+    const [link, setLink] = useState('');
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
-        if (props.mode !== 'panel' && props.mode !== 'all') {
+        if (!classic) {
             return undefined;
         }
         let alive = true;
-        splunkGet('data/ui/views?count=100')
+        splunkGet('data/ui/views?count=200&search=isDashboard%3D1')
             .then((body) => {
-                if (alive) {
-                    setViews(restEntries(body).map((item) => item.name).filter(Boolean).sort());
+                if (!alive) {
+                    return;
                 }
+                const rows = restEntries(body)
+                    .filter((item) => {
+                        const data = item.content['eai:data'];
+                        return typeof data !== 'string' || !/<dashboard[^>]*version="2"/.test(data);
+                    })
+                    .map((item) => ({ name: item.name, label: typeof item.content.label === 'string' && item.content.label ? item.content.label : item.name }))
+                    .filter((item) => item.name)
+                    .sort((left, right) => left.label.localeCompare(right.label));
+                setViews(rows);
             })
             .catch(() => {
                 if (alive) {
@@ -149,28 +240,20 @@ export function SaveDialog(props: {
         return () => {
             alive = false;
         };
-    }, [props.mode]);
+    }, [classic]);
 
     useEffect(() => {
-        if (props.mode !== 'alert') {
+        if (mode !== 'alert-streaming') {
             return undefined;
         }
         let alive = true;
         splunkGet('alerts/metric_alerts?count=1')
-            .then(() => {
-                if (alive) {
-                    setStreamingOk(true);
-                }
-            })
-            .catch(() => {
-                if (alive) {
-                    setStreamingOk(false);
-                }
-            });
+            .then(() => alive && setStreamingOk(true))
+            .catch(() => alive && setStreamingOk(false));
         return () => {
             alive = false;
         };
-    }, [props.mode]);
+    }, [mode]);
 
     function reloadWorkspaces(): void {
         splunkGet('storage/collections/data/mx_workspaces?limit=100')
@@ -179,131 +262,216 @@ export function SaveDialog(props: {
     }
 
     useEffect(() => {
-        if (props.mode === 'workspace') {
+        if (mode === 'workspace') {
             reloadWorkspaces();
         }
-    }, [props.mode]);
+    }, [mode]);
 
-    async function save(event: React.FormEvent): Promise<void> {
-        event.preventDefault();
-        setError('');
-        setDone('');
-        const title = name.trim();
-        if (props.mode !== 'panel' && props.mode !== 'all' ? !title : !existing && !title) {
-            setError(t('Enter a name.'));
+    function panels(): PanelSpec[] {
+        const list = panelsFor(
+            targets,
+            props.span,
+            props.range,
+            props.latest,
+            props.globalSplit,
+            props.globalLimit,
+            props.globalFilters,
+            props.metricDims,
+            props.eventIndexes,
+            props.metricIndexes
+        );
+        if (list.length === 0) {
+            throw new Error(t('Nothing to save.'));
+        }
+        if (!all && panelTitle.trim()) {
+            list[0] = { ...list[0], title: panelTitle.trim() };
+        }
+        return list;
+    }
+
+    /** Private objects live in the user's namespace. Shared ones are created there too and then moved to the app. */
+    async function share(path: string): Promise<void> {
+        if (sharing !== 'app') {
             return;
         }
-        if (!existing && title && (props.mode === 'panel' || props.mode === 'all' || props.mode === 'workspace' || props.mode === 'base')) {
-            const nameError = props.mode === 'base' || props.mode === 'workspace' ? '' : dashboardNameError(title);
-            if (nameError) {
-                setError(nameError);
-                return;
-            }
+        await splunkPost(`${path}/acl`, { sharing: 'app', owner: currentUser() }, currentUser());
+    }
+
+    async function save(): Promise<void> {
+        setError('');
+        setDone('');
+        setLink('');
+        const title = name.trim();
+        const needsTitle = !(classic && dashboard === 'existing');
+        if (needsTitle && !title) {
+            setError(studio || classic ? t('Enter a dashboard title.') : t('Enter a title.'));
+            return;
         }
         setBusy(true);
         try {
-            if (props.mode === 'report' || props.mode === 'alert' || props.mode === 'panel' || props.mode === 'all') {
-                const panels = panelsFor(
-                    targets,
-                    props.span,
-                    props.range,
-                    props.latest,
-                    props.globalSplit,
-                    props.globalFilters,
-                    props.metricDims,
-                    props.eventIndexes,
-                    props.metricIndexes
-                );
-                if (panels.length === 0) {
-                    throw new Error(t('Nothing to save.'));
-                }
-                if (props.mode === 'report') {
-                    await splunkPost('saved/searches', {
-                        name: title,
-                        search: panels[0].search,
-                        'dispatch.earliest_time': panels[0].earliest,
-                        'dispatch.latest_time': panels[0].latest,
-                        description: description.trim(),
-                    });
-                    setDone(`${t('Saved report')} ${title}.`);
-                } else if (props.mode === 'alert') {
-                    await saveAlert(panels[0], title);
-                } else {
-                    await saveDashboard(panels, title);
-                }
-            } else if (props.mode === 'base') {
+            if (mode === 'report') {
+                await saveReport(title);
+            } else if (classic) {
+                await saveClassic(title);
+            } else if (studio) {
+                await saveStudio(title);
+            } else if (mode === 'alert-scheduled') {
+                await saveScheduled(title);
+            } else if (mode === 'alert-streaming') {
+                await saveStreaming(title);
+            } else if (mode === 'base') {
                 await saveBase(title);
             } else {
                 await saveWorkspace(title);
             }
         } catch (caught) {
-            setError(caught instanceof Error ? caught.message : t('Could not save.'));
+            setError(caught instanceof Error ? t(caught.message) : t('Could not save.'));
         } finally {
             setBusy(false);
         }
     }
 
-    async function saveDashboard(panels: PanelSpec[], title: string): Promise<void> {
-        const label = title || existing;
-        if (existing) {
-            if (format === 'studio') {
-                throw new Error(t('Adding panels to an existing dashboard works for Classic dashboards. Create a new Dashboard Studio dashboard.'));
+    async function saveReport(title: string): Promise<void> {
+        const panel = panels()[0];
+        await splunkPost(
+            'saved/searches',
+            {
+                name: title,
+                search: panel.search,
+                description: description.trim(),
+                'dispatch.earliest_time': panel.earliest,
+                'dispatch.latest_time': panel.latest,
+                'display.general.type': content === 'table' ? 'statistics' : 'visualizations',
+                'display.visualizations.show': content === 'table' ? '0' : '1',
+                'display.statistics.show': content === 'chart' ? '0' : '1',
+                'display.visualizations.charting.chart': panel.chart,
+                'display.general.timeRangePicker.show': reportPicker ? '1' : '0',
+                'request.ui_dispatch_view': 'search',
+            },
+            currentUser()
+        );
+        await share(`saved/searches/${encodeURIComponent(title)}`);
+        setDone(`${t('Saved report')} ${title}.`);
+    }
+
+    async function saveClassic(title: string): Promise<void> {
+        const list = panels();
+        if (dashboard === 'existing') {
+            if (!existing) {
+                throw new Error(t('Select a dashboard.'));
             }
             const body = await splunkGet(`data/ui/views/${encodeURIComponent(existing)}`);
             const entry = restEntries(body)[0];
             const current = typeof entry?.content['eai:data'] === 'string' ? entry.content['eai:data'] : '';
-            const next = appendClassicPanels(current, panels);
-            await splunkPost(`data/ui/views/${encodeURIComponent(existing)}`, { 'eai:data': next });
+            await splunkPost(`data/ui/views/${encodeURIComponent(existing)}`, { 'eai:data': appendClassicPanels(current, list) });
             setDone(`${t('Added the charts to')} ${existing}.`);
+            setLink(`/${locale()}/app/metrics_explorer/${encodeURIComponent(existing)}`);
             return;
         }
-        const xml = format === 'studio' ? studioDashboard(label, panels) : classicDashboard(label, panels);
-        await splunkPost('data/ui/views', { name: label, 'eai:data': xml });
-        setDone(`${t('Saved dashboard')} ${label}.`);
-    }
-
-    async function saveAlert(panel: PanelSpec, title: string): Promise<void> {
-        const series = chart?.series[0];
-        if (alertKind === 'streaming') {
-            if (!streamingOk) {
-                throw new Error(t('Streaming alerts are not available on this instance.'));
-            }
-            if (!series || (series.source ?? 'metric') !== 'metric') {
-                throw new Error(t('A streaming alert needs a metric series.'));
-            }
-            const aggregation = resolveForSource('metric', series.aggregation);
-            if (!aggregation) {
-                throw new Error(t('Unknown aggregation.'));
-            }
-            await splunkPost('alerts/metric_alerts', {
-                name: title,
-                condition: metricAlertCondition(aggregation.name, series.metric, alertComparator(comparator), threshold),
-                metric_indexes: props.metricIndexes === undefined ? '*' : props.metricIndexes.join(','),
-                filter: '',
-                'trigger.evaluation_per': '1m',
-                'trigger.threshold': '1',
-            });
-            setDone(`${t('Saved streaming alert')} ${title}.`);
-            return;
+        const id = dashboardId.trim();
+        const idError = dashboardIdError(id);
+        if (idError) {
+            throw new Error(t(idError));
         }
         await splunkPost(
-            'saved/searches',
-            scheduledAlertFields({
-                name: title,
-                search: panel.search,
-                earliest: panel.earliest,
-                comparator: alertComparator(comparator),
-                threshold,
-                cron,
-                severity: Number(severity),
-                throttle,
-            })
+            'data/ui/views',
+            { name: id, 'eai:data': classicDashboard(title, list, { description, timeInput }) },
+            currentUser()
         );
+        await share(`data/ui/views/${encodeURIComponent(id)}`);
+        setDone(`${t('Saved dashboard')} ${title}.`);
+        setLink(`/${locale()}/app/metrics_explorer/${encodeURIComponent(id)}`);
+    }
+
+    async function saveStudio(title: string): Promise<void> {
+        const id = dashboardIdFromTitle(title);
+        await splunkPost(
+            'data/ui/views',
+            { name: id, 'eai:data': studioDashboard(title, panels(), { description, layout: studioLayout }) },
+            currentUser()
+        );
+        await share(`data/ui/views/${encodeURIComponent(id)}`);
+        setDone(`${t('Saved dashboard')} ${title}.`);
+        setLink(`/${locale()}/app/metrics_explorer/${encodeURIComponent(id)}`);
+    }
+
+    function throttle(units: readonly string[]): string {
+        if (!throttleOn) {
+            return '';
+        }
+        const value = timeAmount(throttleAmount, throttleUnit, units);
+        if (!value) {
+            throw new Error(t('Enter a whole number for the throttle.'));
+        }
+        return value;
+    }
+
+    function recipients(): string {
+        return email ? emailTo : '';
+    }
+
+    async function saveScheduled(title: string): Promise<void> {
+        const panel = panels()[0];
+        const cron = alertCron(every, everyUnit, minute);
+        if (!cron) {
+            throw new Error(t('Enter how often the alert runs, for example every 1 hour.'));
+        }
+        const window = timeAmount(windowAmount, windowUnit, ['m', 'h', 'd', 'w']);
+        if (!window) {
+            throw new Error(t('Enter a whole number for the time window.'));
+        }
+        const fields = scheduledAlertFields({
+            name: title,
+            search: panel.search,
+            earliest: `-${window}`,
+            comparator: alertComparator(comparator),
+            threshold,
+            cron,
+            severity: Number(severity),
+            throttle: throttle(['s', 'm', 'h', 'd']),
+            description,
+            emailTo: recipients(),
+        });
+        if (!track) {
+            fields['alert.track'] = '0';
+        }
+        await splunkPost('saved/searches', fields, currentUser());
+        await share(`saved/searches/${encodeURIComponent(title)}`);
         setDone(`${t('Saved scheduled alert')} ${title}.`);
     }
 
+    async function saveStreaming(title: string): Promise<void> {
+        if (!streamingOk) {
+            throw new Error(t('Streaming alerts are not available on this instance.'));
+        }
+        if (!series || (series.source ?? 'metric') !== 'metric') {
+            throw new Error(t('A streaming alert needs a metric series.'));
+        }
+        const aggregation = resolveForSource('metric', series.aggregation);
+        if (!aggregation) {
+            throw new Error(t('Unknown aggregation.'));
+        }
+        const resolved = resolveSeries([series], props.globalSplit, chart?.useGlobalSplit ?? true, props.globalLimit)[0] ?? series;
+        const fields = streamingAlertFields({
+            name: title,
+            condition: metricAlertCondition(aggregation.name, series.metric, alertComparator(comparator), threshold),
+            metricIndexes: props.metricIndexes === undefined || props.metricIndexes.length === 0 ? '*' : props.metricIndexes.join(','),
+            filter: metricAlertFilter([...globalFiltersFor(series, props.globalFilters, props.metricDims), ...series.filters]),
+            groupby: resolved.splitBy ?? '',
+            severity: Number(severity),
+            throttleMinutes: throttleOn ? throttleAmount : '',
+            description,
+            emailTo: recipients(),
+        });
+        if (!track) {
+            fields['splunk_ui.track'] = '0';
+        }
+        await splunkPost('alerts/metric_alerts', fields, currentUser());
+        await share(`alerts/metric_alerts/${encodeURIComponent(title)}`);
+        setDone(`${t('Saved streaming alert')} ${title}.`);
+    }
+
     async function saveBase(title: string): Promise<void> {
-        const series = chart?.series[0];
         if (!series || series.source === 'base') {
             throw new Error(t('Open a metric, event, or dataset chart first.'));
         }
@@ -326,7 +494,7 @@ export function SaveDialog(props: {
             is_scheduled: baseMode === 'cached' ? '1' : '0',
         };
         if (baseMode === 'cached') {
-            fields.cron_schedule = cron;
+            fields.cron_schedule = baseCron;
         }
         await splunkPost('saved/searches', fields, owner);
         if (sharing === 'app') {
@@ -342,7 +510,7 @@ export function SaveDialog(props: {
             description: description.trim(),
             spl: search,
             mode: baseMode,
-            cron: baseMode === 'cached' ? cron : '',
+            cron: baseMode === 'cached' ? baseCron : '',
             saved_search: saved,
             owner,
             sharing,
@@ -361,6 +529,7 @@ export function SaveDialog(props: {
                 latest: props.latest,
                 catalogRange: props.catalogRange,
                 globalSplit: props.globalSplit,
+                globalLimit: props.globalLimit,
                 globalFilters: props.globalFilters,
             },
             Date.now()
@@ -380,193 +549,423 @@ export function SaveDialog(props: {
 
     const user = currentUser();
     const visibleWorkspaces = workspaces.filter((item) => item.sharing === 'app' || !item.owner || item.owner === user);
+    const span = chart?.settings.span || props.span;
+    const finished = Boolean(done);
+
+    const sharingRow = (
+        <FormRow>
+            <span>{t('Permissions')}</span>
+            <Radio
+                name="mx-sharing"
+                label={t('Permissions')}
+                value={sharing}
+                options={[
+                    ['private', t('Private')],
+                    ['app', t('Shared in App')],
+                ]}
+                onChange={setSharing}
+            />
+        </FormRow>
+    );
+
+    const titleRow = (label: string, hint?: string) => (
+        <FormRow>
+            <span>{label}</span>
+            <Column>
+                <Input aria-label={label} value={name} onChange={(event) => setName(event.target.value)} />
+                {hint ? <Hint>{hint}</Hint> : null}
+            </Column>
+        </FormRow>
+    );
+
+    const descriptionRow = (
+        <FormRow>
+            <span>{t('Description')}</span>
+            <Area aria-label={t('Description')} placeholder={t('optional')} value={description} onChange={(event) => setDescription(event.target.value)} />
+        </FormRow>
+    );
 
     return (
-        <Backdrop onMouseDown={props.onClose}>
-            <Dialog
-                aria-label={t('Save')}
-                onMouseDown={(event) => event.stopPropagation()}
-                onSubmit={(event) => {
-                    void save(event);
-                }}
-            >
-                <strong>
-                    {props.mode === 'report'
-                        ? t('Save as report')
-                        : props.mode === 'panel'
-                          ? t('Save as dashboard panel')
-                          : props.mode === 'all'
-                            ? t('Save all charts')
-                            : props.mode === 'base'
-                              ? t('Save as base search')
-                              : props.mode === 'alert'
-                                ? t('Create alert')
-                                : t('Workspaces')}
-                </strong>
-                {props.mode === 'panel' || props.mode === 'all' ? (
-                    <Row>
-                        {t('Format')}
-                        <select aria-label={t('Dashboard format')} value={format} onChange={(event) => setFormat(event.target.value === 'studio' ? 'studio' : 'classic')}>
-                            <option value="classic">{t('Classic')}</option>
-                            <option value="studio">{t('Dashboard Studio')}</option>
-                        </select>
-                    </Row>
-                ) : null}
-                {props.mode === 'panel' || props.mode === 'all' ? (
-                    <Row>
-                        {t('Existing dashboard')}
-                        <select aria-label={t('Existing dashboard')} value={existing} onChange={(event) => setExisting(event.target.value)}>
-                            <option value="">{t('New dashboard')}</option>
-                            {views.map((view) => (
-                                <option key={view} value={view}>
-                                    {view}
-                                </option>
-                            ))}
-                        </select>
-                    </Row>
-                ) : null}
-                {props.mode === 'alert' ? (
+        <Modal
+            title={t(TITLES[mode])}
+            width={alert ? 640 : 560}
+            onClose={props.onClose}
+            onSubmit={() => {
+                if (!finished && mode !== 'workspace') {
+                    void save();
+                }
+            }}
+            footer={
+                finished && mode !== 'workspace' ? (
                     <>
-                        <Row>
-                            {t('Alert type')}
-                            <select
-                                aria-label={t('Alert type')}
-                                value={alertKind}
-                                onChange={(event) => setAlertKind(event.target.value === 'streaming' ? 'streaming' : 'scheduled')}
-                            >
-                                <option value="scheduled">{t('Scheduled')}</option>
-                                {streamingOk ? <option value="streaming">{t('Streaming')}</option> : null}
-                            </select>
-                        </Row>
-                        <Row>
-                            {t('Condition')}
-                            <select aria-label={t('Alert comparator')} value={comparator} onChange={(event) => setComparator(event.target.value)}>
-                                <option value="greater than">{t('greater than')}</option>
-                                <option value="less than">{t('less than')}</option>
-                                <option value="equal to">{t('equal to')}</option>
-                            </select>
-                        </Row>
-                        <Row>
-                            {t('Threshold')}
-                            <input aria-label={t('Alert threshold')} value={threshold} onChange={(event) => setThreshold(event.target.value)} />
-                        </Row>
-                        {alertKind === 'scheduled' ? (
-                            <>
-                                <Row>
-                                    {t('Frequency')}
-                                    <select aria-label={t('Alert frequency')} value={cron} onChange={(event) => setCron(event.target.value)}>
-                                        {ALERT_SCHEDULES.map((item) => (
-                                            <option key={item.id} value={item.id}>
-                                                {item.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </Row>
-                                <Row>
-                                    {t('Severity')}
-                                    <select aria-label={t('Alert severity')} value={severity} onChange={(event) => setSeverity(event.target.value)}>
-                                        <option value="1">{t('Info')}</option>
-                                        <option value="2">{t('Low')}</option>
-                                        <option value="3">{t('Medium')}</option>
-                                        <option value="4">{t('High')}</option>
-                                        <option value="5">{t('Critical')}</option>
-                                    </select>
-                                </Row>
-                                <Row>
-                                    {t('Throttle')}
-                                    <input aria-label={t('Alert throttle')} placeholder={t('1h, or empty')} value={throttle} onChange={(event) => setThrottle(event.target.value)} />
-                                </Row>
-                            </>
+                        {link ? (
+                            <Button as="a" href={link} target="_blank" rel="noopener">
+                                {t('View dashboard')}
+                            </Button>
                         ) : null}
+                        <Button type="button" $primary onClick={props.onClose}>
+                            {t('Done')}
+                        </Button>
                     </>
-                ) : null}
-                {props.mode === 'base' ? (
-                    <Row>
-                        {t('Mode')}
-                        <select aria-label={t('Base search mode')} value={baseMode} onChange={(event) => setBaseMode(event.target.value === 'cached' ? 'cached' : 'live')}>
-                            <option value="live">{t('Live')}</option>
-                            <option value="cached">{t('Cached')}</option>
-                        </select>
-                    </Row>
-                ) : null}
-                {props.mode === 'base' || props.mode === 'workspace' ? (
-                    <Row>
-                        {t('Sharing')}
-                        <select aria-label={t('Sharing')} value={sharing} onChange={(event) => setSharing(event.target.value === 'app' ? 'app' : 'private')}>
-                            <option value="private">{t('Private')}</option>
-                            <option value="app">{t('App')}</option>
-                        </select>
-                    </Row>
-                ) : null}
-                {props.mode === 'base' && baseMode === 'cached' ? (
-                    <Row>
-                        {t('Schedule')}
-                        <select aria-label={t('Base search schedule')} value={cron} onChange={(event) => setCron(event.target.value)}>
-                            {ALERT_SCHEDULES.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.label}
-                                </option>
-                            ))}
-                        </select>
-                    </Row>
-                ) : null}
-                {!existing || (props.mode !== 'panel' && props.mode !== 'all') ? (
-                    <Row>
-                        {t('Name')}
-                        <input aria-label={t('Save name')} value={name} onChange={(event) => setName(event.target.value)} />
-                    </Row>
-                ) : null}
-                {props.mode === 'report' || props.mode === 'base' || props.mode === 'workspace' ? (
-                    <Row>
-                        {t('Description')}
-                        <input aria-label={t('Save description')} value={description} onChange={(event) => setDescription(event.target.value)} />
-                    </Row>
-                ) : null}
-                {error ? <span role="alert">{error}</span> : null}
-                {done ? <span role="status">{done}</span> : null}
-                {props.mode === 'workspace' ? (
-                    <div>
-                        {visibleWorkspaces.length === 0 ? <span>{t('No saved workspaces.')}</span> : null}
-                        {visibleWorkspaces.map((item) => (
-                            <div key={item._key ?? item.name}>
-                                <button
+                ) : (
+                    <>
+                        <Button type="button" onClick={props.onClose}>
+                            {mode === 'workspace' ? t('Close') : t('Cancel')}
+                        </Button>
+                        <Button type={mode === 'workspace' ? 'button' : 'submit'} $primary disabled={busy} onClick={mode === 'workspace' ? () => void save() : undefined}>
+                            {busy ? t('Saving…') : t('Save')}
+                        </Button>
+                    </>
+                )
+            }
+        >
+            {finished ? <Message role="status">{done}</Message> : null}
+            {!finished && mode === 'report' ? (
+                <>
+                    {titleRow(t('Title'))}
+                    {descriptionRow}
+                    <FormRow>
+                        <span>{t('Content')}</span>
+                        <Radio
+                            name="mx-report-content"
+                            label={t('Content')}
+                            value={content}
+                            options={[
+                                ['both', t('Line chart + table')],
+                                ['chart', t('Line chart')],
+                                ['table', t('Statistics table')],
+                            ]}
+                            onChange={setContent}
+                        />
+                    </FormRow>
+                    <FormRow>
+                        <span>{t('Time range picker')}</span>
+                        <Radio
+                            name="mx-report-picker"
+                            label={t('Time range picker')}
+                            value={reportPicker ? 'yes' : 'no'}
+                            options={[
+                                ['yes', t('Yes')],
+                                ['no', t('No')],
+                            ]}
+                            onChange={(value) => setReportPicker(value === 'yes')}
+                        />
+                    </FormRow>
+                    {sharingRow}
+                </>
+            ) : null}
+            {!finished && classic ? (
+                <>
+                    <FormRow>
+                        <span>{t('Dashboard')}</span>
+                        <Radio
+                            name="mx-dashboard"
+                            label={t('Dashboard')}
+                            value={dashboard}
+                            options={[
+                                ['new', t('New')],
+                                ['existing', t('Existing')],
+                            ]}
+                            onChange={setDashboard}
+                        />
+                    </FormRow>
+                    {dashboard === 'existing' ? (
+                        <FormRow>
+                            <span>{t('Dashboard')}</span>
+                            <Picker aria-label={t('Existing dashboard')} value={existing} onChange={(event) => setExisting(event.target.value)}>
+                                <option value="">{t('Select a dashboard')}</option>
+                                {views.map((view) => (
+                                    <option key={view.name} value={view.name}>
+                                        {view.label}
+                                    </option>
+                                ))}
+                            </Picker>
+                        </FormRow>
+                    ) : (
+                        <>
+                            {titleRow(t('Dashboard title'))}
+                            <FormRow>
+                                <span>{t('Dashboard ID')}</span>
+                                <Column>
+                                    <Input
+                                        aria-label={t('Dashboard ID')}
+                                        value={dashboardId}
+                                        placeholder={dashboardIdFromTitle(name)}
+                                        onChange={(event) => setDashboardId(event.target.value)}
+                                        onFocus={() => {
+                                            if (!dashboardId && name.trim()) {
+                                                setDashboardId(dashboardIdFromTitle(name));
+                                            }
+                                        }}
+                                    />
+                                    <Hint>{t('The dashboard ID may only contain letters, numbers, and underscores.')}</Hint>
+                                </Column>
+                            </FormRow>
+                            <FormRow>
+                                <span>{t('Dashboard description')}</span>
+                                <Area
+                                    aria-label={t('Dashboard description')}
+                                    placeholder={t('optional')}
+                                    value={description}
+                                    onChange={(event) => setDescription(event.target.value)}
+                                />
+                            </FormRow>
+                            <FormRow>
+                                <span />
+                                <label>
+                                    <input type="checkbox" checked={timeInput} onChange={(event) => setTimeInput(event.target.checked)} />{' '}
+                                    {t('Add interactive time picker')}
+                                </label>
+                            </FormRow>
+                            {sharingRow}
+                        </>
+                    )}
+                    {!all ? (
+                        <FormRow>
+                            <span>{t('Panel title')}</span>
+                            <Input aria-label={t('Panel title')} value={panelTitle} onChange={(event) => setPanelTitle(event.target.value)} />
+                        </FormRow>
+                    ) : null}
+                </>
+            ) : null}
+            {!finished && studio ? (
+                <>
+                    {titleRow(t('Title'))}
+                    {descriptionRow}
+                    <FormRow>
+                        <span>{t('Layout')}</span>
+                        <Radio
+                            name="mx-studio-layout"
+                            label={t('Layout')}
+                            value={studioLayout}
+                            options={[
+                                ['absolute', t('Absolute')],
+                                ['grid', t('Grid')],
+                            ]}
+                            onChange={setStudioLayout}
+                        />
+                    </FormRow>
+                    {sharingRow}
+                </>
+            ) : null}
+            {!finished && alert ? (
+                <>
+                    {mode === 'alert-streaming' && !streamingOk ? (
+                        <Message $error role="alert">
+                            {t('Streaming alerts are not available on this instance.')}
+                        </Message>
+                    ) : null}
+                    {titleRow(t('Title'))}
+                    {descriptionRow}
+                    {sharingRow}
+                    {mode === 'alert-scheduled' ? (
+                        <FormRow>
+                            <span>{t('Evaluate every')}</span>
+                            <Inline>
+                                <Input aria-label={t('Evaluate every')} style={{ width: 56 }} value={every} onChange={(event) => setEvery(event.target.value)} />
+                                <Picker aria-label={t('Evaluation unit')} value={everyUnit} onChange={(event) => setEveryUnit(event.target.value as EveryUnit)}>
+                                    <option value="m">{t('Minutes')}</option>
+                                    <option value="h">{t('Hours')}</option>
+                                    <option value="d">{t('Days')}</option>
+                                </Picker>
+                                {everyUnit !== 'm' ? (
+                                    <>
+                                        {t('At')}
+                                        <Picker aria-label={t('Minutes past the hour')} value={minute} onChange={(event) => setMinute(Number(event.target.value))}>
+                                            {[0, 15, 30, 45].map((value) => (
+                                                <option key={value} value={value}>
+                                                    {value}
+                                                </option>
+                                            ))}
+                                        </Picker>
+                                        {t('minutes past the hour')}
+                                    </>
+                                ) : null}
+                            </Inline>
+                        </FormRow>
+                    ) : null}
+                    <Section>{t('Trigger')}</Section>
+                    <FormRow>
+                        <span>{t('Alert when')}</span>
+                        <Column>
+                            <span>
+                                {series?.metric ?? ''} ({t('over')} {span} {t('intervals')})
+                            </span>
+                            <Inline>
+                                <Picker aria-label={t('Alert comparator')} value={comparator} onChange={(event) => setComparator(event.target.value)}>
+                                    <option value="greater than">{t('Is greater than')}</option>
+                                    <option value="less than">{t('Is less than')}</option>
+                                    <option value="equal to">{t('Is equal to')}</option>
+                                </Picker>
+                                <Input aria-label={t('Alert threshold')} style={{ width: 96 }} value={threshold} onChange={(event) => setThreshold(event.target.value)} />
+                            </Inline>
+                        </Column>
+                    </FormRow>
+                    {mode === 'alert-scheduled' ? (
+                        <FormRow>
+                            <span>{t('In the last')}</span>
+                            <Inline>
+                                <Input aria-label={t('In the last')} style={{ width: 56 }} value={windowAmount} onChange={(event) => setWindowAmount(event.target.value)} />
+                                <Picker aria-label={t('Time window unit')} value={windowUnit} onChange={(event) => setWindowUnit(event.target.value)}>
+                                    <option value="m">{t('Minutes')}</option>
+                                    <option value="h">{t('Hours')}</option>
+                                    <option value="d">{t('Days')}</option>
+                                    <option value="w">{t('Weeks')}</option>
+                                </Picker>
+                            </Inline>
+                        </FormRow>
+                    ) : null}
+                    <FormRow>
+                        <span>{t('Throttle')}</span>
+                        <Column>
+                            <label>
+                                <input type="checkbox" checked={throttleOn} onChange={(event) => setThrottleOn(event.target.checked)} /> {t('Suppress triggering for')}
+                            </label>
+                            {throttleOn ? (
+                                <Inline>
+                                    <Input aria-label={t('Suppress triggering for')} style={{ width: 56 }} value={throttleAmount} onChange={(event) => setThrottleAmount(event.target.value)} />
+                                    {mode === 'alert-streaming' ? (
+                                        <span>{t('Minutes')}</span>
+                                    ) : (
+                                        <Picker aria-label={t('Throttle unit')} value={throttleUnit} onChange={(event) => setThrottleUnit(event.target.value)}>
+                                            <option value="s">{t('Seconds')}</option>
+                                            <option value="m">{t('Minutes')}</option>
+                                            <option value="h">{t('Hours')}</option>
+                                            <option value="d">{t('Days')}</option>
+                                        </Picker>
+                                    )}
+                                </Inline>
+                            ) : null}
+                        </Column>
+                    </FormRow>
+                    <Section>{t('Trigger actions')}</Section>
+                    {track ? (
+                        <ActionBox>
+                            <Inline style={{ justifyContent: 'space-between' }}>
+                                <strong>{t('Add to Triggered Alerts')}</strong>
+                                <Button type="button" aria-label={t('Remove action')} onClick={() => setTrack(false)}>
+                                    ×
+                                </Button>
+                            </Inline>
+                            <FormRow>
+                                <span>{t('Severity')}</span>
+                                <Picker aria-label={t('Alert severity')} value={severity} onChange={(event) => setSeverity(event.target.value)}>
+                                    <option value="1">{t('Info')}</option>
+                                    <option value="2">{t('Low')}</option>
+                                    <option value="3">{t('Medium')}</option>
+                                    <option value="4">{t('High')}</option>
+                                    <option value="5">{t('Critical')}</option>
+                                </Picker>
+                            </FormRow>
+                        </ActionBox>
+                    ) : null}
+                    {email ? (
+                        <ActionBox>
+                            <Inline style={{ justifyContent: 'space-between' }}>
+                                <strong>{t('Send email')}</strong>
+                                <Button type="button" aria-label={t('Remove action')} onClick={() => setEmail(false)}>
+                                    ×
+                                </Button>
+                            </Inline>
+                            <FormRow>
+                                <span>{t('To')}</span>
+                                <Column>
+                                    <Input aria-label={t('Email recipients')} value={emailTo} onChange={(event) => setEmailTo(event.target.value)} />
+                                    <Hint>{t('Comma separated list of email addresses.')}</Hint>
+                                </Column>
+                            </FormRow>
+                        </ActionBox>
+                    ) : null}
+                    <Inline>
+                        {!track ? (
+                            <Button type="button" onClick={() => setTrack(true)}>
+                                + {t('Add to Triggered Alerts')}
+                            </Button>
+                        ) : null}
+                        {!email ? (
+                            <Button type="button" onClick={() => setEmail(true)}>
+                                + {t('Send email')}
+                            </Button>
+                        ) : null}
+                    </Inline>
+                </>
+            ) : null}
+            {!finished && mode === 'base' ? (
+                <>
+                    {titleRow(t('Name'))}
+                    {descriptionRow}
+                    <FormRow>
+                        <span>{t('Mode')}</span>
+                        <Radio
+                            name="mx-base-mode"
+                            label={t('Base search mode')}
+                            value={baseMode}
+                            options={[
+                                ['live', t('Live')],
+                                ['cached', t('Cached')],
+                            ]}
+                            onChange={setBaseMode}
+                        />
+                    </FormRow>
+                    {baseMode === 'cached' ? (
+                        <FormRow>
+                            <span>{t('Schedule')}</span>
+                            <Picker aria-label={t('Base search schedule')} value={baseCron} onChange={(event) => setBaseCron(event.target.value)}>
+                                {ALERT_SCHEDULES.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {t(item.label)}
+                                    </option>
+                                ))}
+                            </Picker>
+                        </FormRow>
+                    ) : null}
+                    {sharingRow}
+                </>
+            ) : null}
+            {mode === 'workspace' ? (
+                <>
+                    {titleRow(t('Name'))}
+                    {descriptionRow}
+                    {sharingRow}
+                    {done ? <Message role="status">{done}</Message> : null}
+                    <Section>{t('Saved workspaces')}</Section>
+                    {visibleWorkspaces.length === 0 ? <Hint>{t('No saved workspaces.')}</Hint> : null}
+                    {visibleWorkspaces.map((item) => (
+                        <Inline key={item._key ?? item.name} style={{ justifyContent: 'space-between' }}>
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    const session = parseSession(typeof item.state === 'string' ? item.state : null);
+                                    if (!session) {
+                                        setError(t('That workspace cannot be opened.'));
+                                        return;
+                                    }
+                                    props.onOpenWorkspace(session);
+                                    props.onClose();
+                                }}
+                            >
+                                {t('Open workspace')} {item.name}
+                            </Button>
+                            {item._key ? (
+                                <Button
                                     type="button"
+                                    aria-label={`${t('Delete workspace')} ${item.name ?? ''}`}
                                     onClick={() => {
-                                        const session = parseSession(typeof item.state === 'string' ? item.state : null);
-                                        if (!session) {
-                                            setError(t('That workspace cannot be opened.'));
-                                            return;
-                                        }
-                                        props.onOpenWorkspace(session);
-                                        props.onClose();
+                                        void splunkDelete(`storage/collections/data/mx_workspaces/${encodeURIComponent(item._key ?? '')}`).then(reloadWorkspaces);
                                     }}
                                 >
-                                    {t('Open workspace')} {item.name}
-                                </button>
-                                {item._key ? (
-                                    <button
-                                        type="button"
-                                        aria-label={`Delete workspace ${item.name ?? ''}`}
-                                        onClick={() => {
-                                            void splunkDelete(`storage/collections/data/mx_workspaces/${encodeURIComponent(item._key ?? '')}`).then(reloadWorkspaces);
-                                        }}
-                                    >
-                                        {t('Delete')}
-                                    </button>
-                                ) : null}
-                            </div>
-                        ))}
-                    </div>
-                ) : null}
-                <Actions>
-                    <button type="button" onClick={props.onClose}>
-                        {t('Close')}
-                    </button>
-                    <button type="submit" disabled={busy}>
-                        {busy ? t('Saving…') : t('Save')}
-                    </button>
-                </Actions>
-            </Dialog>
-        </Backdrop>
+                                    {t('Delete')}
+                                </Button>
+                            ) : null}
+                        </Inline>
+                    ))}
+                </>
+            ) : null}
+            {error ? (
+                <Message $error role="alert">
+                    {error}
+                </Message>
+            ) : null}
+        </Modal>
     );
 }

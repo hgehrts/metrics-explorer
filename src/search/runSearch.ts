@@ -60,6 +60,14 @@ export function runSearch(
     };
 }
 
+/** Fields every metric data point has. mcatalog leaves them out of `_dims`, but they split and filter like dimensions. */
+export const DEFAULT_DIMENSIONS = ['host', 'source', 'sourcetype'] as const;
+
+/** Dimensions from a `values(_dims)` catalog search, plus host, source, and sourcetype. */
+export function collectDimensions(payload: SearchPayload): string[] {
+    return [...new Set([...collectFieldValues(payload, '_dims'), ...DEFAULT_DIMENSIONS])].sort();
+}
+
 export function collectFieldValues(payload: SearchPayload, fieldIncludes: string): string[] {
     const names = new Set<string>();
     for (const row of payload.results ?? []) {

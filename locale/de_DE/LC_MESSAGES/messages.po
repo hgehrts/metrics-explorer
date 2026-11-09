@@ -627,3 +627,561 @@ msgstr "Statistiktabelle"
 
 msgid "Heatmap"
 msgstr "Heatmap"
+
+msgid "(No alerts available)"
+msgstr "(Nein Benachrichtigungen verfügbar)"
+
+msgid "+ Add dimension filter"
+msgstr "+ Dimensionsfilter hinzufügen"
+
+msgid "+ Add new reference line"
+msgstr "+ Neue Bezugslinie hinzufügen"
+
+msgid "+ Percentile"
+msgstr "+ Perzentil"
+
+msgid "1 match found"
+msgstr "1 Übereinstimmung gefunden"
+
+msgid "2 days before"
+msgstr "vor 2 Tagen"
+
+msgid "2 hours before"
+msgstr "vor 2 Stunden"
+
+msgid "24 hours before"
+msgstr "vor 24 Stunden"
+
+msgid "30 minutes before"
+msgstr "vor 30 Minuten"
+
+msgid "60 minutes before"
+msgstr "vor 60 Minuten"
+
+msgid "7 days before"
+msgstr "vor 7 Tagen"
+
+msgid "Absolute"
+msgstr "Absolutwert"
+
+msgid "Add a horizontal line to show significant values or thresholds."
+msgstr "Fügt eine neue horizontale Linie hinzu, um signifikante Werte oder Schwellenwerte anzuzeigen."
+
+msgid "Add interactive time picker"
+msgstr "Interaktives Zeitsteuerelement hinzufügen"
+
+msgid "Add new filter"
+msgstr "Neuen Filter hinzufügen"
+
+msgid "Add new reference line"
+msgstr "Neue Bezugslinie hinzufügen"
+
+msgid "Add to Triggered Alerts"
+msgstr "Zu „Ausgelöste Benachrichtigungen“ hinzufügen"
+
+msgid "Add to selected chart"
+msgstr "Zu ausgewähltem Diagramm hinzufügen"
+
+msgid "Aggregation"
+msgstr "Aggregation"
+
+msgid "Alert when"
+msgstr "Benachrichtigen, wenn"
+
+msgid "Apply"
+msgstr "Anwenden"
+
+msgid "At"
+msgstr "Um"
+
+msgid "Auto"
+msgstr "Automatisch"
+
+msgid "Auto-refresh settings"
+msgstr "Einstellungen für automatisches Aktualisieren"
+
+msgid "Calculation"
+msgstr "Berechnung"
+
+msgid "Clear search"
+msgstr "Suche löschen"
+
+msgid "Clear selections"
+msgstr "Auswahlen aufheben"
+
+msgid "Clone"
+msgstr "Klonen"
+
+msgid "Clone this panel"
+msgstr "Dieses Teilfenster klonen"
+
+msgid "Comma separated list of email addresses."
+msgstr "Durch Kommas getrennte Liste von E-Mail-Adressen."
+
+msgid "Content"
+msgstr "Inhalt"
+
+msgid "Create new filter"
+msgstr "Neuen Filter erstellen"
+
+msgid "Current chart"
+msgstr "Aktuelles Diagramm"
+
+msgid "Custom time range"
+msgstr "Benutzerdefinierter Zeitraum"
+
+msgid "Customize the label (optional)."
+msgstr "Beschriftung anpassen (optional)."
+
+msgid "Daily"
+msgstr "Täglich"
+
+msgid "Dashboard"
+msgstr "Dashboard"
+
+msgid "Dashboard ID"
+msgstr "Dashboard-ID"
+
+msgid "Dashboard description"
+msgstr "Dashboard-Beschreibung"
+
+msgid "Dashboard title"
+msgstr "Dashboard-Titel"
+
+msgid "Data filters"
+msgstr "Datenfilter"
+
+msgid "Data structure"
+msgstr "Datenstruktur"
+
+msgid "Date & time range"
+msgstr "Datums- und Zeitbereich"
+
+msgid "Days"
+msgstr "Tage"
+
+msgid "Days ago"
+msgstr "Tage zuvor"
+
+msgid "Delete workspace"
+msgstr "Arbeitsbereich löschen"
+
+msgid "Done"
+msgstr "Fertig"
+
+msgid "Earliest"
+msgstr "Frühester Zeitpunkt"
+
+msgid "Earliest amount"
+msgstr "Anzahl"
+
+msgid "Earliest unit"
+msgstr "Einheit"
+
+msgid "Edit span"
+msgstr "Spanne bearbeiten"
+
+msgid "Edit y-axis"
+msgstr "y-Achse bearbeiten"
+
+msgid "Email recipients"
+msgstr "E-Mail-Empfänger"
+
+msgid "Enter a constant here."
+msgstr "Geben Sie hier eine Konstante ein."
+
+msgid "Enter a dashboard title."
+msgstr "Geben Sie einen Dashboard-Titel ein."
+
+msgid "Enter a title."
+msgstr "Geben Sie einen Titel ein."
+
+msgid "Enter a whole number for the throttle."
+msgstr "Geben Sie für die Einschränkung eine ganze Zahl ein."
+
+msgid "Enter a whole number for the time window."
+msgstr "Geben Sie für das Zeitfenster eine ganze Zahl ein."
+
+msgid "Enter a whole number from 1 to 9999."
+msgstr "Geben Sie eine ganze Zahl von 1 bis 9999 ein."
+
+msgid "Enter how often the alert runs, for example every 1 hour."
+msgstr "Geben Sie an, wie oft die Benachrichtigung läuft, zum Beispiel alle 1 Stunden."
+
+msgid "Enter e-mail addresses separated by commas."
+msgstr "Geben Sie E-Mail-Adressen durch Kommas getrennt ein."
+
+msgid "The ID may only contain letters, digits, and underscores."
+msgstr "Die ID darf nur Buchstaben, Ziffern und Unterstriche enthalten."
+
+msgid "Threshold must be a number."
+msgstr "Der Schwellenwert muss eine Zahl sein."
+
+msgid "Evaluate every"
+msgstr "Auswerten alle"
+
+msgid "Evaluation unit"
+msgstr "Einheit der Auswertung"
+
+msgid "Every 5 minutes"
+msgstr "Alle 5 Minuten"
+
+msgid "Existing"
+msgstr "Vorhanden"
+
+msgid "Export as CSV"
+msgstr "Als CSV exportieren"
+
+msgid "Export as PNG"
+msgstr "Als PNG exportieren"
+
+msgid "Filter"
+msgstr "Filter"
+
+msgid "Filter by index"
+msgstr "Nach Index filtern"
+
+msgid "Filter by indexes and other fields"
+msgstr "Nach Indizes und anderen Feldern filtern"
+
+msgid "Filter by other fields"
+msgstr "Nach anderen Feldern filtern"
+
+msgid "From"
+msgstr "Von"
+
+msgid "Global actions"
+msgstr "Globale Aktionen"
+
+msgid "Global controls"
+msgstr "Globale Steuerelemente"
+
+msgid "Grid"
+msgstr "Raster"
+
+msgid "Highest:"
+msgstr "Höchster Wert:"
+
+msgid "Hourly"
+msgstr "Stündlich"
+
+msgid "Hours"
+msgstr "Stunden"
+
+msgid "Hours ago"
+msgstr "Stunden zuvor"
+
+msgid "In the last"
+msgstr "In der/den letzten"
+
+msgid "Include or exclude metrics from specific dimensions."
+msgstr "Schließen Sie Metriken aus bestimmten Dimensionen ein oder aus."
+
+msgid "Is equal to"
+msgstr "Ist gleich"
+
+msgid "Is greater than"
+msgstr "Ist größer als"
+
+msgid "Is less than"
+msgstr "Ist kleiner als"
+
+msgid "Last 1 hour"
+msgstr "Letzte 1 Stunde"
+
+msgid "Last 12 hours"
+msgstr "Letzte 12 Stunden"
+
+msgid "Last 3 hours"
+msgstr "Letzte 3 Stunden"
+
+msgid "Last 30 days"
+msgstr "Letzte 30 Tage"
+
+msgid "Last 30 minutes"
+msgstr "Letzte 30 Minuten"
+
+msgid "Last 48 hours"
+msgstr "Letzte 48 Stunden"
+
+msgid "Last 6 hours"
+msgstr "Letzte 6 Stunden"
+
+msgid "Latest"
+msgstr "Spätester Zeitpunkt"
+
+msgid "Layout"
+msgstr "Layoutoption"
+
+msgid "Left"
+msgstr "Links"
+
+msgid "Line chart"
+msgstr "Liniendiagramm"
+
+msgid "Line chart + table"
+msgstr "Liniendiagramm + Tabelle"
+
+msgid "Lowest:"
+msgstr "Niedrigster Wert:"
+
+msgid "Maximize chart"
+msgstr "Diagramm maximieren"
+
+msgid "Maximum"
+msgstr "Maximalwert"
+
+msgid "Minimize chart"
+msgstr "Diagramm minimieren"
+
+msgid "Minimum"
+msgstr "Minimalwert"
+
+msgid "Minutes"
+msgstr "Minuten"
+
+msgid "Minutes ago"
+msgstr "Minuten zuvor"
+
+msgid "Minutes past the hour"
+msgstr "Minuten nach der vollen Stunde"
+
+msgid "Months ago"
+msgstr "Monate zuvor"
+
+msgid "New"
+msgstr "Neu"
+
+msgid "No"
+msgstr "Nein"
+
+msgid "No base searches."
+msgstr "Keine Base Searches."
+
+msgid "No matches found."
+msgstr "Keine Übereinstimmungen gefunden."
+
+msgid "No metric indexes."
+msgstr "Keine Metrikindizes."
+
+msgid "Off"
+msgstr "Aus"
+
+msgid "On"
+msgstr "Ein"
+
+msgid "Open in Search"
+msgstr "In Search öffnen"
+
+msgid "Operator"
+msgstr "Operator"
+
+msgid "PNG export needs a line, area, or column chart."
+msgstr "Der PNG-Export braucht ein Linien-, Flächen- oder Spaltendiagramm."
+
+msgid "Panel title"
+msgstr "Titel des Teilfensters"
+
+msgid "Permissions"
+msgstr "Berechtigungen"
+
+msgid "Quarters ago"
+msgstr "Quartale zuvor"
+
+msgid "Range type"
+msgstr "Art des Zeitraums"
+
+msgid "Relative"
+msgstr "Relativ"
+
+msgid "Remove action"
+msgstr "Aktion entfernen"
+
+msgid "Remove dimension filter"
+msgstr "Dimensionsfilter entfernen"
+
+msgid "Remove filter"
+msgstr "Filter entfernen"
+
+msgid "Remove reference line"
+msgstr "Bezugslinie entfernen"
+
+msgid "Restore chart"
+msgstr "Diagramm wiederherstellen"
+
+msgid "Restore chart size"
+msgstr "Diagrammgröße wiederherstellen"
+
+msgid "Save all charts to Classic Dashboards"
+msgstr "Alle Diagramme unter „Klassische Dashboards“ speichern"
+
+msgid "Save all charts to Dashboard Studio"
+msgstr "Alle Diagramme in Dashboard Studio speichern"
+
+msgid "Save as scheduled alert"
+msgstr "Als geplante Benachrichtigung speichern"
+
+msgid "Save as streaming alert"
+msgstr "Als Streaming-Benachrichtigung speichern"
+
+msgid "Save to Classic Dashboards"
+msgstr "Unter „Klassische Dashboards“ speichern"
+
+msgid "Save to Dashboard Studio"
+msgstr "In Dashboard Studio speichern"
+
+msgid "Saved workspaces"
+msgstr "Gespeicherte Arbeitsbereiche"
+
+msgid "Scale"
+msgstr "Skalierung"
+
+msgid "Search related events"
+msgstr "Zugehörige Ereignisse durchsuchen"
+
+msgid "Seconds"
+msgstr "Sekunden"
+
+msgid "Seconds ago"
+msgstr "Sekunden zuvor"
+
+msgid "Select a dashboard"
+msgstr "Dashboard auswählen"
+
+msgid "Select a dashboard."
+msgstr "Wählen Sie ein Dashboard aus."
+
+msgid "Select a time range."
+msgstr "Wählen Sie einen Zeitraum aus."
+
+msgid "Select dimension"
+msgstr "Dimension auswählen"
+
+msgid "Select dimension values"
+msgstr "Dimensionswerte auswählen"
+
+msgid "Select index filters"
+msgstr "Indexfilter auswählen"
+
+msgid "Send email"
+msgstr "E-Mail senden"
+
+msgid "Set the minimum and maximum for the y-axis (e.g. 1000, 1k, 3m)."
+msgstr "Minimum und Maximum der y-Achse festlegen (z. B. 1000, 1k, 3m)."
+
+msgid "Settings for"
+msgstr "Einstellungen für"
+
+msgid "Shared in App"
+msgstr "In App freigegeben"
+
+msgid "Show an earlier time range."
+msgstr "Frühere Zeitspanne anzeigen."
+
+msgid "Sort ascending"
+msgstr "Aufsteigend sortieren"
+
+msgid "Sort descending"
+msgstr "Absteigend sortieren"
+
+msgid "Split metrics by a dimension"
+msgstr "Metriken nach einer Dimension unterteilen"
+
+msgid "Split on"
+msgstr "Teilen bei"
+
+msgid "Split this series into separate values."
+msgstr "Teilen Sie diese Reihe in separate Werte."
+
+msgid "Start by adding index filters."
+msgstr "Beginnen Sie mit Indexfiltern."
+
+msgid "Suppress triggering for"
+msgstr "Auslösung unterdrücken für"
+
+msgid "The PNG could not be created."
+msgstr "Das PNG konnte nicht erstellt werden."
+
+msgid "The chart is not drawn yet."
+msgstr "Das Diagramm ist noch nicht gezeichnet."
+
+msgid "The dashboard ID may only contain letters, numbers, and underscores."
+msgstr "Die Dashboard-ID darf nur Buchstaben, Ziffern und Unterstriche enthalten."
+
+msgid "Throttle unit"
+msgstr "Einheit der Einschränkung"
+
+msgid "Time charts"
+msgstr "Zeitdiagramme"
+
+msgid "Time range picker"
+msgstr "Zeitspannenauswahl"
+
+msgid "Time window unit"
+msgstr "Einheit des Zeitfensters"
+
+msgid "Title"
+msgstr "Titel"
+
+msgid "To"
+msgstr "An"
+
+msgid "Trigger"
+msgstr "Auslöser"
+
+msgid "Trigger actions"
+msgstr "Auslöseaktionen"
+
+msgid "Update"
+msgstr "Aktualisieren"
+
+msgid "Use \"dimension = value(s)\" pairs to filter the data further, e.g.: ip=10.1*, 10.2*"
+msgstr "Verwenden Sie Paare aus „Dimension = Wert(e)“, um die Daten weiter zu filtern, z. B.: ip=10.1*, 10.2*"
+
+msgid "Value"
+msgstr "Wert"
+
+msgid "View dashboard"
+msgstr "Dashboard anzeigen"
+
+msgid "Weeks"
+msgstr "Wochen"
+
+msgid "Weeks ago"
+msgstr "Wochen zuvor"
+
+msgid "Years ago"
+msgstr "Jahre zuvor"
+
+msgid "Yes"
+msgstr "Ja"
+
+msgid "Zoom out"
+msgstr "Verkleinern"
+
+msgid "decimal places in tooltips"
+msgstr "Dezimalstellen in QuickInfos"
+
+msgid "e.g. -7d or 2026-11-09 20:44"
+msgstr "z. B. -7d oder 2026-11-09 20:44"
+
+msgid "e.g. now or 2026-11-09 20:44"
+msgstr "z. B. now oder 2026-11-09 20:44"
+
+msgid "intervals"
+msgstr "Intervalle"
+
+msgid "matches found"
+msgstr "Übereinstimmungen gefunden"
+
+msgid "minutes past the hour"
+msgstr "Minuten nach der vollen Stunde"
+
+msgid "optional"
+msgstr "optional"
+
+msgid "over"
+msgstr "über"
+
+msgid "to now"
+msgstr "bis jetzt"

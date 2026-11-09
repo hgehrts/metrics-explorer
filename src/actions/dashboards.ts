@@ -29,16 +29,39 @@ function cdata(value: string): string {
     return `<![CDATA[${value}]]>`;
 }
 
-function panelXml(panel: PanelSpec): string {
+const ID = /^[A-Za-z0-9_]{1,80}$/;
+
+/** The dashboard ID is its file name: letters, digits, and underscores only. */
+export function dashboardIdError(id: string): string {
+    return ID.test(id.trim()) ? '' : 'The ID may only contain letters, digits, and underscores.';
+}
+
+/** An ID made from a title, for dashboards where only a title is asked: `CPU load` becomes `cpu_load`. */
+export function dashboardIdFromTitle(title: string): string {
+    const id = title
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 80);
+    return id || 'dashboard';
+}
+
+/** Token of the interactive time input. Panels read their range from it when the dashboard has one. */
+const TIME_TOKEN = 'mx_time';
+
+function panelXml(panel: PanelSpec, timeInput = false): string {
     const stack = panel.stacked ? '\n          <option name="charting.chart.stackMode">stacked</option>' : '';
+    const earliest = timeInput ? `$${TIME_TOKEN}.earliest$` : panel.earliest;
+    const latest = timeInput ? `$${TIME_TOKEN}.latest$` : panel.latest;
     return `    <row>
       <panel>
         <title>${xml(panel.title)}</title>
         <chart>
           <search>
             <query>${cdata(panel.search)}</query>
-            <earliest>${xml(panel.earliest)}</earliest>
-            <latest>${xml(panel.latest)}</latest>
+            <earliest>${xml(earliest)}</earliest>
+            <latest>${xml(latest)}</latest>
           </search>
           <option name="charting.chart">${panel.chart}</option>${stack}
         </chart>
@@ -47,13 +70,30 @@ function panelXml(panel: PanelSpec): string {
 }
 
 /** A Classic dashboard. One row per panel. */
-export function classicDashboard(label: string, panels: PanelSpec[]): string {
+export function classicDashboard(
+    label: string,
+    panels: PanelSpec[],
+    options: { description?: string; timeInput?: boolean } = {}
+): string {
     if (panels.length === 0) {
         throw new Error('Nothing to save.');
     }
+    const description = options.description?.trim() ? `\n  <description>${xml(options.description.trim())}</description>` : '';
+    const fieldset = options.timeInput
+        ? `
+  <fieldset submitButton="false">
+    <input type="time" token="${TIME_TOKEN}">
+      <label></label>
+      <default>
+        <earliest>${xml(panels[0].earliest)}</earliest>
+        <latest>${xml(panels[0].latest)}</latest>
+      </default>
+    </input>
+  </fieldset>`
+        : '';
     return `<dashboard version="1.1">
-  <label>${xml(label)}</label>
-${panels.map(panelXml).join('\n')}
+  <label>${xml(label)}</label>${description}${fieldset}
+${panels.map((panel) => panelXml(panel, Boolean(options.timeInput))).join('\n')}
 </dashboard>
 `;
 }
@@ -67,7 +107,8 @@ export function appendClassicPanels(xmlText: string, panels: PanelSpec[]): strin
     if (close < 0) {
         throw new Error('That dashboard is not a Classic dashboard.');
     }
-    return `${xmlText.slice(0, close)}${panels.map(panelXml).join('\n')}\n${xmlText.slice(close)}`;
+    const timeInput = xmlText.includes(`token="${TIME_TOKEN}"`);
+    return `${xmlText.slice(0, close)}${panels.map((panel) => panelXml(panel, timeInput)).join('\n')}\n${xmlText.slice(close)}`;
 }
 
 function studioViz(panel: PanelSpec, id: string): Record<string, unknown> {
@@ -80,7 +121,11 @@ function studioViz(panel: PanelSpec, id: string): Record<string, unknown> {
 }
 
 /** A Dashboard Studio definition. Panels sit in a grid, one under the other. */
-export function studioDashboard(label: string, panels: PanelSpec[]): string {
+export function studioDashboard(
+    label: string,
+    panels: PanelSpec[],
+    options: { description?: string; layout?: 'absolute' | 'grid' } = {}
+): string {
     if (panels.length === 0) {
         throw new Error('Nothing to save.');
     }
@@ -104,14 +149,18 @@ export function studioDashboard(label: string, panels: PanelSpec[]): string {
             position: { x: 0, y: index * 320, w: 1200, h: 300 },
         });
     });
+    const layout =
+        options.layout === 'grid'
+            ? { type: 'grid', options: { width: 1200, height: Math.max(320, panels.length * 320) }, structure, globalInputs: [] }
+            : { type: 'absolute', options: { width: 1200, height: Math.max(320, panels.length * 320) }, structure, globalInputs: [] };
     const definition = {
         title: label,
-        description: '',
+        description: options.description?.trim() ?? '',
         inputs: {},
         defaults: {},
         visualizations,
         dataSources,
-        layout: { type: 'absolute', options: { width: 1200, height: Math.max(320, panels.length * 320) }, structure, globalInputs: [] },
+        layout,
     };
     return `<dashboard version="2" theme="light">
   <label>${xml(label)}</label>

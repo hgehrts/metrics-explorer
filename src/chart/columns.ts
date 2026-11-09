@@ -53,7 +53,8 @@ export function toLineTable(rows: SearchRow[], seriesName: string, splitBy?: str
         };
     }
 
-    const names = rows.length > 0 ? seriesNames(rows[0]) : [];
+    // Splunk leaves empty fields out of a JSON row, so a sparse split shows only some series in each row.
+    const names = [...new Set(rows.flatMap((row) => seriesNames(row)))];
     if (names.length <= 1) {
         const times = rows.map((row) => text(row._time)).filter((time, index) => time || rows[index]);
         const values = rows.map((row) => text(names[0] ? row[names[0]] : ''));

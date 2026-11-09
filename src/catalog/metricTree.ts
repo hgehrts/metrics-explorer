@@ -157,6 +157,11 @@ export function matchesQuery(text: string, query: string): boolean {
     return new RegExp(pattern).test(haystack);
 }
 
+/** Number of metrics (leaves) in a tree, for the "N matches found" line of a search. */
+export function countLeaves(nodes: MetricNode[]): number {
+    return nodes.reduce((total, node) => total + (node.folder ? countLeaves(node.children) : 1), 0);
+}
+
 export function filterMetricTree(nodes: MetricNode[], query: string): MetricNode[] {
     if (!query.trim()) {
         return nodes;

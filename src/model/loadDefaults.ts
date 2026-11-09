@@ -8,7 +8,21 @@ export type ExplorerSettings = {
     hierarchySeparator: string;
     /** Most metric names the catalog lists. Above it the explorer says that not all metrics are listed. */
     maxMetrics: number;
+    /** Start of the "Data ingested from" range, one of the range presets. */
+    catalogRange: string;
 };
+
+/** The presets of both time pickers, as in the original workspace. */
+export const RANGE_PRESETS = ['-15m', '-30m', '-60m', '-3h', '-6h', '-12h', '-24h', '-48h', '-7d', '-30d'] as const;
+
+const SAME_AS: Record<string, string> = { '-1h': '-60m', '-1d': '-24h', '-2d': '-48h', '-1w': '-7d' };
+
+/** `earliest` from `[metadata]` as a preset. Values without a preset use the last 24 hours. */
+export function catalogRangeFromMetadata(content: Record<string, string | undefined>): string {
+    const configured = typeof content.earliest === 'string' ? content.earliest.trim() : '';
+    const preset = SAME_AS[configured] ?? configured;
+    return (RANGE_PRESETS as readonly string[]).includes(preset) ? preset : '-24h';
+}
 
 /** Splunk Web forwards REST calls under this prefix with the signed-in session. No credentials are sent or stored here. */
 const SPLUNKD = '/splunkd/__raw';
@@ -44,6 +58,7 @@ export async function loadSettings(): Promise<ExplorerSettings> {
     return {
         filters: pickDefaults(stanzas, roles),
         maxMetrics: maxMetricsFromMetadata(metadata),
+        catalogRange: catalogRangeFromMetadata(metadata),
         ...hierarchyFromMetadata(metadata),
     };
 }

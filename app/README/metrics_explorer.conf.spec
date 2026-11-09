@@ -3,7 +3,8 @@
 [metadata]
 earliest = <string>
 * How far back the metric catalog looks.
-* Default: -2d
+* One of -15m, -30m, -1h, -3h, -6h, -12h, -1d, -2d, -1w, -7d, -30d. Others fall back to -1d.
+* Default: -1d
 
 max_metrics = <int>
 * Maximum number of metric names loaded into the tree.

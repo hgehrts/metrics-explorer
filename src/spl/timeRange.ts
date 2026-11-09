@@ -3,9 +3,41 @@
  * Typed dates are read in the time zone of this browser and sent as epoch seconds, so no text reaches SPL.
  */
 
-const RELATIVE = /^-(\d{1,4})(s|m|h|d|w)$/;
+const RELATIVE = /^-(\d{1,4})(s|m|h|d|w|mon|y)$/;
 const ABSOLUTE = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/;
-const UNIT_SECONDS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400, w: 604800 };
+/** Months and years are calendar units in Splunk. Here they only size spans and compare bounds, so an average is enough. */
+const UNIT_SECONDS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400, w: 604800, mon: 2592000, y: 31536000 };
+
+/** Units of the relative custom range, as the original workspace offers them. A quarter is sent as three months. */
+export const RELATIVE_UNITS = [
+    { id: 's', label: 'Seconds ago', factor: 1, token: 's' },
+    { id: 'm', label: 'Minutes ago', factor: 1, token: 'm' },
+    { id: 'h', label: 'Hours ago', factor: 1, token: 'h' },
+    { id: 'd', label: 'Days ago', factor: 1, token: 'd' },
+    { id: 'w', label: 'Weeks ago', factor: 1, token: 'w' },
+    { id: 'mon', label: 'Months ago', factor: 1, token: 'mon' },
+    { id: 'q', label: 'Quarters ago', factor: 3, token: 'mon' },
+    { id: 'y', label: 'Years ago', factor: 1, token: 'y' },
+] as const;
+
+export type RelativeUnit = (typeof RELATIVE_UNITS)[number]['id'];
+
+/** The start token for "N units ago", or null when the amount is not a whole number from 1 to 9999. */
+export function relativeStart(amount: string, unit: RelativeUnit): string | null {
+    const text = amount.trim();
+    const chosen = RELATIVE_UNITS.find((item) => item.id === unit);
+    if (!chosen || !/^\d{1,4}$/.test(text) || Number(text) < 1) {
+        return null;
+    }
+    const value = Number(text) * chosen.factor;
+    return value > 9999 ? null : `-${value}${chosen.token}`;
+}
+
+/** Splits a relative start back into amount and unit, for reopening the dialog. */
+export function parseRelativeStart(token: string): { amount: string; unit: RelativeUnit } | null {
+    const match = RELATIVE.exec(token);
+    return match ? { amount: match[1], unit: match[2] as RelativeUnit } : null;
+}
 
 export function isRelativeBound(token: string): boolean {
     return RELATIVE.test(token);

@@ -12,7 +12,8 @@ import { formatStatColumns, formatTimeCell } from '../chart/stats';
 import { HeatmapChart } from './HeatmapChart';
 import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
 import { chartPng, chartSvg, safeFileName } from '../export/png';
-import { ChartModel, globalFiltersFor, hasSplitValues, resolveSeries, SeriesFilter, seriesLegend } from '../model/workspace';
+import { ChartModel, globalFiltersFor, GlobalSplitLimit, hasSplitValues, resolveSeries, SeriesFilter, seriesLegend } from '../model/workspace';
+import { DropdownMenu, MenuItem } from './Menu';
 import { runSearch, SearchRow } from '../search/runSearch';
 import { buildReferenceValueSearch, relatedEventsSearch } from '../spl/buildMstats';
 import { resolveForSource } from '../spl/functions';
@@ -53,23 +54,39 @@ const SmallButton = styled.button`
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
-    border-radius: 6px;
-    padding: 4px 8px;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
     cursor: pointer;
 `;
 
-const Menu = styled.div`
-    position: absolute;
-    right: 0;
-    top: 32px;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    min-width: 180px;
-    padding: 6px;
-    border: 1px solid ${variables.neutral200};
-    border-radius: 8px;
-    background: ${variables.backgroundColorSection};
+const IconAction = styled.button`
+    padding: 2px 6px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: ${variables.contentColorDefault};
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    &:hover {
+        background: ${variables.interactiveColorOverlayHover};
+    }
+`;
+
+const Title = styled.div`
+    font-size: 12px;
+
+    h2 {
+        display: inline;
+        margin: 0 6px 0 0;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    span {
+        color: ${variables.contentColorMuted};
+    }
 `;
 
 // The visualization draws its own tooltip only when its tooltip option is on, and hover events need that option.
@@ -113,24 +130,6 @@ function hoverPoint(payload: Record<string, unknown> | undefined): HoverPoint | 
     };
 }
 
-const ZoomBar = styled.div`
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin: 6px 0;
-    font-size: 12px;
-    color: ${variables.contentColorMuted};
-`;
-
-/** Shows an epoch-second bound as local time, or the word `now`. */
-function formatBound(value: string, locale: string | undefined): string {
-    if (value === 'now' || !/^\d+$/.test(value)) {
-        return value;
-    }
-    return new Date(Number(value) * 1000).toLocaleString(locale ?? 'en-US');
-}
-
 const Note = styled.p`
     margin: 8px 0;
     color: ${variables.contentColorMuted};
@@ -157,6 +156,17 @@ const Stats = styled.table`
     }
 `;
 
+const Empty = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: ${variables.contentColorMuted};
+    font-size: 13px;
+`;
+
+export type ChartSaveMode = 'report' | 'panel-classic' | 'panel-studio' | 'base' | 'alert-scheduled' | 'alert-streaming';
+
 type SeriesResult = {
     rows: SearchRow[];
     error: string;
@@ -172,6 +182,10 @@ export function ChartView(props: {
     span: string;
     refreshToken: number;
     globalSplit: string;
+    globalLimit: GlobalSplitLimit;
+    /** The window every chart shows after a drag across one of them. Null shows the time range. */
+    zoom: { earliest: string; latest: string } | null;
+    onZoom: (window: { earliest: string; latest: string }) => void;
     /** Filters that apply to every chart. A series gets only those whose dimension its metric has. */
     globalFilters: SeriesFilter[];
     /** Dimensions per metric. A metric not in here yet takes every global filter until its dimensions arrive. */
@@ -189,15 +203,13 @@ export function ChartView(props: {
     onMaximize: () => void;
     /** Replaces a manual span that would draw too many points. */
     onWidenSpan: (span: string) => void;
-    onSave: (mode: 'report' | 'panel' | 'base' | 'alert') => void;
+    onSave: (mode: ChartSaveMode) => void;
 }): React.ReactElement {
     const [results, setResults] = useState<SeriesResult[]>([]);
     const [referenceNumbers, setReferenceNumbers] = useState<Array<number | null | undefined>>([]);
     const [loading, setLoading] = useState(false);
-    const [menu, setMenu] = useState(false);
     const [exportNote, setExportNote] = useState('');
-    /** A zoomed chart searches only its zoom window. It keeps that window until the user zooms out. */
-    const [zoom, setZoom] = useState<{ earliest: string; latest: string } | null>(null);
+    const zoom = props.zoom;
     /** The point under the pointer. The visualization's own tooltip is off, so this one shows exact, formatted values. */
     const [hover, setHover] = useState<HoverPoint | null>(null);
     // The pointer position is not React state: a state update on every mouse move re-renders the chart and drops its hover.
@@ -205,20 +217,15 @@ export function ChartView(props: {
     const tipRef = useRef<HTMLDivElement | null>(null);
     const cardRef = useRef<HTMLElement>(null);
     /** Series with the split they actually use, so inherited splits behave like chosen ones. */
-    const series = resolveSeries(props.chart.series, props.globalSplit, props.chart.useGlobalSplit).map((item) => ({
+    const series = resolveSeries(props.chart.series, props.globalSplit, props.chart.useGlobalSplit, props.globalLimit).map((item) => ({
         ...item,
         filters: [...globalFiltersFor(item, props.globalFilters, props.metricDims), ...item.filters],
     }));
     const signature = JSON.stringify(series);
     const timeWindow = zoom ?? { earliest: props.range, latest: props.latest };
     const span = props.chart.settings.span || (zoom ? spanForRange(zoom.earliest, zoom.latest) : props.span);
-    // The global refresh waits while a chart is zoomed. Zooming out makes the next refresh count again.
+    // The global refresh waits while the charts are zoomed. Zooming out makes the next refresh count again.
     const refreshToken = zoom ? 0 : props.refreshToken;
-
-    useEffect(() => {
-        // A new global range replaces the zoom, because the zoom lies inside the old range.
-        setZoom(null);
-    }, [props.range, props.latest]);
 
     useEffect(() => {
         const stops: Array<() => void> = [];
@@ -341,7 +348,10 @@ export function ChartView(props: {
         splitBy: hasSplitValues(results[index]?.rows ?? [], item.splitBy) ? item.splitBy : '',
     }));
     const tables = shown.map((item, index) => {
-        const label = seriesLegend(item, shown);
+        // A split charted wide has one column per value. With only one value, that value names the line.
+        const rows = results[index]?.rows ?? [];
+        const values = series[index].splitBy && !item.splitBy ? [...new Set(rows.flatMap((row) => Object.keys(row).filter((key) => !key.startsWith('_'))))] : [];
+        const label = values.length === 1 ? values[0] : seriesLegend(item, shown);
         return formatStatColumns(
             toLineTable(results[index]?.rows ?? [], label, item.splitBy || undefined),
             item.aggregation,
@@ -386,156 +396,158 @@ export function ChartView(props: {
     return (
         <Card ref={cardRef} $selected={props.selected} onClick={props.onSelect}>
             <TitleRow>
-                <strong>
-                    {title} (Time span={span})
-                </strong>
-                <Actions>
-                    <SmallButton
+                <Title>
+                    <h2>{title}</h2>
+                    <span>({t('Time span')}={span})</span>
+                </Title>
+                <Actions onClick={(event) => event.stopPropagation()}>
+                    <IconAction
                         type="button"
-                        aria-label={props.minimized ? 'Restore chart' : 'Minimize chart'}
+                        aria-label={props.minimized ? t('Restore chart') : t('Minimize chart')}
+                        title={props.minimized ? t('Restore chart') : t('Minimize chart')}
                         onClick={props.onMinimize}
                     >
-                        {props.minimized ? 'Show' : 'Minimize'}
-                    </SmallButton>
-                    <SmallButton
+                        {props.minimized ? '▸' : '▾'}
+                    </IconAction>
+                    <IconAction
                         type="button"
-                        aria-label={props.maximized ? 'Restore chart size' : 'Maximize chart'}
+                        aria-label={props.maximized ? t('Restore chart size') : t('Maximize chart')}
+                        title={props.maximized ? t('Restore chart size') : t('Maximize chart')}
                         onClick={props.onMaximize}
                     >
-                        {props.maximized ? 'Restore' : 'Maximize'}
-                    </SmallButton>
-                    <SmallButton type="button" aria-label={t('Chart actions')} onClick={() => setMenu((open) => !open)}>
-                        Actions
-                    </SmallButton>
-                    <SmallButton type="button" aria-label={t('Remove chart')} onClick={props.onRemove}>
-                        Remove
-                    </SmallButton>
-                    {menu ? (
-                        <Menu>
-                            <SmallButton
-                                type="button"
-                                onClick={() => {
-                                    if (!first?.search) {
-                                        return;
-                                    }
-                                    const locale = window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1] ?? 'en-US';
-                                    window.open(
-                                        splunkSearchUrl(locale, first.search, first.earliest, first.latest),
-                                        '_blank',
-                                        'noopener'
-                                    );
-                                    setMenu(false);
-                                }}
-                            >
-                                Open in Search
-                            </SmallButton>
-                            <SmallButton
-                                type="button"
-                                onClick={() => {
-                                    const locale = window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1] ?? 'en-US';
-                                    const item = props.chart.series[0];
-                                    window.open(
-                                        splunkSearchUrl(
-                                            locale,
-                                            relatedEventsSearch({
-                                                source: item?.source,
-                                                name: item?.metric ?? '',
-                                                filters: item?.filters,
-                                                indexes: props.eventIndexes,
-                                            }),
-                                            timeWindow.earliest,
-                                            timeWindow.latest
-                                        ),
-                                        '_blank',
-                                        'noopener'
-                                    );
-                                    setMenu(false);
-                                }}
-                            >
-                                Search Related Events
-                            </SmallButton>
-                            <SmallButton type="button" onClick={props.onClone}>
-                                Clone chart
-                            </SmallButton>
-                            <SmallButton type="button" onClick={() => props.onSave('report')}>
-                                {t('Save as report')}
-                            </SmallButton>
-                            <SmallButton type="button" onClick={() => props.onSave('panel')}>
-                                {t('Save as dashboard panel')}
-                            </SmallButton>
-                            <SmallButton type="button" onClick={() => props.onSave('base')}>
-                                {t('Save as base search')}
-                            </SmallButton>
-                            <SmallButton type="button" onClick={() => props.onSave('alert')}>
-                                {t('Create alert')}
-                            </SmallButton>
-                            <SmallButton
-                                type="button"
-                                onClick={() => {
-                                    const blob = new Blob([toCsv(showChart ? data : stats)], { type: 'text/csv' });
-                                    const url = URL.createObjectURL(blob);
-                                    const link = document.createElement('a');
-                                    link.href = url;
-                                    link.download = `${props.chart.series[0]?.metric || 'chart'}.csv`;
-                                    link.click();
-                                    URL.revokeObjectURL(url);
-                                    setMenu(false);
-                                }}
-                            >
-                                Export CSV
-                            </SmallButton>
-                            <SmallButton
-                                type="button"
-                                disabled={visual.kind === 'heatmap' || !showChart}
-                                title={
-                                    visual.kind === 'heatmap' || !showChart
-                                        ? 'PNG export needs a line, area, or column chart.'
-                                        : 'Save the chart as a PNG image.'
-                                }
-                                onClick={async () => {
-                                    const svg = chartSvg(cardRef.current);
-                                    setMenu(false);
-                                    if (!svg) {
-                                        setExportNote('The chart is not drawn yet.');
-                                        return;
-                                    }
-                                    try {
-                                        const blob = await chartPng(svg, title);
+                        {props.maximized ? '⤡' : '⤢'}
+                    </IconAction>
+                    <DropdownMenu
+                        label={t('Chart actions')}
+                        alignRight
+                        trigger={(isOpen, toggle) => (
+                            <IconAction type="button" aria-label={t('Chart actions')} title={t('Chart actions')} aria-expanded={isOpen} onClick={toggle}>
+                                ⋯
+                            </IconAction>
+                        )}
+                    >
+                        {(close) => (
+                            <>
+                                <MenuItem
+                                    disabled={!first?.search}
+                                    onClick={() => {
+                                        close();
+                                        if (!first?.search) {
+                                            return;
+                                        }
+                                        window.open(splunkSearchUrl(locale ?? 'en-US', first.search, first.earliest, first.latest), '_blank', 'noopener');
+                                    }}
+                                >
+                                    {t('Open in Search')}
+                                </MenuItem>
+                                <MenuItem
+                                    onClick={() => {
+                                        close();
+                                        props.onClone();
+                                    }}
+                                >
+                                    {t('Clone this panel')}
+                                </MenuItem>
+                                <MenuItem
+                                    onClick={() => {
+                                        close();
+                                        const item = props.chart.series[0];
+                                        window.open(
+                                            splunkSearchUrl(
+                                                locale ?? 'en-US',
+                                                relatedEventsSearch({
+                                                    source: item?.source,
+                                                    name: item?.metric ?? '',
+                                                    filters: item?.filters,
+                                                    indexes: props.eventIndexes,
+                                                }),
+                                                timeWindow.earliest,
+                                                timeWindow.latest
+                                            ),
+                                            '_blank',
+                                            'noopener'
+                                        );
+                                    }}
+                                >
+                                    {t('Search related events')}
+                                </MenuItem>
+                                {(
+                                    [
+                                        ['alert-scheduled', 'Save as scheduled alert'],
+                                        ['alert-streaming', 'Save as streaming alert'],
+                                        ['panel-classic', 'Save to Classic Dashboards'],
+                                        ['panel-studio', 'Save to Dashboard Studio'],
+                                        ['report', 'Save as report'],
+                                        ['base', 'Save as base search'],
+                                    ] as Array<[ChartSaveMode, string]>
+                                ).map(([mode, label]) => (
+                                    <MenuItem
+                                        key={mode}
+                                        onClick={() => {
+                                            close();
+                                            props.onSave(mode);
+                                        }}
+                                    >
+                                        {t(label)}
+                                    </MenuItem>
+                                ))}
+                                <MenuItem
+                                    disabled={visual.kind === 'heatmap' || !showChart}
+                                    title={visual.kind === 'heatmap' || !showChart ? t('PNG export needs a line, area, or column chart.') : undefined}
+                                    onClick={async () => {
+                                        close();
+                                        const svg = chartSvg(cardRef.current);
+                                        if (!svg) {
+                                            setExportNote(t('The chart is not drawn yet.'));
+                                            return;
+                                        }
+                                        try {
+                                            const blob = await chartPng(svg, title);
+                                            const url = URL.createObjectURL(blob);
+                                            const link = document.createElement('a');
+                                            link.href = url;
+                                            link.download = `${safeFileName(props.chart.series[0]?.metric || 'chart')}.png`;
+                                            link.click();
+                                            URL.revokeObjectURL(url);
+                                            setExportNote('');
+                                        } catch (error) {
+                                            setExportNote(error instanceof Error ? error.message : t('The PNG could not be created.'));
+                                        }
+                                    }}
+                                >
+                                    {t('Export as PNG')}
+                                </MenuItem>
+                                <MenuItem
+                                    onClick={() => {
+                                        close();
+                                        const blob = new Blob([toCsv(showChart ? data : stats)], { type: 'text/csv' });
                                         const url = URL.createObjectURL(blob);
                                         const link = document.createElement('a');
                                         link.href = url;
-                                        link.download = `${safeFileName(props.chart.series[0]?.metric || 'chart')}.png`;
+                                        link.download = `${props.chart.series[0]?.metric || 'chart'}.csv`;
                                         link.click();
                                         URL.revokeObjectURL(url);
-                                        setExportNote('');
-                                    } catch (error) {
-                                        setExportNote(error instanceof Error ? error.message : 'The PNG could not be created.');
-                                    }
-                                }}
-                            >
-                                Export PNG
-                            </SmallButton>
-                        </Menu>
-                    ) : null}
+                                    }}
+                                >
+                                    {t('Export as CSV')}
+                                </MenuItem>
+                            </>
+                        )}
+                    </DropdownMenu>
+                    <IconAction type="button" aria-label={t('Remove chart')} title={t('Remove chart')} onClick={props.onRemove}>
+                        ×
+                    </IconAction>
                 </Actions>
             </TitleRow>
             {props.minimized ? null : (
                 <>
-            {zoom ? (
-                <ZoomBar>
-                    <span>
-                        Zoomed: {formatBound(zoom.earliest, locale)} to {formatBound(zoom.latest, locale)}
-                    </span>
-                    <SmallButton type="button" onClick={() => setZoom(null)}>
-                        Zoom out
-                    </SmallButton>
-                    <span>{t('Reset zoom to enable refresh.')}</span>
-                </ZoomBar>
-            ) : null}
             {results.map((result, index) =>
                 result.error ? <Note key={`${index}-${result.error}`}>{result.error}</Note> : null
             )}
-            {loading ? <Note>{results.some((result) => result.rows.length > 0) ? 'Refreshing' : t('Loading…')}</Note> : null}
+            {loading ? <Note>{results.some((result) => result.rows.length > 0) ? t('Refreshing…') : t('Loading…')}</Note> : null}
+            {!loading && results.length > 0 && results.every((result) => !result.error && result.rows.length === 0) ? (
+                <Empty role="status">{t('No results found.')}</Empty>
+            ) : null}
             {props.chart.settings.span && estimatedPoints(timeWindow.earliest, timeWindow.latest, props.chart.settings.span) > 1000 ? (
                 <Note role="status">
                     This span draws about {estimatedPoints(timeWindow.earliest, timeWindow.latest, props.chart.settings.span)} points.
@@ -601,7 +613,7 @@ export function ChartView(props: {
                         }
                         const next = zoomWindow(event.payload, Date.now() / 1000);
                         if (next) {
-                            setZoom(next);
+                            props.onZoom(next);
                         }
                     }}
                     options={{

@@ -1,5 +1,21 @@
-import { alertCondition, alertSearch, metricAlertCondition, scheduledAlertFields } from '../src/actions/alerts';
-import { appendClassicPanels, classicDashboard, studioDashboard } from '../src/actions/dashboards';
+import {
+    alertCondition,
+    alertCron,
+    alertSearch,
+    emailList,
+    metricAlertCondition,
+    metricAlertFilter,
+    scheduledAlertFields,
+    streamingAlertFields,
+    timeAmount,
+} from '../src/actions/alerts';
+import {
+    appendClassicPanels,
+    classicDashboard,
+    dashboardIdError,
+    dashboardIdFromTitle,
+    studioDashboard,
+} from '../src/actions/dashboards';
 
 const panel = {
     title: 'cpu',
@@ -48,5 +64,84 @@ test('a scheduled alert compares the latest numeric value', () => {
     expect(fields['alert.track']).toBe('1');
     expect(fields['alert.suppress.period']).toBe('1h');
     expect(fields.alert_condition).toBe('search alert_value > 80');
-    expect(metricAlertCondition('avg', 'lab.cpu.user', 'less than', '10')).toBe('avg("lab.cpu.user") < 10');
+    expect(metricAlertCondition('avg', 'lab.cpu.user', 'less than', '10')).toBe("'avg(lab.cpu.user)' < 10");
+});
+
+test('the alert schedule reads like the original dialog', () => {
+    expect(alertCron('1', 'h', 0)).toBe('0 * * * *');
+    expect(alertCron('2', 'h', 15)).toBe('15 */2 * * *');
+    expect(alertCron('5', 'm', 30)).toBe('*/5 * * * *');
+    expect(alertCron('1', 'd', 45)).toBe('45 0 * * *');
+    expect(alertCron('0', 'h', 0)).toBeNull();
+    expect(alertCron('24', 'h', 0)).toBeNull();
+    expect(alertCron('1', 'h', 10)).toBeNull();
+    expect(timeAmount('10', 'm', ['s', 'm'])).toBe('10m');
+    expect(timeAmount('x', 'm', ['m'])).toBeNull();
+    expect(timeAmount('3', 'y', ['m'])).toBeNull();
+});
+
+test('an alert can also send e-mail and keeps its description', () => {
+    const fields = scheduledAlertFields({
+        name: 'cpu',
+        search: '| mstats avg("lab.cpu.user") WHERE index=* span=1m',
+        earliest: '-1h',
+        comparator: 'less than',
+        threshold: '5',
+        cron: '15 */2 * * *',
+        severity: 1,
+        throttle: '',
+        description: ' Lab CPU ',
+        emailTo: 'a@example.com, b@example.com',
+    });
+    expect(fields.cron_schedule).toBe('15 */2 * * *');
+    expect(fields.description).toBe('Lab CPU');
+    expect(fields['action.email.to']).toBe('a@example.com,b@example.com');
+    expect(fields['alert.suppress']).toBe('0');
+    expect(() => emailList('not an address')).toThrow('e-mail');
+});
+
+test('a streaming alert uses the metric_alerts settings', () => {
+    const filter = metricAlertFilter([
+        { dimension: 'host', mode: 'include', values: ['a', 'b"c'] },
+        { dimension: 'region', mode: 'exclude', values: ['eu'] },
+        { dimension: 'bad name', mode: 'include', values: ['x'] },
+    ]);
+    expect(filter).toBe('(host="a" OR host="b\\"c") AND NOT region="eu"');
+    const fields = streamingAlertFields({
+        name: 'cpu',
+        condition: "'avg(lab.cpu.user)' > 80",
+        metricIndexes: 'lab_metrics',
+        filter,
+        groupby: 'host',
+        severity: 3,
+        throttleMinutes: '10',
+    });
+    expect(fields['trigger.threshold']).toBe('always');
+    expect(fields['trigger.suppress']).toBe('10m');
+    expect(fields['splunk_ui.track']).toBe('1');
+    expect(fields.groupby).toBe('host');
+    expect(fields['trigger.evaluation_per']).toBeUndefined();
+    expect(streamingAlertFields({ ...fields, name: 'x', condition: 'c', metricIndexes: '*', filter: '', groupby: '', severity: 1, throttleMinutes: '' })['trigger.suppress']).toBe('0');
+});
+
+test('dashboard IDs are checked and derived from a title', () => {
+    expect(dashboardIdError('cpu_load_1')).toBe('');
+    expect(dashboardIdError('cpu load')).not.toBe('');
+    expect(dashboardIdFromTitle(' CPU load / Lab ')).toBe('cpu_load_lab');
+    expect(dashboardIdFromTitle('!!!')).toBe('dashboard');
+});
+
+test('a classic dashboard can carry a description and a time picker', () => {
+    const xml = classicDashboard('Lab', [panel], { description: 'Lab <cpu>', timeInput: true });
+    expect(xml).toContain('<description>Lab &lt;cpu&gt;</description>');
+    expect(xml).toContain('<input type="time" token="mx_time">');
+    expect(xml).toContain('<earliest>$mx_time.earliest$</earliest>');
+    const next = appendClassicPanels(xml, [{ ...panel, title: 'net' }]);
+    expect(next.match(/\$mx_time\.latest\$/g)).toHaveLength(2);
+});
+
+test('a studio dashboard can use the grid layout', () => {
+    const xml = studioDashboard('Lab', [panel], { layout: 'grid', description: 'x' });
+    expect(xml).toContain('"type":"grid"');
+    expect(xml).toContain('"description":"x"');
 });

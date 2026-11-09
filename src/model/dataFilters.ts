@@ -4,17 +4,42 @@ import { metricIndexClause, quoteSpl } from '../spl/buildMstats';
  * A filter on the data pane. `index` limits the catalog to an index. `exclude` hides metric names that match a pattern.
  * Filters only narrow what the tree shows. They are a convenience, not an access control: Splunk index permissions still apply.
  */
-export type DataFilter = { kind: 'index' | 'exclude'; value: string };
+export type DataFilter =
+    | { kind: 'index' | 'exclude'; value: string }
+    /** A "dimension = value(s)" pair. Values may end in or contain `*`. `value` is the label, so filters compare as text. */
+    | { kind: 'dimension'; value: string; dimension: string; op: '=' | '!='; values: string[] };
 
 const INDEX_VALUE = /^[A-Za-z0-9_.-]+$/;
 const EXCLUDE_VALUE = /^[A-Za-z0-9_.:*-]+$/;
+const DIMENSION_VALUE = /^[^\r\n"\\]{1,200}$/;
+const FIELD = /^[A-Za-z0-9_.:-]+$/;
+
+export function dimensionFilter(dimension: string, op: '=' | '!=', values: string[]): DataFilter {
+    const cleaned = [...new Set(values.map((item) => item.trim()).filter(Boolean))];
+    return { kind: 'dimension', dimension: dimension.trim(), op, values: cleaned, value: `${dimension.trim()}${op}${cleaned.join(',')}` };
+}
 
 export function filterLabel(filter: DataFilter): string {
+    if (filter.kind === 'dimension') {
+        return `${filter.dimension} ${filter.op} ${filter.values.join(', ')}`;
+    }
     return filter.kind === 'index' ? `index = ${filter.value}` : `metric name not ${filter.value}`;
 }
 
 /** Returns an error message for an invalid filter value, or null when it can be used. */
 export function validateFilter(filter: DataFilter): string | null {
+    if (filter.kind === 'dimension') {
+        if (!FIELD.test(filter.dimension)) {
+            return 'Select a dimension.';
+        }
+        if (filter.values.length === 0) {
+            return 'Select at least one value.';
+        }
+        if (filter.values.length > 50 || !filter.values.every((item) => DIMENSION_VALUE.test(item))) {
+            return 'Use at most 50 values without quotes, backslashes, or line breaks.';
+        }
+        return null;
+    }
     const value = filter.value.trim();
     if (!value) {
         return 'Enter a value.';
@@ -28,7 +53,32 @@ export function validateFilter(filter: DataFilter): string | null {
     return null;
 }
 
-const FIELD = /^[A-Za-z0-9_.:-]+$/;
+/** `dim="a" OR dim="b"`, negated for `!=`. Quoted values keep `*` as a wildcard in mcatalog and mstats. */
+function dimensionClause(filter: Extract<DataFilter, { kind: 'dimension' }>): string {
+    const any = filter.values.map((value) => `${filter.dimension}=${quoteSpl(value)}`).join(' OR ');
+    return filter.op === '=' ? `(${any})` : `NOT (${any})`;
+}
+
+/** Index part of the catalog search: the chosen index filters, limited to the indexes the user may search. */
+function indexPart(filters: DataFilter[], metricIndexes?: string[]): string {
+    const indexes = filters.filter((item) => item.kind === 'index').map((item) => item.value.trim());
+    const allowed = metricIndexes === undefined ? null : new Set(metricIndexes);
+    const chosen = allowed ? (indexes.length > 0 ? indexes.filter((value) => allowed.has(value)) : metricIndexes) : indexes;
+    return metricIndexes === undefined && indexes.length === 0
+        ? 'index=*'
+        : metricIndexes === undefined
+          ? `(${indexes.map((value) => `index=${quoteSpl(value)}`).join(' OR ')})`
+          : metricIndexClause(chosen);
+}
+
+/** Values of one dimension in the indexes the filter form has chosen, for the value picker. */
+export function buildCatalogValueSearch(dimension: string, filters: DataFilter[], metricIndexes?: string[]): string {
+    if (!FIELD.test(dimension)) {
+        throw new Error('Dimension name is not allowed.');
+    }
+    const field = quoteSpl(dimension);
+    return `| mcatalog values(metric_name) WHERE ${indexPart(filters, metricIndexes)} AND NOT metric_name="*_mrollup_*" BY ${field} | fields ${field} | head 1000`;
+}
 
 /**
  * The catalog search for the tree, with the active filters applied.
@@ -37,17 +87,11 @@ const FIELD = /^[A-Za-z0-9_.:-]+$/;
  * which never includes an internal index such as `_metrics`.
  */
 export function buildCatalogSearch(filters: DataFilter[], by = '', metricIndexes?: string[]): string {
-    const indexes = filters.filter((item) => item.kind === 'index').map((item) => item.value.trim());
     const excludes = filters.filter((item) => item.kind === 'exclude').map((item) => item.value.trim());
-    const allowed = metricIndexes === undefined ? null : new Set(metricIndexes);
-    const chosen = allowed ? (indexes.length > 0 ? indexes.filter((value) => allowed.has(value)) : metricIndexes) : indexes;
     const clauses = [
-        metricIndexes === undefined && indexes.length === 0
-            ? 'index=*'
-            : metricIndexes === undefined
-              ? `(${indexes.map((value) => `index=${quoteSpl(value)}`).join(' OR ')})`
-              : metricIndexClause(chosen),
+        indexPart(filters, metricIndexes),
         ...excludes.map((value) => `NOT metric_name=${quoteSpl(value)}`),
+        ...filters.flatMap((item) => (item.kind === 'dimension' && validateFilter(item) === null ? [dimensionClause(item)] : [])),
     ];
     if (by && !FIELD.test(by)) {
         throw new Error('Dimension name is not allowed.');

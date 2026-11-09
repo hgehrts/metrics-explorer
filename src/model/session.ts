@@ -1,4 +1,5 @@
-import { ChartModel, SeriesFilter } from './workspace';
+import { SPLIT_LIMITS } from '../spl/buildMstats';
+import { ChartModel, DEFAULT_GLOBAL_LIMIT, GlobalSplitLimit, SeriesFilter } from './workspace';
 
 /** What is kept between visits: the charts and the view around them. Never credentials or search results. */
 export interface SavedSession {
@@ -12,9 +13,12 @@ export interface SavedSession {
     catalogRange: string;
     globalSplit: string;
     globalFilters: SeriesFilter[];
+    globalLimit: GlobalSplitLimit;
 }
 
 export const SESSION_VERSION = 1;
+
+const SPLIT_LIMIT_VALUES: readonly number[] = SPLIT_LIMITS;
 
 export function sessionKey(user: string): string {
     return `metrics-explorer.session.v${SESSION_VERSION}.${user || 'default'}`;
@@ -80,8 +84,14 @@ export function parseSession(text: string | null): SavedSession | null {
     }
     // Sessions saved before the catalog range was kept fall back to the default.
     if (typeof value.catalogRange !== 'string') {
-        value.catalogRange = '-2d';
+        value.catalogRange = '-24h';
     }
+    // Sessions saved before the global split had its own limit show the top five.
+    const limit = isRecord(value.globalLimit) ? value.globalLimit : {};
+    value.globalLimit = {
+        direction: limit.direction === 'lowest' ? 'lowest' : DEFAULT_GLOBAL_LIMIT.direction,
+        limit: typeof limit.limit === 'number' && SPLIT_LIMIT_VALUES.includes(limit.limit) ? limit.limit : DEFAULT_GLOBAL_LIMIT.limit,
+    };
     if (value.charts.length === 0 || !value.charts.every(isChart)) {
         return null;
     }
