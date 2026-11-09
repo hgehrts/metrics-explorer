@@ -1974,7 +1974,7 @@ export function Explorer(): React.ReactElement {
                             {t('+ Add global filter')}
                         </TextLink>
                     )}
-                    {globalFilterError ? <Note role="alert">{globalFilterError}</Note> : null}
+                    {globalFilterError ? <Note role="alert">{t(globalFilterError)}</Note> : null}
                 </FilterBox>
                 ) : null}
                 {recovered && charts.length > 0 ? (
@@ -2275,7 +2275,7 @@ export function Explorer(): React.ReactElement {
                                         </SplitRow>
                                     </>
                                 ) : null}
-                                {referenceError ? <span role="alert">{referenceError}</span> : null}
+                                {referenceError ? <span role="alert">{t(referenceError)}</span> : null}
                             </Field>
                         ) : null}
                         <Field>
@@ -2439,7 +2439,7 @@ export function Explorer(): React.ReactElement {
                                     onChange={(event) => changeCustomPercentile(event.target.value)}
                                 />
                             ) : null}
-                            {customError ? <span role="alert">{customError}</span> : null}
+                            {customError ? <span role="alert">{t(customError)}</span> : null}
                         </Field>
                         ) : (
                             <Field>
@@ -2462,7 +2462,7 @@ export function Explorer(): React.ReactElement {
                             >
                                 <option value="">{t('None')}</option>
                                 {series.source === 'event' || series.source === 'dataset' ? null : (
-                                    <option value={INHERIT_SPLIT}>Inherit Global Split By</option>
+                                    <option value={INHERIT_SPLIT}>{t('Inherit Global Split By')}</option>
                                 )}
                                 {splitChoices(
                                     (series.source ?? 'metric') === 'metric' ? dimensions : sourceFields,
@@ -2533,7 +2533,7 @@ export function Explorer(): React.ReactElement {
                                     </Select>
                                 </SplitRow>
                             ) : null}
-                            {shiftError ? <span role="alert">{shiftError}</span> : null}
+                            {shiftError ? <span role="alert">{t(shiftError)}</span> : null}
                         </Field>
                         <Field as="div">
                             <SectionTitle>{t('Filter')}</SectionTitle>
@@ -2790,7 +2790,7 @@ export function Explorer(): React.ReactElement {
                                                         {t('Log')}
                                                     </label>
                                                 </span>
-                                                {validateAxis(axisDraft) ? <span role="alert">{validateAxis(axisDraft)}</span> : null}
+                                                {validateAxis(axisDraft) ? <span role="alert">{t(validateAxis(axisDraft))}</span> : null}
                                                 <SplitRow>
                                                     <ToolButton type="button" onClick={() => setAxisEdit(false)}>
                                                         {t('Cancel')}

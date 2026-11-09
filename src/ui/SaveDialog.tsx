@@ -11,8 +11,10 @@ import {
     metricAlertCondition,
     metricAlertFilter,
     scheduledAlertFields,
+    scriptFile,
     streamingAlertFields,
     timeAmount,
+    webhookUrl,
 } from '../actions/alerts';
 import {
     appendClassicPanels,
@@ -30,6 +32,7 @@ import { ChartModel, GlobalSplitLimit, globalFiltersFor, resolveSeries, SeriesFi
 import { baseSavedName, buildBaseSearchSpl } from '../spl/buildMstats';
 import { resolveForSource } from '../spl/functions';
 import { buildSeriesSearch } from '../spl/seriesSearch';
+import { AlertPreview } from './AlertPreview';
 import { ChartSaveMode } from './ChartView';
 import { Button, FormRow, Hint, Inline, Input, Modal, Picker } from './Modal';
 
@@ -214,6 +217,10 @@ export function SaveDialog(props: {
     const [severity, setSeverity] = useState('1');
     const [email, setEmail] = useState(false);
     const [emailTo, setEmailTo] = useState('');
+    const [webhook, setWebhook] = useState(false);
+    const [webhookTo, setWebhookTo] = useState('');
+    const [script, setScript] = useState(false);
+    const [scriptName, setScriptName] = useState('');
     const [streamingOk, setStreamingOk] = useState(true);
     const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
     const [error, setError] = useState('');
@@ -419,6 +426,14 @@ export function SaveDialog(props: {
         return email ? emailTo : '';
     }
 
+    function webhookTarget(): string {
+        return webhook ? webhookUrl(webhookTo) : '';
+    }
+
+    function scriptTarget(): string {
+        return script ? scriptFile(scriptName) : '';
+    }
+
     async function saveScheduled(title: string): Promise<void> {
         const panel = panels()[0];
         const cron = alertCron(every, everyUnit, minute);
@@ -440,6 +455,8 @@ export function SaveDialog(props: {
             throttle: throttle(['s', 'm', 'h', 'd']),
             description,
             emailTo: recipients(),
+            webhookUrl: webhookTarget(),
+            scriptFile: scriptTarget(),
         });
         if (!track) {
             fields['alert.track'] = '0';
@@ -471,6 +488,8 @@ export function SaveDialog(props: {
             throttleMinutes: throttleOn ? throttleAmount : '',
             description,
             emailTo: recipients(),
+            webhookUrl: webhookTarget(),
+            scriptFile: scriptTarget(),
         });
         if (!track) {
             fields['splunk_ui.track'] = '0';
@@ -759,6 +778,22 @@ export function SaveDialog(props: {
             ) : null}
             {!finished && alert ? (
                 <>
+                    {(() => {
+                        try {
+                            const panel = panels()[0];
+                            return panel ? (
+                                <AlertPreview
+                                    search={panel.search}
+                                    earliest={panel.earliest}
+                                    latest={panel.latest}
+                                    seriesName={panel.title}
+                                    categorical={isCategorical(chart?.settings.type ?? 'line')}
+                                />
+                            ) : null;
+                        } catch (caught) {
+                            return <Message $error>{caught instanceof Error ? caught.message : t('Nothing to save.')}</Message>;
+                        }
+                    })()}
                     {mode === 'alert-streaming' && !streamingOk ? (
                         <Message $error role="alert">
                             {t('Streaming alerts are not available on this instance.')}
@@ -885,6 +920,40 @@ export function SaveDialog(props: {
                             </FormRow>
                         </ActionBox>
                     ) : null}
+                    {webhook ? (
+                        <ActionBox>
+                            <Inline style={{ justifyContent: 'space-between' }}>
+                                <strong>{t('Webhook')}</strong>
+                                <Button type="button" aria-label={t('Remove action')} onClick={() => setWebhook(false)}>
+                                    ×
+                                </Button>
+                            </Inline>
+                            <FormRow>
+                                <span>{t('URL')}</span>
+                                <Column>
+                                    <Input aria-label={t('Webhook URL')} value={webhookTo} onChange={(event) => setWebhookTo(event.target.value)} placeholder="https://" />
+                                    <Hint>{t('An http or https address. Splunk calls it when the alert fires.')}</Hint>
+                                </Column>
+                            </FormRow>
+                        </ActionBox>
+                    ) : null}
+                    {script ? (
+                        <ActionBox>
+                            <Inline style={{ justifyContent: 'space-between' }}>
+                                <strong>{t('Run a script')}</strong>
+                                <Button type="button" aria-label={t('Remove action')} onClick={() => setScript(false)}>
+                                    ×
+                                </Button>
+                            </Inline>
+                            <FormRow>
+                                <span>{t('File name')}</span>
+                                <Column>
+                                    <Input aria-label={t('Script file name')} value={scriptName} onChange={(event) => setScriptName(event.target.value)} />
+                                    <Hint>{t('A file name in the Splunk scripts directory, without a path.')}</Hint>
+                                </Column>
+                            </FormRow>
+                        </ActionBox>
+                    ) : null}
                     <Inline>
                         {!track ? (
                             <Button type="button" onClick={() => setTrack(true)}>
@@ -894,6 +963,16 @@ export function SaveDialog(props: {
                         {!email ? (
                             <Button type="button" onClick={() => setEmail(true)}>
                                 + {t('Send email')}
+                            </Button>
+                        ) : null}
+                        {!webhook ? (
+                            <Button type="button" onClick={() => setWebhook(true)}>
+                                + {t('Webhook')}
+                            </Button>
+                        ) : null}
+                        {!script ? (
+                            <Button type="button" onClick={() => setScript(true)}>
+                                + {t('Run a script')}
                             </Button>
                         ) : null}
                     </Inline>

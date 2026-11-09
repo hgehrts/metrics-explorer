@@ -405,6 +405,58 @@ const GERMAN: Record<string, string> = {
     'optional': 'optional',
     'over': 'über',
     'to now': 'bis jetzt',
+    'Preview': 'Vorschau',
+    'Webhook': 'Webhook',
+    'URL': 'URL',
+    'Webhook URL': 'Webhook-URL',
+    'An http or https address. Splunk calls it when the alert fires.': 'Eine http- oder https-Adresse. Splunk ruft sie auf, wenn die Benachrichtigung auslöst.',
+    'Run a script': 'Skript ausführen',
+    'File name': 'Dateiname',
+    'Script file name': 'Skriptdatei',
+    'A file name in the Splunk scripts directory, without a path.': 'Ein Dateiname im Splunk-Skriptverzeichnis, ohne Pfad.',
+    'Remove webhook': 'Webhook entfernen',
+    'Remove script': 'Skript entfernen',
+    'Enter a webhook URL that starts with http:// or https://.': 'Geben Sie eine Webhook-URL ein, die mit http:// oder https:// beginnt.',
+    'Enter a script file name from the Splunk scripts directory, without a path.': 'Geben Sie einen Skriptdateinamen aus dem Splunk-Skriptverzeichnis ein, ohne Pfad.',
+    'Inherit Global Split By': 'Globale Unterteilung übernehmen',
+    'Select a dimension.': 'Dimension wählen.',
+    'Enter at least one value.': 'Mindestens einen Wert eingeben.',
+    'Use at most 50 values.': 'Höchstens 50 Werte verwenden.',
+    'Use letters, digits, dots, colons, dashes, and underscores. Values may not contain line breaks.':
+        'Verwenden Sie Buchstaben, Ziffern, Punkte, Doppelpunkte, Bindestriche und Unterstriche. Werte dürfen keine Zeilenumbrüche enthalten.',
+    'This global filter is already active.': 'Dieser globale Filter ist bereits aktiv.',
+    'Select at least one value.': 'Mindestens einen Wert wählen.',
+    'Use at most 50 values without quotes, backslashes, or line breaks.':
+        'Höchstens 50 Werte, ohne Anführungszeichen, umgekehrte Schrägstriche oder Zeilenumbrüche.',
+    'Enter a value.': 'Wert eingeben.',
+    'An index name may contain letters, digits, dots, underscores, and dashes.':
+        'Ein Indexname darf Buchstaben, Ziffern, Punkte, Unterstriche und Bindestriche enthalten.',
+    'Use letters, digits, dots, colons, dashes, underscores, and * as a wildcard.':
+        'Verwenden Sie Buchstaben, Ziffern, Punkte, Doppelpunkte, Bindestriche, Unterstriche und * als Platzhalter.',
+    'Enter a percentile from 0 to below 100 with up to three decimals.':
+        'Geben Sie ein Perzentil von 0 bis unter 100 mit höchstens drei Dezimalstellen ein.',
+    'Enter a smaller time shift.': 'Geben Sie eine kleinere Zeitverschiebung ein.',
+    'Time shift must be a numeric value.': 'Die Zeitverschiebung muss eine Zahl sein.',
+    'Enter a time range that starts before it ends.': 'Geben Sie einen Zeitraum ein, der vor seinem Ende beginnt.',
+    'Min must be a valid number.': 'Minimum muss eine gültige Zahl sein.',
+    'Max must be a valid number.': 'Maximum muss eine gültige Zahl sein.',
+    'Max must be greater than min.': 'Maximum muss größer als Minimum sein.',
+    'A log scale needs values above zero.': 'Eine logarithmische Skala braucht Werte über null.',
+    'Use a time like -4h, -7d, now, or a date like 2026-11-06 14:00.':
+        'Verwenden Sie eine Zeit wie -4h, -7d, now oder ein Datum wie 2026-11-06 14:00.',
+    'That date does not exist.': 'Dieses Datum gibt es nicht.',
+    'Start: use a time before now.': 'Start: Verwenden Sie eine Zeit vor jetzt.',
+    'The start must be before the end.': 'Der Start muss vor dem Ende liegen.',
+    'Start': 'Start',
+    'End': 'Ende',
+    'Time': 'Zeit',
+    'Search failed.': 'Suche fehlgeschlagen.',
+    'The search cannot be stored.': 'Die Suche kann nicht gespeichert werden.',
+    'That dashboard is not a Classic dashboard.': 'Dieses Dashboard ist kein klassisches Dashboard.',
+    'Metric name is not allowed.': 'Der Metrikname ist nicht zulässig.',
+    'Filter values cannot span lines.': 'Filterwerte dürfen keine Zeilenumbrüche enthalten.',
+    'Use letters, numbers, and . _ : -. Start with a letter or number. No spaces.':
+        'Verwenden Sie Buchstaben, Ziffern und . _ : -. Beginnen Sie mit einem Buchstaben oder einer Ziffer. Keine Leerzeichen.',
 };
 
 export function t(text: string): string {

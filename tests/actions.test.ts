@@ -6,6 +6,8 @@ import {
     metricAlertCondition,
     metricAlertFilter,
     scheduledAlertFields,
+    scriptFile,
+    webhookUrl,
     streamingAlertFields,
     timeAmount,
 } from '../src/actions/alerts';
@@ -96,8 +98,43 @@ test('an alert can also send e-mail and keeps its description', () => {
     expect(fields.cron_schedule).toBe('15 */2 * * *');
     expect(fields.description).toBe('Lab CPU');
     expect(fields['action.email.to']).toBe('a@example.com,b@example.com');
+    expect(fields.actions).toBe('email');
     expect(fields['alert.suppress']).toBe('0');
     expect(() => emailList('not an address')).toThrow('e-mail');
+});
+
+test('webhook and script actions keep a URL and a file name, and reject a path', () => {
+    expect(webhookUrl(' https://alerts.example/hook ')).toBe('https://alerts.example/hook');
+    expect(() => webhookUrl('javascript:alert(1)')).toThrow('http');
+    expect(scriptFile('disk_full.py')).toBe('disk_full.py');
+    expect(() => scriptFile('../bin/evil.sh')).toThrow('path');
+    const scheduled = scheduledAlertFields({
+        name: 'cpu',
+        search: '| mstats avg("lab.cpu.user") WHERE index=* span=1m',
+        earliest: '-1h',
+        comparator: 'greater than',
+        threshold: '80',
+        cron: '0 * * * *',
+        severity: 1,
+        throttle: '',
+        webhookUrl: 'https://alerts.example/hook',
+        scriptFile: 'disk_full.py',
+    });
+    expect(scheduled.actions).toBe('webhook, script');
+    expect(scheduled['action.webhook.param.url']).toBe('https://alerts.example/hook');
+    expect(scheduled['action.script.filename']).toBe('disk_full.py');
+    const streaming = streamingAlertFields({
+        name: 'cpu',
+        condition: "'avg(lab.cpu.user)' > 80",
+        metricIndexes: '*',
+        filter: '',
+        groupby: '',
+        severity: 1,
+        throttleMinutes: '',
+        webhookUrl: 'http://127.0.0.1/hook',
+    });
+    expect(streaming['action.webhook']).toBe('1');
+    expect(streaming.actions).toBeUndefined();
 });
 
 test('a streaming alert uses the metric_alerts settings', () => {

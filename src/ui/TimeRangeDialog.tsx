@@ -46,7 +46,8 @@ export function TimeRangeDialog(props: {
         }
         const result = customRange(start, end, now);
         if ('error' in result) {
-            setError(result.error);
+            const parts = /^(Start|End): (.*)$/.exec(result.error);
+            setError(parts ? `${t(parts[1])}: ${t(parts[2])}` : t(result.error));
             return;
         }
         props.onApply(result.earliest, result.latest);

@@ -626,7 +626,7 @@ export function ChartView(props: {
                         yAxisTitleVisibility: 'collapsed',
                         ...axisOptions(props.chart.settings),
                         ...(visual.stacked ? { stackMode: 'stacked' } : {}),
-                        ...(categorical ? { showDataLabels: 'all' } : {}),
+                        ...(categorical ? { dataValuesDisplay: 'all' } : {}),
                     }}
                 />
                 {hover ? (
@@ -651,7 +651,7 @@ export function ChartView(props: {
                             <tr>
                                 {stats.fields.map((field) => (
                                     <th key={field.name} scope="col">
-                                        {field.name === '_time' ? 'Time' : field.name}
+                                        {field.name === '_time' ? t('Time') : field.name}
                                     </th>
                                 ))}
                             </tr>

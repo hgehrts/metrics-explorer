@@ -74,6 +74,8 @@ export function scheduledAlertFields(input: {
     description?: string;
     /** Extra trigger action: e-mail to these addresses. */
     emailTo?: string;
+    webhookUrl?: string;
+    scriptFile?: string;
 }): Record<string, string> {
     const cron = CRON.test(input.cron) ? input.cron : ALERT_SCHEDULES[1].id;
     const severity = Math.min(5, Math.max(1, Math.round(input.severity)));
@@ -97,17 +99,61 @@ export function scheduledAlertFields(input: {
     if (input.description?.trim()) {
         fields.description = input.description.trim();
     }
-    const email = emailList(input.emailTo ?? '');
-    if (email) {
-        fields['action.email'] = '1';
-        fields['action.email.to'] = email;
-        fields.actions = 'email';
-    }
+    applyTriggerActions(fields, input, true);
     return fields;
 }
 
 const CRON = /^(\*|\*\/\d{1,2}|\d{1,2}) (\*|\*\/\d{1,2}|\d{1,2}) (\*|\*\/\d{1,2}) \* \*$/;
 const EMAIL = /^[^\s@,;"<>]+@[^\s@,;"<>]+\.[^\s@,;"<>]+$/;
+const WEBHOOK = /^https?:\/\/[^\s]+$/;
+const SCRIPT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
+
+/** A webhook receiver. Splunk accepts only http and https, with no spaces. */
+export function webhookUrl(text: string): string {
+    const url = text.trim();
+    if (!WEBHOOK.test(url) || url.length > 2000) {
+        throw new Error('Enter a webhook URL that starts with http:// or https://.');
+    }
+    return url;
+}
+
+/** A file name in $SPLUNK_HOME/bin/scripts. A path would point outside that directory. */
+export function scriptFile(text: string): string {
+    const name = text.trim();
+    if (!SCRIPT.test(name) || name.includes('..')) {
+        throw new Error('Enter a script file name from the Splunk scripts directory, without a path.');
+    }
+    return name;
+}
+
+function applyTriggerActions(
+    fields: Record<string, string>,
+    input: { emailTo?: string; webhookUrl?: string; scriptFile?: string },
+    listActions: boolean
+): void {
+    const names: string[] = [];
+    const email = emailList(input.emailTo ?? '');
+    if (email) {
+        fields['action.email'] = '1';
+        fields['action.email.to'] = email;
+        names.push('email');
+    }
+    if (input.webhookUrl) {
+        const url = webhookUrl(input.webhookUrl);
+        fields['action.webhook'] = '1';
+        fields['action.webhook.param.url'] = url;
+        names.push('webhook');
+    }
+    if (input.scriptFile) {
+        const name = scriptFile(input.scriptFile);
+        fields['action.script'] = '1';
+        fields['action.script.filename'] = name;
+        names.push('script');
+    }
+    if (listActions && names.length > 0) {
+        fields.actions = names.join(', ');
+    }
+}
 
 /** Comma separated e-mail addresses, or an empty string. Throws when one of them is not an address. */
 export function emailList(text: string): string {
@@ -170,6 +216,8 @@ export function streamingAlertFields(input: {
     throttleMinutes: string;
     description?: string;
     emailTo?: string;
+    webhookUrl?: string;
+    scriptFile?: string;
 }): Record<string, string> {
     const fields: Record<string, string> = {
         name: input.name,
@@ -189,10 +237,6 @@ export function streamingAlertFields(input: {
     if (input.description?.trim()) {
         fields.description = input.description.trim();
     }
-    const email = emailList(input.emailTo ?? '');
-    if (email) {
-        fields['action.email'] = '1';
-        fields['action.email.to'] = email;
-    }
+    applyTriggerActions(fields, input, false);
     return fields;
 }
