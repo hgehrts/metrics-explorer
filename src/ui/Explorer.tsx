@@ -2453,11 +2453,17 @@ export function Explorer(): React.ReactElement {
                             <Help>{t('Split this series into separate values.')}</Help>
                             <Select
                                 aria-label={t('Split by')}
-                                value={series.splitBy}
+                                value={
+                                    (series.source === 'event' || series.source === 'dataset') && series.splitBy === INHERIT_SPLIT
+                                        ? ''
+                                        : series.splitBy
+                                }
                                 onChange={(event) => patchSeries({ splitBy: event.target.value })}
                             >
                                 <option value="">{t('None')}</option>
-                                <option value={INHERIT_SPLIT}>Inherit Global Split By</option>
+                                {series.source === 'event' || series.source === 'dataset' ? null : (
+                                    <option value={INHERIT_SPLIT}>Inherit Global Split By</option>
+                                )}
                                 {splitChoices(
                                     (series.source ?? 'metric') === 'metric' ? dimensions : sourceFields,
                                     series.splitBy === INHERIT_SPLIT ? '' : series.splitBy

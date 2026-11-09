@@ -1,6 +1,6 @@
 import { buildBaseChartSearch, buildBaseSearchSpl, buildFieldSearch, buildSourcetypeSearch, buildTstats, readableFields, relatedEventsSearch } from '../src/spl/buildMstats';
 import { needsField, resolveEventFunction } from '../src/spl/functions';
-import { createSeries } from '../src/model/workspace';
+import { createSeries, INHERIT_SPLIT, resolveSeries, resolveSplit } from '../src/model/workspace';
 
 test('the sourcetype list skips nothing it was given and falls back to the internal index', () => {
     expect(buildSourcetypeSearch(['_internal', 'main'])).toBe(
@@ -78,6 +78,11 @@ test('a base search keeps the metric and filters and the chart adds the aggregat
     ).toBe('| savedsearch "MX Base - cpu" | timechart span=30m avg("_value") AS value');
 });
 
-test('an event series starts with Count', () => {
-    expect(createSeries('splunkd', [], 'event')).toMatchObject({ source: 'event', aggregation: 'Count', field: '' });
+test('an event series starts with Count and does not inherit a metric split', () => {
+    const event = createSeries('splunkd', [], 'event');
+    expect(event).toMatchObject({ source: 'event', aggregation: 'Count', field: '', splitBy: '' });
+    expect(createSeries('internal_server', [], 'dataset').splitBy).toBe('');
+    const inherited = { ...event, splitBy: INHERIT_SPLIT };
+    expect(resolveSplit(inherited, 'server')).toBe('');
+    expect(resolveSeries([inherited], 'server', true)[0].splitBy).toBe('');
 });

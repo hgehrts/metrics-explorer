@@ -46,8 +46,12 @@ export const INHERIT_SPLIT = '*global*';
 /**
  * The split a series actually uses: its own dimension, the global one when it inherits and the chart follows it, or none.
  */
-export function resolveSplit(series: Pick<Series, 'splitBy'>, globalSplit: string, useGlobalSplit = true): string {
+export function resolveSplit(series: Pick<Series, 'splitBy'> & { source?: Series['source'] }, globalSplit: string, useGlobalSplit = true): string {
     if (series.splitBy === INHERIT_SPLIT) {
+        // A metric dimension does not exist on events or data models. Inheriting it makes tstats return no rows.
+        if (series.source === 'event' || series.source === 'dataset') {
+            return '';
+        }
         return useGlobalSplit ? globalSplit : '';
     }
     return series.splitBy;
@@ -74,7 +78,11 @@ export function resolveSeries(
     globalLimit: GlobalSplitLimit = DEFAULT_GLOBAL_LIMIT
 ): Series[] {
     return series.map((item) =>
-        item.splitBy === INHERIT_SPLIT && useGlobalSplit && globalSplit
+        item.splitBy === INHERIT_SPLIT &&
+        useGlobalSplit &&
+        globalSplit &&
+        item.source !== 'event' &&
+        item.source !== 'dataset'
             ? { ...item, splitBy: globalSplit, splitDirection: globalLimit.direction, splitLimit: globalLimit.limit }
             : { ...item, splitBy: resolveSplit(item, globalSplit, useGlobalSplit) }
     );
@@ -130,7 +138,8 @@ export function createSeries(metric: string, filters: SeriesFilter[] = [], sourc
         baseMode: 'live',
         baseOwner: '',
         aggregation: source === 'metric' ? 'Avg' : 'Count',
-        splitBy: INHERIT_SPLIT,
+        // The workspace split is a metric dimension. Events and datasets start unsplit so a missing field does not blank the chart.
+        splitBy: source === 'event' || source === 'dataset' ? '' : INHERIT_SPLIT,
         splitDirection: 'highest',
         splitLimit: 5,
         timeShift: '',
