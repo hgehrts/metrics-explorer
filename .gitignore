@@ -11,3 +11,7 @@ coverage/
 playwright-report/
 test-results/
 .DS_Store
+
+# Design notes and the original Analytics Workspace reference extracts.
+# Kept on disk for local work, not published with the app.
+docs/superpowers/
