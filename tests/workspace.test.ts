@@ -6,6 +6,7 @@ import {
     INHERIT_SPLIT,
     refreshStatus,
     resolveSplit,
+    sharedDimensions,
     seriesLegend,
 } from '../src/model/workspace';
 
@@ -14,6 +15,19 @@ test('a split applies only when the rows carry that dimension', () => {
     expect(hasSplitValues([{ value: 1 }], 'extracted_host')).toBe(false);
     expect(hasSplitValues([{ extracted_host: '' }], 'extracted_host')).toBe(false);
     expect(hasSplitValues([{ extracted_host: 'lab-a' }], '')).toBe(false);
+});
+
+test('global Split By lists only dimensions shared by the active chart metrics', () => {
+    expect(sharedDimensions([], { cpu: ['host'] })).toEqual([]);
+    expect(sharedDimensions(['cpu'], {})).toEqual([]);
+    expect(sharedDimensions(['cpu'], { cpu: ['region', 'host', 'source'] })).toEqual(['host', 'region', 'source']);
+    expect(
+        sharedDimensions(['cpu', 'mem'], {
+            cpu: ['host', 'region', 'source'],
+            mem: ['dc', 'host', 'source'],
+        })
+    ).toEqual(['host', 'source']);
+    expect(sharedDimensions(['cpu', 'cpu'], { cpu: ['host'] })).toEqual(['host']);
 });
 
 test('a new series inherits the global split, and a chosen split overrides it', () => {

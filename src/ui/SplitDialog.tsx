@@ -12,10 +12,10 @@ export function SplitDialog(props: {
     onApply: (split: string, limit: GlobalSplitLimit) => void;
     onClose: () => void;
 }): React.ReactElement {
-    const [split, setSplit] = useState(props.split);
+    const [split, setSplit] = useState(props.dimensions.includes(props.split) ? props.split : '');
     const [direction, setDirection] = useState(props.limit.direction);
     const [limit, setLimit] = useState(props.limit.limit);
-    const choices = split && !props.dimensions.includes(split) ? [split, ...props.dimensions] : props.dimensions;
+    const choices = props.dimensions;
     return (
         <Modal
             title={t('Split metrics by a dimension')}

@@ -47,6 +47,7 @@ import {
     INHERIT_SPLIT,
     refreshStatus,
     resolveSplit,
+    sharedDimensions,
     Series,
     SeriesFilter,
     seriesLegend,
@@ -1226,6 +1227,12 @@ export function Explorer(): React.ReactElement {
     }
 
     const selected = charts.find((chart) => chart.id === selectedId) ?? charts[0];
+    const globalSplitDimensions = sharedDimensions(
+        (selected?.series ?? [])
+            .filter((item) => (item.source ?? 'metric') === 'metric')
+            .map((item) => item.metric),
+        metricDims
+    );
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
 
     useEffect(() => {
@@ -3080,7 +3087,7 @@ export function Explorer(): React.ReactElement {
             ) : null}
             {splitDialog ? (
                 <SplitDialog
-                    dimensions={allDimensions}
+                    dimensions={globalSplitDimensions}
                     split={globalSplit}
                     limit={globalLimit}
                     onClose={() => setSplitDialog(false)}

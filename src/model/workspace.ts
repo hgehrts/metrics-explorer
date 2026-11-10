@@ -46,6 +46,24 @@ export const INHERIT_SPLIT = '*global*';
 /**
  * The split a series actually uses: its own dimension, the global one when it inherits and the chart follows it, or none.
  */
+/**
+ * Dimensions the global Split By list may offer for the metrics in the active chart.
+ * Nothing is selected, or a metric's dimensions are not loaded yet: the list stays empty.
+ * Several metrics offer only the dimensions every one of them has.
+ */
+export function sharedDimensions(metrics: string[], known: Record<string, string[] | undefined>): string[] {
+    const unique = [...new Set(metrics.filter(Boolean))];
+    if (unique.length === 0) {
+        return [];
+    }
+    const lists = unique.map((metric) => known[metric]);
+    if (lists.some((list) => !list)) {
+        return [];
+    }
+    const [first, ...rest] = lists as string[][];
+    return first.filter((name) => rest.every((list) => list.includes(name))).sort();
+}
+
 export function resolveSplit(series: Pick<Series, 'splitBy'> & { source?: Series['source'] }, globalSplit: string, useGlobalSplit = true): string {
     if (series.splitBy === INHERIT_SPLIT) {
         // A metric dimension does not exist on events or data models. Inheriting it makes tstats return no rows.
