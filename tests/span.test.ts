@@ -1,4 +1,11 @@
-import { estimatedPoints, searchWindow, spanForDuration, spanForRange } from '../src/spl/span';
+import { activeSpan, estimatedPoints, searchWindow, spanForDuration, spanForRange } from '../src/spl/span';
+
+test('a chosen span is kept and an empty one follows the range', () => {
+    const now = 1_800_000_000;
+    expect(activeSpan('30s', '-60m', 'now', now)).toBe('30s');
+    expect(activeSpan('', '-60m', 'now', now)).toBe('10s');
+    expect(activeSpan('30s | delete', '-60m', 'now', now)).toBe('10s');
+});
 
 test('uses 10s for one hour so the chart stays under 1000 points', () => {
     expect(spanForDuration(3600)).toBe('10s');

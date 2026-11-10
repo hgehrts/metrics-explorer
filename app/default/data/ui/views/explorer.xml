@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <dashboard version="1.1" hideTitle="true" hideEdit="true" hideExport="true" hideFilters="true" script="build/explorer.js" stylesheet="build/explorer.css">
-  <label>Metrics Explorer</label>
+  <label>Metric Explorer NG</label>
   <description>Browse metric indexes without writing SPL.</description>
   <row>
     <panel>

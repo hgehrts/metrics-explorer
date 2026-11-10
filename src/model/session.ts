@@ -1,4 +1,5 @@
 import { SPLIT_LIMITS } from '../spl/buildMstats';
+import { spanSeconds } from '../spl/span';
 import { ChartModel, DEFAULT_GLOBAL_LIMIT, GlobalSplitLimit, SeriesFilter } from './workspace';
 
 /** What is kept between visits: the charts and the view around them. Never credentials or search results. */
@@ -14,6 +15,8 @@ export interface SavedSession {
     globalSplit: string;
     globalFilters: SeriesFilter[];
     globalLimit: GlobalSplitLimit;
+    /** Empty follows the time range. Otherwise an SPL span such as 30s or 5m for every chart on Auto. */
+    globalSpan: string;
 }
 
 export const SESSION_VERSION = 1;
@@ -95,6 +98,8 @@ export function parseSession(text: string | null): SavedSession | null {
     if (value.charts.length === 0 || !value.charts.every(isChart)) {
         return null;
     }
+    // Sessions saved before the toolbar span existed stay on automatic.
+    value.globalSpan = typeof value.globalSpan === 'string' && spanSeconds(value.globalSpan) ? value.globalSpan : '';
     // Global filters are checked like any filter: names and values only, never raw SPL.
     value.globalFilters = Array.isArray(value.globalFilters)
         ? (value.globalFilters as unknown[]).filter(isSeriesFilter)

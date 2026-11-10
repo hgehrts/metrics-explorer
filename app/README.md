@@ -1,4 +1,4 @@
-# Metrics Explorer
+# Metric Explorer NG
 
 Browse metric indexes without writing SPL.
 

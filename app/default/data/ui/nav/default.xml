@@ -1,3 +1,7 @@
 <nav search_view="explorer">
   <view name="explorer" default="true"/>
+  <view name="dashboards"/>
+  <!-- The Documentation label is translated in locale/de_DE. -->
+  <view name="documentation"/>
 </nav>
+

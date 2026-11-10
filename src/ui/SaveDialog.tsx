@@ -174,6 +174,7 @@ export function SaveDialog(props: {
     globalSplit: string;
     globalLimit: GlobalSplitLimit;
     globalFilters: SeriesFilter[];
+    globalSpan: string;
     metricDims: Record<string, string[]>;
     eventIndexes: string[];
     metricIndexes?: string[];
@@ -559,6 +560,7 @@ export function SaveDialog(props: {
                 globalSplit: props.globalSplit,
                 globalLimit: props.globalLimit,
                 globalFilters: props.globalFilters,
+                globalSpan: props.globalSpan,
             },
             Date.now()
         );

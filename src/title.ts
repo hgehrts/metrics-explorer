@@ -1,1 +1,1 @@
-export const APP_TITLE = 'Metrics Explorer';
+export const APP_TITLE = 'Metric Explorer NG';

@@ -1,6 +1,9 @@
 import { parseTimeShift, shiftSeconds } from './timeShift';
 import { boundSeconds, isRelativeBound } from './timeRange';
 
+/** Spans the toolbar offers. The same steps size an automatic span. */
+export const SPAN_PRESETS = ['1s', '10s', '30s', '1m', '5m', '10m', '30m', '1h', '4h', '1d', '7d'] as const;
+
 const SPANS: { seconds: number; spl: string }[] = [
     { seconds: 1, spl: '1s' },
     { seconds: 10, spl: '10s' },
@@ -50,6 +53,14 @@ export function estimatedPoints(earliest: string, latest: string, span: string, 
 export function spanForRange(earliest: string, latest = 'now', nowSeconds = Date.now() / 1000): string {
     const duration = boundSeconds(latest, nowSeconds) - boundSeconds(earliest, nowSeconds);
     return spanForDuration(duration > 0 ? duration : 3600);
+}
+
+/**
+ * The span shared by every chart that has not chosen its own.
+ * A chosen span is kept as written, including while the user is zoomed in. Anything else follows the window.
+ */
+export function activeSpan(chosen: string, earliest: string, latest = 'now', nowSeconds = Date.now() / 1000): string {
+    return spanSeconds(chosen) ? chosen : spanForRange(earliest, latest, nowSeconds);
 }
 
 /**

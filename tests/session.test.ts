@@ -4,7 +4,7 @@ import { createChart } from '../src/model/workspace';
 function sample(): string {
     const chart = createChart('lab.net.bytes_total');
     return serializeSession(
-        { charts: [chart], layout: 'grid', range: '-60m', latest: 'now', catalogRange: '-7d', globalSplit: 'host', globalLimit: { direction: 'lowest', limit: 10 }, globalFilters: [] },
+        { charts: [chart], layout: 'grid', range: '-60m', latest: 'now', catalogRange: '-7d', globalSplit: 'host', globalLimit: { direction: 'lowest', limit: 10 }, globalFilters: [], globalSpan: '30s' },
         1234
     );
 }
@@ -18,6 +18,7 @@ test('a saved session comes back with its charts and view', () => {
     expect(session?.range).toBe('-60m');
     expect(session?.catalogRange).toBe('-7d');
     expect(session?.globalSplit).toBe('host');
+    expect(session?.globalSpan).toBe('30s');
     expect(session?.globalLimit).toEqual({ direction: 'lowest', limit: 10 });
     expect(session?.savedAt).toBe(1234);
 });
@@ -25,7 +26,7 @@ test('a saved session comes back with its charts and view', () => {
 test('a session keeps a custom range end and falls back to now for damaged values', () => {
     const custom = parseSession(
         serializeSession(
-            { charts: [createChart('lab.net.bytes_total')], layout: 'stack', range: '1700000000', latest: '1700003600', catalogRange: '-2d', globalSplit: '', globalLimit: { direction: 'highest', limit: 5 }, globalFilters: [] },
+            { charts: [createChart('lab.net.bytes_total')], layout: 'stack', range: '1700000000', latest: '1700003600', catalogRange: '-2d', globalSplit: '', globalLimit: { direction: 'highest', limit: 5 }, globalFilters: [], globalSpan: '' },
             1
         )
     );
@@ -38,6 +39,9 @@ test('a session saved without a catalog range or global limit gets the defaults'
     const text = JSON.stringify({ version: 1, charts: [chart()], layout: 'grid', range: '-1h', globalSplit: '', savedAt: 1 });
     expect(parseSession(text)?.catalogRange).toBe('-24h');
     expect(parseSession(text)?.globalLimit).toEqual({ direction: 'highest', limit: 5 });
+    expect(parseSession(text)?.globalSpan).toBe('');
+    const rejected = JSON.stringify({ ...JSON.parse(text), globalSpan: '30s | delete' });
+    expect(parseSession(rejected)?.globalSpan).toBe('');
 });
 
 function chart() {

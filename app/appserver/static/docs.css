@@ -1,0 +1,112 @@
+.mx-docs {
+    max-width: 1080px;
+    font-size: 16px;
+    line-height: 1.5;
+}
+.mx-docs h2 {
+    margin: 1.4em 0 0.35em;
+    font-size: 1.45em;
+}
+.mx-docs h3 {
+    margin: 0.9em 0 0.2em;
+    font-size: 1.15em;
+    scroll-margin-top: 16px;
+}
+.mx-docs p {
+    margin: 0.35em 0 0.7em;
+}
+.mx-docs ul {
+    margin: 0.15em 0 0.55em 1.2em;
+    padding: 0;
+}
+.mx-docs li {
+    margin: 0.18em 0;
+}
+.mx-docs code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+}
+.mx-figure {
+    position: relative;
+    margin: 0.6em 0 1em;
+}
+.mx-figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin: 0;
+}
+.mx-hot {
+    position: absolute;
+    width: 2.4%;
+    height: 2.8%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    overflow: hidden;
+    z-index: 1;
+}
+.mx-hot:hover,
+.mx-hot:focus {
+    box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #6e1230;
+    outline: none;
+}
+.mx-figure-en .mx-n-1 { left: 21.4297%; top: 10.9060%; }
+.mx-figure-en .mx-n-2 { left: 21.4299%; top: 15.8340%; }
+.mx-figure-en .mx-n-3 { left: 21.4285%; top: 18.1062%; }
+.mx-figure-en .mx-n-4 { left: 21.4289%; top: 13.8386%; }
+.mx-figure-en .mx-n-5 { left: 21.4291%; top: 65.3788%; }
+.mx-figure-en .mx-n-6 { left: 21.4310%; top: 67.8234%; }
+.mx-figure-en .mx-n-7 { left: 21.4296%; top: 70.2807%; }
+.mx-figure-en .mx-n-8 { left: 21.4303%; top: 73.0690%; }
+.mx-figure-en .mx-n-9 { left: 21.4305%; top: 75.8680%; }
+.mx-figure-en .mx-n-10 { left: 23.7407%; top: 44.7437%; }
+.mx-figure-en .mx-n-11 { left: 27.2644%; top: 8.6649%; }
+.mx-figure-en .mx-n-12 { left: 30.9491%; top: 8.6614%; }
+.mx-figure-en .mx-n-13 { left: 38.0914%; top: 8.6620%; }
+.mx-figure-en .mx-n-14 { left: 42.8526%; top: 8.6600%; }
+.mx-figure-en .mx-n-15 { left: 45.0529%; top: 8.6619%; }
+.mx-figure-en .mx-n-16 { left: 56.8369%; top: 8.6587%; }
+.mx-figure-en .mx-n-17 { left: 65.1798%; top: 8.6691%; }
+.mx-figure-en .mx-n-18 { left: 69.6337%; top: 8.6595%; }
+.mx-figure-en .mx-n-19 { left: 72.3728%; top: 8.6614%; }
+.mx-figure-en .mx-n-20 { left: 27.9727%; top: 10.8238%; }
+.mx-figure-en .mx-n-21 { left: 45.2464%; top: 15.3747%; }
+.mx-figure-en .mx-n-22 { left: 70.5374%; top: 14.7359%; }
+.mx-figure-en .mx-n-23 { left: 42.8591%; top: 27.9591%; }
+.mx-figure-en .mx-n-24 { left: 82.4418%; top: 43.2018%; }
+.mx-figure-en .mx-n-25 { left: 83.9278%; top: 49.6372%; }
+.mx-figure-en .mx-n-26 { left: 92.8547%; top: 11.5919%; }
+.mx-figure-en .mx-n-27 { left: 83.9357%; top: 56.4280%; }
+.mx-figure-en .mx-n-28 { left: 81.4253%; top: 39.1453%; }
+.mx-figure-de .mx-n-1 { left: 22.0250%; top: 10.9060%; }
+.mx-figure-de .mx-n-2 { left: 22.0251%; top: 15.8113%; }
+.mx-figure-de .mx-n-3 { left: 22.0237%; top: 18.1062%; }
+.mx-figure-de .mx-n-4 { left: 22.0242%; top: 13.7687%; }
+.mx-figure-de .mx-n-5 { left: 22.0243%; top: 65.7285%; }
+.mx-figure-de .mx-n-6 { left: 22.0263%; top: 68.5227%; }
+.mx-figure-de .mx-n-7 { left: 22.0248%; top: 70.9800%; }
+.mx-figure-de .mx-n-8 { left: 22.0256%; top: 74.8172%; }
+.mx-figure-de .mx-n-9 { left: 22.0257%; top: 77.2666%; }
+.mx-figure-de .mx-n-10 { left: 23.7407%; top: 48.9395%; }
+.mx-figure-de .mx-n-11 { left: 25.2406%; top: 8.6649%; }
+.mx-figure-de .mx-n-12 { left: 29.3991%; top: 8.6473%; }
+.mx-figure-de .mx-n-13 { left: 38.4485%; top: 8.6620%; }
+.mx-figure-de .mx-n-14 { left: 46.2455%; top: 8.6600%; }
+.mx-figure-de .mx-n-15 { left: 50.0529%; top: 8.6619%; }
+.mx-figure-de .mx-n-16 { left: 58.0273%; top: 8.6587%; }
+.mx-figure-de .mx-n-17 { left: 69.4655%; top: 8.6691%; }
+.mx-figure-de .mx-n-18 { left: 75.1695%; top: 8.6595%; }
+.mx-figure-de .mx-n-19 { left: 78.3252%; top: 8.6614%; }
+.mx-figure-de .mx-n-20 { left: 29.7585%; top: 10.8238%; }
+.mx-figure-de .mx-n-21 { left: 47.0321%; top: 15.9342%; }
+.mx-figure-de .mx-n-22 { left: 75.5969%; top: 15.5051%; }
+.mx-figure-de .mx-n-23 { left: 46.4305%; top: 26.5605%; }
+.mx-figure-de .mx-n-24 { left: 90.4775%; top: 46.9780%; }
+.mx-figure-de .mx-n-25 { left: 92.8564%; top: 57.4694%; }
+.mx-figure-de .mx-n-26 { left: 98.8070%; top: 11.8716%; }
+.mx-figure-de .mx-n-27 { left: 95.2452%; top: 69.2252%; }
+.mx-figure-de .mx-n-28 { left: 80.7110%; top: 50.3341%; }

@@ -28,7 +28,7 @@ import {
 } from '../spl/functions';
 import { parseTimeShift, SHIFT_UNITS, ShiftUnit, timeShiftToken } from '../spl/timeShift';
 import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, buildFieldSearch, buildSourcetypeSearch, readableFields, SPLIT_LIMITS } from '../spl/buildMstats';
-import { spanForRange } from '../spl/span';
+import { activeSpan, SPAN_PRESETS } from '../spl/span';
 import { boundForInput } from '../spl/timeRange';
 import { isSeriesFilter } from '../model/session';
 import { collectDimensions, collectFieldValues, collectMetricNames, collectValueMetrics, runSearch } from '../search/runSearch';
@@ -522,6 +522,20 @@ const Stage = styled.main`
     min-height: 0;
 `;
 
+const SpanCustom = styled.div`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 12px 8px;
+
+    input,
+    select {
+        width: 72px;
+        font-size: 12px;
+        padding: 4px;
+    }
+`;
+
 const Toolbar = styled.div`
     display: flex;
     gap: 6px;
@@ -836,6 +850,10 @@ export function Explorer(): React.ReactElement {
     const [spanCount, setSpanCount] = useState('');
     const [spanUnit, setSpanUnit] = useState('m');
     const [spanEdit, setSpanEdit] = useState(false);
+    /** Empty follows the time range. A value applies to every chart that has not set its own span. */
+    const [globalSpan, setGlobalSpan] = useState('');
+    const [globalSpanCount, setGlobalSpanCount] = useState('30');
+    const [globalSpanUnit, setGlobalSpanUnit] = useState('s');
     const [axisEdit, setAxisEdit] = useState(false);
     const [axisDraft, setAxisDraft] = useState<Pick<ChartSettings, 'yMin' | 'yMax' | 'yScale'>>({ yMin: '', yMax: '', yScale: 'linear' });
     const [referenceOpen, setReferenceOpen] = useState(false);
@@ -1017,7 +1035,7 @@ export function Explorer(): React.ReactElement {
             return;
         }
         const session = serializeSession(
-            { charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit },
+            { charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit, globalSpan },
             Date.now()
         );
         try {
@@ -1026,7 +1044,7 @@ export function Explorer(): React.ReactElement {
         } catch {
             // Storage can be full or disabled; the workspace still works without it.
         }
-    }, [charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit]);
+    }, [charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit, globalSpan]);
 
     useEffect(() => {
         // A new range replaces the zoom, because the zoom lies inside the old range.
@@ -1046,6 +1064,7 @@ export function Explorer(): React.ReactElement {
         setGlobalSplit(saved.globalSplit);
         setGlobalFilters(saved.globalFilters);
         setGlobalLimit(saved.globalLimit);
+        setGlobalSpan(saved.globalSpan);
         setRecovered(false);
     }
 
@@ -1230,7 +1249,7 @@ export function Explorer(): React.ReactElement {
         );
     }, [series?.id, series?.source, series?.metric, catalogRange, eventIndexes]);
     const chosen = resolveForSource(series?.source, series?.aggregation ?? '');
-    const span = spanForRange(range, latest);
+    const span = activeSpan(globalSpan, zoom?.earliest ?? range, zoom?.latest ?? latest);
     const locale = window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1];
     const selectedMetrics = new Set(selected?.series.map((item) => item.metric) ?? []);
 
@@ -1873,6 +1892,73 @@ export function Explorer(): React.ReactElement {
                         )}
                     </DropdownMenu>
                     <Divider />
+                    <DropdownMenu
+                        label={t('Time span')}
+                        trigger={(isOpen, toggle) => (
+                            <Bar type="button" aria-label={t('Time span')} aria-expanded={isOpen} onClick={toggle}>
+                                {t('Time span')}: {globalSpan || t('Auto')} ▾
+                            </Bar>
+                        )}
+                    >
+                        {(close) => (
+                            <>
+                                <MenuItem
+                                    $checked={!globalSpan}
+                                    onClick={() => {
+                                        setGlobalSpan('');
+                                        close();
+                                    }}
+                                >
+                                    {t('Auto')}
+                                </MenuItem>
+                                {SPAN_PRESETS.map((item) => (
+                                    <MenuItem
+                                        key={item}
+                                        $checked={globalSpan === item}
+                                        onClick={() => {
+                                            setGlobalSpan(item);
+                                            close();
+                                        }}
+                                    >
+                                        {item}
+                                    </MenuItem>
+                                ))}
+                                <MenuHeading>{t('Custom…')}</MenuHeading>
+                                <SpanCustom>
+                                    <TextInput
+                                        aria-label={t('Span count')}
+                                        value={globalSpanCount}
+                                        inputMode="numeric"
+                                        onChange={(event) => setGlobalSpanCount(event.target.value)}
+                                    />
+                                    <Select
+                                        aria-label={t('Span unit')}
+                                        value={globalSpanUnit}
+                                        onChange={(event) => setGlobalSpanUnit(event.target.value)}
+                                    >
+                                        {SPAN_UNITS.map((item) => (
+                                            <option key={item.id} value={item.id}>
+                                                {t(item.label)}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                    <ToolButton
+                                        type="button"
+                                        disabled={buildSpan(globalSpanCount, globalSpanUnit) === null}
+                                        onClick={() => {
+                                            const next = buildSpan(globalSpanCount, globalSpanUnit);
+                                            if (next) {
+                                                setGlobalSpan(next);
+                                                close();
+                                            }
+                                        }}
+                                    >
+                                        {t('Apply span')}
+                                    </ToolButton>
+                                </SpanCustom>
+                            </>
+                        )}
+                    </DropdownMenu>
                     <Bar
                         type="button"
                         aria-label={t('Refresh chart data')}
@@ -2110,6 +2196,7 @@ export function Explorer(): React.ReactElement {
                                 range={range}
                                 latest={latest}
                                 span={span}
+                                spanManual={Boolean(globalSpan)}
                                 refreshToken={refreshToken}
                                 globalSplit={globalSplit}
                                 globalLimit={globalLimit}
@@ -2136,13 +2223,17 @@ export function Explorer(): React.ReactElement {
                                     setSelectedSeriesId(copy.series[0]?.id ?? '');
                                     setExpandedSeriesId(copy.series[0]?.id ?? '');
                                 }}
-                                onWidenSpan={(next) =>
-                                    setCharts((current) =>
-                                        current.map((item) =>
-                                            item.id === chart.id ? { ...item, settings: { ...item.settings, span: next } } : item
-                                        )
-                                    )
-                                }
+                                onWidenSpan={(next) => {
+                                    if (chart.settings.span) {
+                                        setCharts((current) =>
+                                            current.map((item) =>
+                                                item.id === chart.id ? { ...item, settings: { ...item.settings, span: next } } : item
+                                            )
+                                        );
+                                        return;
+                                    }
+                                    setGlobalSpan(next);
+                                }}
                                 onSave={(mode) => {
                                     setSelectedId(chart.id);
                                     setSaveMode(mode);
@@ -2805,7 +2896,8 @@ export function Explorer(): React.ReactElement {
                                     ) : (
                                         <SplitRow>
                                             <span>
-                                                {t('Time span')} = {selected.settings.span || t('Auto')}
+                                                {t('Time span')} ={' '}
+                                                {selected.settings.span || (globalSpan ? `${t('Auto')} (${globalSpan})` : t('Auto'))}
                                             </span>
                                             <TextLink
                                                 type="button"
@@ -3012,6 +3104,7 @@ export function Explorer(): React.ReactElement {
                     layout={layout}
                     globalSplit={globalSplit}
                     globalFilters={globalFilters}
+                    globalSpan={globalSpan}
                     metricDims={metricDims}
                     eventIndexes={eventIndexes}
                     metricIndexes={metricIndexes}

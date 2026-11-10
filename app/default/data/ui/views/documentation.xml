@@ -1,0 +1,298 @@
+<?xml version="1.0"?>
+<dashboard version="1.1" stylesheet="docs.css" script="docs.js" hideEdit="true" hideExport="true">
+  <label>Documentation</label>
+  <description>Areas and functions of Metric Explorer NG.</description>
+  <row>
+    <panel>
+      <html>
+        <div class="mx-docs mx-docs-en">
+          <p>The app name in the bar is Metric Explorer NG. The app ID stays <code>metrics_explorer</code>. Dashboards, reports, alerts, base searches, and workspaces saved here belong to this app. The numbers in the picture match the sections below.</p>
+          <div class="mx-figure mx-figure-en">
+          <img src="/static/app/metrics_explorer/docs-annotated-en.png" alt="Metric Explorer NG with numbered areas"/>
+          <a class="mx-hot mx-n-1" href="#mx-1">1</a>
+          <a class="mx-hot mx-n-2" href="#mx-2">2</a>
+          <a class="mx-hot mx-n-3" href="#mx-3">3</a>
+          <a class="mx-hot mx-n-4" href="#mx-4">4</a>
+          <a class="mx-hot mx-n-5" href="#mx-5">5</a>
+          <a class="mx-hot mx-n-6" href="#mx-6">6</a>
+          <a class="mx-hot mx-n-7" href="#mx-7">7</a>
+          <a class="mx-hot mx-n-8" href="#mx-8">8</a>
+          <a class="mx-hot mx-n-9" href="#mx-9">9</a>
+          <a class="mx-hot mx-n-10" href="#mx-10">10</a>
+          <a class="mx-hot mx-n-11" href="#mx-11">11</a>
+          <a class="mx-hot mx-n-12" href="#mx-12">12</a>
+          <a class="mx-hot mx-n-13" href="#mx-13">13</a>
+          <a class="mx-hot mx-n-14" href="#mx-14">14</a>
+          <a class="mx-hot mx-n-15" href="#mx-15">15</a>
+          <a class="mx-hot mx-n-16" href="#mx-16">16</a>
+          <a class="mx-hot mx-n-17" href="#mx-17">17</a>
+          <a class="mx-hot mx-n-18" href="#mx-18">18</a>
+          <a class="mx-hot mx-n-19" href="#mx-19">19</a>
+          <a class="mx-hot mx-n-20" href="#mx-20">20</a>
+          <a class="mx-hot mx-n-21" href="#mx-21">21</a>
+          <a class="mx-hot mx-n-22" href="#mx-22">22</a>
+          <a class="mx-hot mx-n-23" href="#mx-23">23</a>
+          <a class="mx-hot mx-n-24" href="#mx-24">24</a>
+          <a class="mx-hot mx-n-25" href="#mx-25">25</a>
+          <a class="mx-hot mx-n-26" href="#mx-26">26</a>
+          <a class="mx-hot mx-n-27" href="#mx-27">27</a>
+          <a class="mx-hot mx-n-28" href="#mx-28">28</a>
+        </div>
+
+          <h2>Data, left column</h2>
+          <p>The column lists what can be charted. It filters the list, not the points of a chart that is already drawn.</p>
+
+          <h3 id="mx-1">1. Search</h3>
+          <ul>
+            <li>Filters metrics, events, datasets, base searches, and alerts by the text you type.</li>
+            <li>Matches in the name are marked. A folder that contains a match is expanded.</li>
+            <li>The cross clears the text.</li>
+          </ul>
+
+          <h3 id="mx-2">2. Data filters</h3>
+          <ul>
+            <li>Limit which metrics and sourcetypes appear in the list.</li>
+            <li>A new filter asks for the field, the mode, and the values. Index and other fields are available.</li>
+            <li>The cross on a filter removes it. Reset to defaults restores the filters from the app configuration.</li>
+            <li>These filters go into the catalog search. Filters for the drawn values are under Global filters and in Analysis.</li>
+          </ul>
+
+          <h3 id="mx-3">3. Grouping</h3>
+          <ul>
+            <li>Group by orders the metric tree by metric name, by index, or by a dimension.</li>
+            <li>The separator splits the name into folders at that character. A dot gives the usual <code>a.b.c</code> hierarchy.</li>
+            <li>A click on a folder expands or collapses it.</li>
+          </ul>
+
+          <h3 id="mx-4">4. Metrics</h3>
+          <ul>
+            <li>A click on the name creates a new chart and selects it.</li>
+            <li>The icon to the right adds the metric to the selected chart instead of opening a new one.</li>
+            <li>The list comes from the metric catalog for the catalog time range. If entries are missing, a note under the list says that only the first <code>max_metrics</code> were loaded.</li>
+            <li>Host, source, and sourcetype are offered as dimensions even when the catalog does not list them.</li>
+          </ul>
+
+          <h3 id="mx-5">5. Events</h3>
+          <ul>
+            <li>Lists sourcetypes in the catalog time range.</li>
+            <li>A click opens an event chart. The search runs with <code>tstats</code>, not <code>mstats</code>.</li>
+            <li>Analysis is where you pick the field to aggregate. <code>exactperc</code> is available here. <code>rate_avg</code> and <code>rate_sum</code> are not.</li>
+          </ul>
+
+          <h3 id="mx-6">6. Datasets</h3>
+          <ul>
+            <li>Lists data models.</li>
+            <li>A click opens a chart on that data model, also through <code>tstats</code>.</li>
+          </ul>
+
+          <h3 id="mx-7">7. Base searches</h3>
+          <ul>
+            <li>Lists base searches saved in this app.</li>
+            <li>A click opens a chart on that search.</li>
+            <li>New base searches are created with Save as base search in a chart's menu.</li>
+          </ul>
+
+          <h3 id="mx-8">8. Alerts</h3>
+          <ul>
+            <li>Lists alerts in this app.</li>
+            <li>Show triggered instances opens the triggered instances in Splunk.</li>
+          </ul>
+
+          <h3 id="mx-9">9. Catalog time range</h3>
+          <ul>
+            <li>Sets the window the catalog uses to find metrics and sourcetypes.</li>
+            <li>This is not the time range of the charts. That control is the bar in the center.</li>
+            <li>A longer window finds more names and takes longer. The note about that sits on the menu.</li>
+          </ul>
+
+          <h3 id="mx-10">10. Column width</h3>
+          <ul>
+            <li>The line between Data and the charts moves the column. The center gets narrower or wider to match.</li>
+            <li>Drag with the mouse. Left and right arrow move it 16 pixels, Shift moves it 48.</li>
+            <li>The column can collapse to a narrow rail. Show data opens it again.</li>
+            <li>The width applies to the current view and is not stored with the workspace.</li>
+          </ul>
+
+          <h2>Bar above the charts</h2>
+
+          <h3 id="mx-11">11. Zoom out</h3>
+          <ul>
+            <li>On a time chart, drag a window across the plot to zoom. Categorical charts and the heatmap do not zoom.</li>
+            <li>The zoom applies to every chart. Zoom out clears it.</li>
+            <li>While zoomed, Refresh and auto-refresh are off.</li>
+          </ul>
+
+          <h3 id="mx-12">12. Time range</h3>
+          <ul>
+            <li>The search window of the charts. Presets, or your own start and end.</li>
+            <li>Changing the time range clears a zoom.</li>
+            <li>With Auto, the time span is chosen from this window so a series stays under about 1,000 points.</li>
+          </ul>
+
+          <h3 id="mx-13">13. Time span</h3>
+          <ul>
+            <li>Auto lets each chart derive the span from the time range, including while zoomed.</li>
+            <li>A chosen span applies to every chart whose own span is Auto.</li>
+            <li>The span in a chart's settings wins over the bar.</li>
+            <li>Categorical charts ignore the span. They collapse the whole time range into one value.</li>
+            <li>Custom span: count and unit, then Apply span. Seconds, minutes, hours, and days are allowed, for example <code>30s</code> or <code>1d</code>.</li>
+            <li>If the span is so fine that more than about 1,000 points would be drawn, a note offers a button that widens the span. If the chart span is set, the button changes that span. Otherwise it changes the span in the bar.</li>
+          </ul>
+
+          <h3 id="mx-14">14. Refresh</h3>
+          <ul>
+            <li>Runs the chart searches again.</li>
+            <li>The button is off when there is no chart or while zoomed. The note beside it says when the data was last loaded.</li>
+          </ul>
+
+          <h3 id="mx-15">15. Auto-refresh</h3>
+          <ul>
+            <li>On or off. On means reload about every 10 seconds.</li>
+            <li>The switch is off while zoomed.</li>
+          </ul>
+
+          <h3 id="mx-16">16. Split by</h3>
+          <ul>
+            <li>Opens the global split: dimension, direction (highest or lowest values), and count. The default is the highest 5 values.</li>
+            <li>It applies to metric series that inherit the global split, and only on charts where Use global split by for this chart is on. That is the default.</li>
+            <li>Events and datasets do not inherit this dimension. A metric dimension does not exist there, and the search would return no rows.</li>
+            <li>A dimension set on the series replaces the global one.</li>
+            <li>The cross next to the button clears the global split.</li>
+          </ul>
+
+          <h3 id="mx-17">17. Remove all</h3>
+          <ul>
+            <li>Removes every chart and the zoom.</li>
+          </ul>
+
+          <h3 id="mx-18">18. Grid and stack</h3>
+          <ul>
+            <li>Grid places the charts side by side. Stack puts them in one column.</li>
+            <li>The chosen layout is stored with the session.</li>
+          </ul>
+
+          <h3 id="mx-19">19. Global actions</h3>
+          <ul>
+            <li>Save all charts to Classic Dashboards writes each chart as a panel on a Classic dashboard, new or existing, in this app.</li>
+            <li>Save all charts to Dashboard Studio does the same for Dashboard Studio. The layout there is absolute or grid.</li>
+            <li>Workspaces saves the current session under a name or opens a saved one. Saved are the charts, time range, catalog time range, global split, global filters, and the span from the bar. Column widths are not saved.</li>
+            <li>The running session is also kept in the browser and restored the next time you open the page.</li>
+          </ul>
+
+          <h3 id="mx-20">20. Global filters</h3>
+          <ul>
+            <li>Sit under the bar once a chart or a filter exists.</li>
+            <li>Dimension, include or exclude, values. They apply to every chart whose series has that dimension.</li>
+            <li>The cross removes a filter.</li>
+          </ul>
+
+          <h2>Chart</h2>
+
+          <h3 id="mx-21">21. Title</h3>
+          <ul>
+            <li>Shows the metric names of the series. With four or more name parts, the first stays, then <code>&lt;...&gt;</code>, then the last. Shorter names stay whole.</li>
+            <li>Hover and the accessible name show the full name. PNG export uses the full title.</li>
+            <li>Time charts also show the effective span, for example <code>(Time span=30s)</code>.</li>
+            <li>A click on the card selects the chart. Analysis on the right belongs to that selection.</li>
+          </ul>
+
+          <h3 id="mx-22">22. Chart actions</h3>
+          <ul>
+            <li>Arrow: collapse the chart or expand it again. The title stays.</li>
+            <li>Four arrows: give the chart the tall height, or restore it.</li>
+            <li>Three dots:</li>
+            <li>Open in Search opens the chart's SPL in a new search.</li>
+            <li>Clone this panel copies the chart.</li>
+            <li>Search related events opens an event search for the time range and the filters.</li>
+            <li>Save as scheduled alert and Save as streaming alert.</li>
+            <li>Save to Classic Dashboards and Save to Dashboard Studio write this one chart.</li>
+            <li>Save as report and Save as base search.</li>
+            <li>Export as PNG for line, area, and column charts. The heatmap has no PNG export.</li>
+            <li>Export as CSV writes the drawn values or, when the table is visible, the table.</li>
+            <li>The cross removes the chart.</li>
+          </ul>
+
+          <h3 id="mx-23">23. Plot</h3>
+          <ul>
+            <li>Time charts: line, area, column, stacked column, heatmap.</li>
+            <li>Categorical charts: one column, or stacked columns, per series or split value, across the whole time range.</li>
+            <li>A second axis appears when a series has Overlay on right axis turned on.</li>
+            <li>The legend names the aggregation and, with a split, the values.</li>
+            <li>Axis numbers are abbreviated while that setting is on. The tooltip uses the chosen decimal places.</li>
+            <li>Loading… during the first search, Refreshing… when values are already shown and a reload is running. No results found. when every search comes back empty.</li>
+            <li>Content Statistics table, or Chart and statistics table, shows the table under or instead of the plot. <code>latest_time</code> and <code>earliest_time</code> produce a table.</li>
+          </ul>
+
+          <h2>Analysis, right column</h2>
+          <p>Applies to the selected chart.</p>
+
+          <h3 id="mx-28">28. Analysis width</h3>
+          <ul>
+            <li>The line between the charts and Analysis moves the column. The center gets narrower or wider to match.</li>
+            <li>Same steps as the data column: drag, arrow keys, Shift for the larger step.</li>
+            <li>Collapsing it leaves the rail Show analysis.</li>
+            <li>The width is not stored with the workspace.</li>
+          </ul>
+
+          <h3 id="mx-24">24. Series filters</h3>
+          <ul>
+            <li>Add new filter: dimension of the selected series, include or exclude, values from the time range.</li>
+            <li>Sort the value list, clear the selection, then add.</li>
+            <li>Applied filters sit on the series and can be removed one by one.</li>
+            <li>These filters apply only to this series. Global filters are added on top.</li>
+          </ul>
+
+          <h3 id="mx-25">25. Reference lines</h3>
+          <ul>
+            <li>A horizontal line on the chart.</li>
+            <li>Either a constant, or a calculation (for example average or maximum) over its own time range.</li>
+            <li>The label is optional. Include value writes the number on the line.</li>
+            <li>Each line can be removed.</li>
+          </ul>
+
+          <h3 id="mx-26">26. Series</h3>
+          <ul>
+            <li>The header shows the full metric name. Clone copies the series, the cross removes it. Removing the last series removes the chart.</li>
+            <li>Aggregation: pick from the list or type. Metrics: Avg, Sum, Min, Max, Count, Range, Median, Std Dev, variance, sum of squares, percentiles, Latest, Earliest, Rate, Rate (Avg), Rate (Sum). Rate is meant for counters.</li>
+            <li>Events and datasets also offer Distinct count, Estimated distinct count, Mode, Values, First, Last, and exactperc. They do not offer Rate (Avg) or Rate (Sum).</li>
+            <li>Percentile: method <code>perc</code> or <code>upperperc</code>, and for events and datasets also <code>exactperc</code>. Presets are 50, 75, 90, 95, 99, 99.9, or your own value from 0 up to but not including 100, with up to three decimal places.</li>
+            <li>Overlay on right axis puts the series on the right Y axis.</li>
+            <li>Split: your own dimension, with direction and limit, or inherit the global split.</li>
+            <li>Time shift moves this series against the others: a fixed offset, or your own count and unit.</li>
+            <li>Events also have the field that is aggregated.</li>
+          </ul>
+
+          <h3 id="mx-27">27. Chart settings</h3>
+          <ul>
+            <li>Chart type. Time charts and categorical charts are in separate groups. Both groups contain a column chart; the categorical one is the second.</li>
+            <li>Content: chart only, statistics table only, or both.</li>
+            <li>Use global split by for this chart turns the split from the bar on or off for this chart.</li>
+            <li>Time span: empty means automatic and then follows the bar. A set span applies only here. Revert sets it back to automatic.</li>
+            <li>Y axis: minimum, maximum, linear or logarithmic. Empty bounds mean automatic. Revert clears your bounds.</li>
+            <li>Tooltip decimal places, 0 to 4. The default is 4.</li>
+            <li>Abbreviate numbers on the axis turns the short form, such as <code>214K</code>, on or off.</li>
+          </ul>
+
+          <h2>Saving</h2>
+          <ul>
+            <li>Title is required. Description is optional.</li>
+            <li>Permissions: Private saves the object for the current user. Shared in App makes it visible in the app.</li>
+            <li>Dashboard: new or existing. The ID of a new dashboard may contain only letters, digits, and underscores. Panel title, and optionally a time range picker on the dashboard. A report also asks whether the panel contains the chart, the table, or both.</li>
+            <li>Scheduled alert: interval, trigger (greater than, less than, or equal to a threshold), an In the last window, optional throttle, actions.</li>
+            <li>Streaming alert: only for one metric series, and only when the instance supports streaming metric alerts. Trigger and throttle are in minutes, without the scheduled window.</li>
+            <li>Actions: add to triggered alerts (with a severity), email, webhook (http or https), script (a file name in Splunk's script directory, without a path).</li>
+            <li>After saving, the dialog links to the new object. Dashboards from this dialog show up under the Dashboards menu.</li>
+          </ul>
+
+          <h2>Dashboards menu</h2>
+          <ul>
+            <li>Opens Splunk's dashboard list in this app's context.</li>
+            <li>It lists Classic dashboards and Dashboard Studio dashboards whose app is <code>metrics_explorer</code>.</li>
+            <li>Creating, opening, editing, permissions, and export happen on that Splunk page, not in a separate list inside Metric Explorer NG.</li>
+            <li>The page's app filter is set to this app. The filter can show dashboards from other apps when you need them.</li>
+          </ul>
+        </div>
+      </html>
+    </panel>
+  </row>
+</dashboard>

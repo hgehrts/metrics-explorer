@@ -23,6 +23,7 @@ import { t } from '../i18n';
 import { zoomWindow } from '../chart/zoom';
 import { formatTooltipValue } from '../chart/tooltip';
 import { chartCardLayout } from './chartFrame';
+import { abbreviateMetricTitle } from '../chart/metricLabel';
 
 const Card = styled.section<{ $selected: boolean }>`
     margin: 0;
@@ -211,6 +212,8 @@ export function ChartView(props: {
     maximized: boolean;
     onMinimize: () => void;
     onMaximize: () => void;
+    /** The toolbar span was chosen by the user, so a span that is too fine can be widened. */
+    spanManual?: boolean;
     /** Replaces a manual span that would draw too many points. */
     onWidenSpan: (span: string) => void;
     onSave: (mode: ChartSaveMode) => void;
@@ -234,7 +237,8 @@ export function ChartView(props: {
     const signature = JSON.stringify(series);
     const categorical = isCategorical(props.chart.settings.type);
     const timeWindow = zoom ?? { earliest: props.range, latest: props.latest };
-    const span = props.chart.settings.span || (zoom ? spanForRange(zoom.earliest, zoom.latest) : props.span);
+    const span = props.chart.settings.span || props.span;
+    const manualSpan = Boolean(props.chart.settings.span) || Boolean(props.spanManual);
     // The global refresh waits while the charts are zoomed. Zooming out makes the next refresh count again.
     const refreshToken = zoom ? 0 : props.refreshToken;
 
@@ -402,6 +406,7 @@ export function ChartView(props: {
         stats.columns[0] = stats.columns[0].map((value) => formatTimeCell(value, locale));
     }
     const title = [...new Set(props.chart.series.map((item) => item.metric))].join(', ');
+    const shownTitle = abbreviateMetricTitle(title);
     const visual = visualFor(props.chart.settings.type);
     const Viz = (visual.kind === 'area' ? Area : visual.kind === 'column' ? Column : Line) as typeof Line;
     const first = results[0];
@@ -410,7 +415,9 @@ export function ChartView(props: {
         <Card ref={cardRef} $selected={props.selected} onClick={props.onSelect}>
             <TitleRow>
                 <Title>
-                    <h2>{title}</h2>
+                    <h2 title={shownTitle === title ? undefined : title} aria-label={title}>
+                        {shownTitle}
+                    </h2>
                     {categorical ? null : <span>({t('Time span')}={span})</span>}
                 </Title>
                 <Actions onClick={(event) => event.stopPropagation()}>
@@ -561,11 +568,11 @@ export function ChartView(props: {
             {!loading && results.length > 0 && results.every((result) => !result.error && result.rows.length === 0) ? (
                 <Empty role="status">{t('No results found.')}</Empty>
             ) : null}
-            {props.chart.settings.span && estimatedPoints(timeWindow.earliest, timeWindow.latest, props.chart.settings.span) > 1000 ? (
+            {manualSpan && estimatedPoints(timeWindow.earliest, timeWindow.latest, span) > 1000 ? (
                 <Note role="status">
                     {t('This span draws about {0} points.').replace(
                         '{0}',
-                        String(estimatedPoints(timeWindow.earliest, timeWindow.latest, props.chart.settings.span))
+                        String(estimatedPoints(timeWindow.earliest, timeWindow.latest, span))
                     )}{' '}
                     {t('A chart stays readable under 1,000.')}{' '}
                     <SmallButton

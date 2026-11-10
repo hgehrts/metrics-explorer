@@ -1,0 +1,298 @@
+<?xml version="1.0"?>
+<dashboard version="1.1" stylesheet="docs.css" script="docs.js" hideEdit="true" hideExport="true" isVisible="false">
+  <label>Dokumentation</label>
+  <description>Bereiche und Funktionen von Metric Explorer NG.</description>
+  <row>
+    <panel>
+      <html>
+        <div class="mx-docs mx-docs-de">
+          <p>Die App heißt in der Leiste Metric Explorer NG. Die App-ID bleibt <code>metrics_explorer</code>. Dashboards, Berichte, Benachrichtigungen, Base Searches und Arbeitsbereiche, die hier gespeichert werden, liegen in dieser App. Die Nummern im Bild entsprechen den Abschnitten darunter.</p>
+          <div class="mx-figure mx-figure-de">
+          <img src="/static/app/metrics_explorer/docs-annotated-de.png" alt="Metric Explorer NG mit nummerierten Bereichen"/>
+          <a class="mx-hot mx-n-1" href="#mx-1">1</a>
+          <a class="mx-hot mx-n-2" href="#mx-2">2</a>
+          <a class="mx-hot mx-n-3" href="#mx-3">3</a>
+          <a class="mx-hot mx-n-4" href="#mx-4">4</a>
+          <a class="mx-hot mx-n-5" href="#mx-5">5</a>
+          <a class="mx-hot mx-n-6" href="#mx-6">6</a>
+          <a class="mx-hot mx-n-7" href="#mx-7">7</a>
+          <a class="mx-hot mx-n-8" href="#mx-8">8</a>
+          <a class="mx-hot mx-n-9" href="#mx-9">9</a>
+          <a class="mx-hot mx-n-10" href="#mx-10">10</a>
+          <a class="mx-hot mx-n-11" href="#mx-11">11</a>
+          <a class="mx-hot mx-n-12" href="#mx-12">12</a>
+          <a class="mx-hot mx-n-13" href="#mx-13">13</a>
+          <a class="mx-hot mx-n-14" href="#mx-14">14</a>
+          <a class="mx-hot mx-n-15" href="#mx-15">15</a>
+          <a class="mx-hot mx-n-16" href="#mx-16">16</a>
+          <a class="mx-hot mx-n-17" href="#mx-17">17</a>
+          <a class="mx-hot mx-n-18" href="#mx-18">18</a>
+          <a class="mx-hot mx-n-19" href="#mx-19">19</a>
+          <a class="mx-hot mx-n-20" href="#mx-20">20</a>
+          <a class="mx-hot mx-n-21" href="#mx-21">21</a>
+          <a class="mx-hot mx-n-22" href="#mx-22">22</a>
+          <a class="mx-hot mx-n-23" href="#mx-23">23</a>
+          <a class="mx-hot mx-n-24" href="#mx-24">24</a>
+          <a class="mx-hot mx-n-25" href="#mx-25">25</a>
+          <a class="mx-hot mx-n-26" href="#mx-26">26</a>
+          <a class="mx-hot mx-n-27" href="#mx-27">27</a>
+          <a class="mx-hot mx-n-28" href="#mx-28">28</a>
+        </div>
+
+          <h2>Daten, linke Spalte</h2>
+          <p>Die Spalte listet, was sich zeichnen lässt. Sie filtert die Liste, nicht die Punkte eines schon gezeichneten Diagramms.</p>
+
+          <h3 id="mx-1">1. Suche</h3>
+          <ul>
+            <li>Filtert Metriken, Ereignisse, Datensätze, Base Searches und Benachrichtigungen nach dem eingegebenen Text.</li>
+            <li>Treffer im Namen werden markiert. Ordner mit einem Treffer sind aufgeklappt.</li>
+            <li>Das Kreuz löscht den Text.</li>
+          </ul>
+
+          <h3 id="mx-2">2. Datenfilter</h3>
+          <ul>
+            <li>Schränken ein, welche Metriken und Sourcetypes in der Liste stehen.</li>
+            <li>Ein neuer Filter fragt Feld, Modus und Werte ab. Index und weitere Felder sind möglich.</li>
+            <li>Das Kreuz an einem Filter entfernt ihn. „Auf Standard zurücksetzen“ stellt die Filter aus der App-Konfiguration wieder her.</li>
+            <li>Diese Filter gehen in die Katalogsuche. Filter für die gezeichneten Werte stehen unter „Globale Filter“ und in der Analyse.</li>
+          </ul>
+
+          <h3 id="mx-3">3. Gruppierung</h3>
+          <ul>
+            <li>„Gruppieren nach“ ordnet den Metrikbaum nach Metrikname, nach Index oder nach einer Dimension.</li>
+            <li>Das Trennzeichen schneidet den Namen an diesem Zeichen in Ordner. Ein Punkt ergibt die übliche Hierarchie <code>a.b.c</code>.</li>
+            <li>Ein Klick auf einen Ordner klappt ihn auf oder zu.</li>
+          </ul>
+
+          <h3 id="mx-4">4. Metriken</h3>
+          <ul>
+            <li>Ein Klick auf den Namen legt ein neues Diagramm an und wählt es aus.</li>
+            <li>Das Symbol rechts daneben hängt die Metrik an das ausgewählte Diagramm, statt ein neues zu öffnen.</li>
+            <li>Die Liste kommt aus dem Metrikkatalog für den Katalog-Zeitraum. Fehlen Einträge, steht unter der Liste, dass nur die ersten <code>max_metrics</code> geladen wurden.</li>
+            <li>Host, Source und Sourcetype stehen als Dimensionen zur Verfügung, auch wenn der Katalog sie nicht extra liefert.</li>
+          </ul>
+
+          <h3 id="mx-5">5. Ereignisse</h3>
+          <ul>
+            <li>Listet Sourcetypes im Katalog-Zeitraum.</li>
+            <li>Ein Klick öffnet ein Ereignisdiagramm. Die Suche läuft über <code>tstats</code>, nicht über <code>mstats</code>.</li>
+            <li>In der Analyse wählt man das Feld, das aggregiert wird. <code>exactperc</code> ist hier möglich, <code>rate_avg</code> und <code>rate_sum</code> nicht.</li>
+          </ul>
+
+          <h3 id="mx-6">6. Datensätze</h3>
+          <ul>
+            <li>Listet Datenmodelle.</li>
+            <li>Ein Klick öffnet ein Diagramm auf diesem Datenmodell, ebenfalls über <code>tstats</code>.</li>
+          </ul>
+
+          <h3 id="mx-7">7. Base Searches</h3>
+          <ul>
+            <li>Listet Base Searches, die in dieser App gespeichert sind.</li>
+            <li>Ein Klick öffnet ein Diagramm auf dieser Suche.</li>
+            <li>Neue Base Searches entstehen über „Als Base Search speichern“ im Menü eines Diagramms.</li>
+          </ul>
+
+          <h3 id="mx-8">8. Benachrichtigungen</h3>
+          <ul>
+            <li>Listet Benachrichtigungen dieser App.</li>
+            <li>„Ausgelöste anzeigen“ öffnet die ausgelösten Instanzen in Splunk.</li>
+          </ul>
+
+          <h3 id="mx-9">9. Katalog-Zeitraum</h3>
+          <ul>
+            <li>Bestimmt, für welches Fenster der Katalog Metriken und Sourcetypes sucht.</li>
+            <li>Das ist nicht der Zeitraum der Diagramme. Den stellt die Leiste in der Mitte.</li>
+            <li>Ein längeres Fenster findet mehr Namen und dauert länger. Der Hinweis dazu steht am Menü.</li>
+          </ul>
+
+          <h3 id="mx-10">10. Breite der Spalte</h3>
+          <ul>
+            <li>Die Linie zwischen Daten und Diagrammen verschiebt die Spalte. Die Mitte wird entsprechend schmaler oder breiter.</li>
+            <li>Ziehen mit der Maus. Pfeil links und rechts verschiebt um 16 Pixel, mit Umschalt um 48.</li>
+            <li>Die Spalte lässt sich bis auf eine schmale Leiste zuklappen. „Daten einblenden“ öffnet sie wieder.</li>
+            <li>Die Breite gilt für die laufende Ansicht und wird nicht mit dem Arbeitsbereich gespeichert.</li>
+          </ul>
+
+          <h2>Leiste über den Diagrammen</h2>
+
+          <h3 id="mx-11">11. Zoom zurück</h3>
+          <ul>
+            <li>Auf einem Zeitdiagramm zoomt man, indem man ein Fenster im Plot aufzieht. Kategorische Diagramme und die Heatmap zoomen nicht.</li>
+            <li>Der Zoom gilt für alle Diagramme. „Zoom zurück“ hebt ihn auf.</li>
+            <li>Solange gezoomt ist, sind Aktualisieren und die automatische Aktualisierung aus.</li>
+          </ul>
+
+          <h3 id="mx-12">12. Zeitraum</h3>
+          <ul>
+            <li>Das Suchfenster der Diagramme. Voreinstellungen und ein eigener Anfang und ein eigenes Ende.</li>
+            <li>Ein Wechsel des Zeitraums setzt einen Zoom zurück.</li>
+            <li>Bei „Automatisch“ wird die Zeitspanne aus diesem Fenster neu gewählt, so dass eine Serie unter etwa 1.000 Punkten bleibt.</li>
+          </ul>
+
+          <h3 id="mx-13">13. Zeitspanne</h3>
+          <ul>
+            <li>„Automatisch“ lässt jedes Diagramm die Spanne aus dem Zeitraum ableiten, auch im Zoom.</li>
+            <li>Eine gewählte Spanne gilt für jedes Diagramm, dessen eigene Spanne auf „Automatisch“ steht.</li>
+            <li>Die Spanne in den Diagrammeinstellungen eines Diagramms gewinnt gegen die Leiste.</li>
+            <li>Kategorische Diagramme ignorieren die Spanne. Sie rechnen den ganzen Zeitraum zu einem Wert zusammen.</li>
+            <li>Eigene Spanne: Anzahl und Einheit, dann „Zeitspanne anwenden“. Erlaubt sind Sekunden, Minuten, Stunden und Tage, zum Beispiel <code>30s</code> oder <code>1d</code>.</li>
+            <li>Liegt die Spanne so fein, dass mehr als etwa 1.000 Punkte entstünden, erscheint ein Hinweis mit einer Schaltfläche, die die Spanne vergrößert. Ist die Diagrammspanne gesetzt, ändert die Schaltfläche diese. Sonst die Spanne in der Leiste.</li>
+          </ul>
+
+          <h3 id="mx-14">14. Aktualisieren</h3>
+          <ul>
+            <li>Startet die Suchen der Diagramme neu.</li>
+            <li>Ohne Diagramm oder während eines Zooms ist die Schaltfläche aus. Der Hinweis daneben sagt, wann zuletzt geladen wurde.</li>
+          </ul>
+
+          <h3 id="mx-15">15. Automatisch aktualisieren</h3>
+          <ul>
+            <li>Ein oder aus. An heißt: etwa alle 10 Sekunden neu laden.</li>
+            <li>Während eines Zooms ist der Schalter aus.</li>
+          </ul>
+
+          <h3 id="mx-16">16. Unterteilen nach</h3>
+          <ul>
+            <li>Öffnet die globale Unterteilung: Dimension, Richtung (höchste oder niedrigste Werte) und Anzahl. Voreinstellung ist die höchsten 5 Werte.</li>
+            <li>Sie gilt für Metrikserien, die die globale Unterteilung erben, und nur in Diagrammen, bei denen „Globale Unterteilung für dieses Diagramm verwenden“ an ist. Das ist die Voreinstellung.</li>
+            <li>Ereignisse und Datensätze erben diese Dimension nicht. Eine Metrikdimension existiert dort nicht, die Suche lieferte sonst keine Zeilen.</li>
+            <li>Eine eigene Dimension an der Serie ersetzt die globale.</li>
+            <li>Das Kreuz neben der Schaltfläche entfernt die globale Unterteilung.</li>
+          </ul>
+
+          <h3 id="mx-17">17. Alle entfernen</h3>
+          <ul>
+            <li>Entfernt alle Diagramme und den Zoom.</li>
+          </ul>
+
+          <h3 id="mx-18">18. Raster und Liste</h3>
+          <ul>
+            <li>Raster zeigt die Diagramme nebeneinander. Liste stapelt sie.</li>
+            <li>Die gewählte Ansicht wird mit der Sitzung gespeichert.</li>
+          </ul>
+
+          <h3 id="mx-19">19. Globale Aktionen</h3>
+          <ul>
+            <li>„Alle Diagramme unter Klassische Dashboards speichern“ schreibt jedes Diagramm als Teilfenster in ein Classic Dashboard, neu oder in ein vorhandenes dieser App.</li>
+            <li>„Alle Diagramme in Dashboard Studio speichern“ macht dasselbe für Dashboard Studio. Layout dort ist absolut oder Raster.</li>
+            <li>„Arbeitsbereiche“ speichert die aktuelle Sitzung unter einem Namen oder öffnet eine gespeicherte. Gespeichert werden Diagramme, Zeitraum, Katalog-Zeitraum, globale Unterteilung, globale Filter und die Zeitspanne der Leiste. Die Breite der Spalten nicht.</li>
+            <li>Die laufende Sitzung liegt zusätzlich im Browser und wird beim nächsten Öffnen wiederhergestellt.</li>
+          </ul>
+
+          <h3 id="mx-20">20. Globale Filter</h3>
+          <ul>
+            <li>Stehen unter der Leiste, sobald ein Diagramm oder ein Filter da ist.</li>
+            <li>Dimension, einschließen oder ausschließen, Werte. Sie gelten für alle Diagramme, deren Serie diese Dimension hat.</li>
+            <li>Das Kreuz entfernt einen Filter.</li>
+          </ul>
+
+          <h2>Diagramm</h2>
+
+          <h3 id="mx-21">21. Titel</h3>
+          <ul>
+            <li>Zeigt die Metriknamen der Serien. Bei vier oder mehr Namensbestandteilen bleibt der erste, dann <code>&lt;...&gt;</code>, dann der letzte. Kürzere Namen bleiben ganz.</li>
+            <li>Die Maus und die Barrierefreiheitsbezeichnung zeigen den vollen Namen. Der PNG-Export verwendet den vollen Titel.</li>
+            <li>Bei Zeitdiagrammen steht die wirksame Zeitspanne daneben, zum Beispiel <code>(Zeitspanne=30s)</code>.</li>
+            <li>Ein Klick auf die Karte wählt das Diagramm. Die Analyse rechts gehört zu dieser Auswahl.</li>
+          </ul>
+
+          <h3 id="mx-22">22. Diagrammaktionen</h3>
+          <ul>
+            <li>Pfeil: Diagramm einklappen oder wieder aufklappen. Der Titel bleibt stehen.</li>
+            <li>Vier Pfeile: Diagramm auf die große Höhe setzen oder zurück.</li>
+            <li>Drei Punkte:</li>
+            <li>„In Search öffnen“ öffnet die SPL des Diagramms in einer neuen Suche.</li>
+            <li>„Dieses Teilfenster klonen“ kopiert das Diagramm.</li>
+            <li>„Zugehörige Ereignisse durchsuchen“ öffnet eine Ereignissuche zum Zeitraum und zu den Filtern.</li>
+            <li>„Als geplante Benachrichtigung speichern“ und „Als Streaming-Benachrichtigung speichern“.</li>
+            <li>„Unter Klassische Dashboards speichern“ und „In Dashboard Studio speichern“ schreiben dieses eine Diagramm.</li>
+            <li>„Als Bericht speichern“ und „Als Base Search speichern“.</li>
+            <li>„Als PNG exportieren“ für Linien-, Flächen- und Spaltendiagramme. Die Heatmap hat keinen PNG-Export.</li>
+            <li>„Als CSV exportieren“ schreibt die gezeichneten Werte oder, wenn die Tabelle sichtbar ist, die Tabelle.</li>
+            <li>Das Kreuz entfernt das Diagramm.</li>
+          </ul>
+
+          <h3 id="mx-23">23. Zeichenfläche</h3>
+          <ul>
+            <li>Zeitdiagramme: Linie, Fläche, Säulen, gestapelte Säulen, Heatmap.</li>
+            <li>Kategorische Diagramme: eine Säule oder gestapelte Säulen je Serie oder Unterteilungswert, über den ganzen Zeitraum.</li>
+            <li>Eine zweite Achse erscheint, wenn eine Serie „Auf der rechten Achse überlagern“ an hat.</li>
+            <li>Die Legende nennt die Aggregation und, bei einer Unterteilung, die Werte.</li>
+            <li>Zahlen auf der Achse sind abgekürzt, solange das in den Einstellungen an ist. Der Tooltip zeigt die eingestellten Nachkommastellen.</li>
+            <li>„Wird geladen…“ während der ersten Suche, „Wird aktualisiert…“ wenn schon Werte da sind und neu geladen wird. „Keine Ergebnisse gefunden.“ wenn jede Suche leer zurückkommt.</li>
+            <li>Inhalt „Statistiktabelle“ oder „Diagramm und Statistiktabelle“ zeigt die Tabelle unter oder statt des Plots. <code>latest_time</code> und <code>earliest_time</code> liefern eine Tabelle.</li>
+          </ul>
+
+          <h2>Analyse, rechte Spalte</h2>
+          <p>Gilt für das ausgewählte Diagramm.</p>
+
+          <h3 id="mx-28">28. Breite der Analyse</h3>
+          <ul>
+            <li>Die Linie zwischen Diagrammen und Analyse verschiebt die Spalte. Die Mitte wird entsprechend schmaler oder breiter.</li>
+            <li>Dieselben Schritte wie bei der Datenspalte: ziehen, Pfeiltasten, Umschalt für den größeren Schritt.</li>
+            <li>Zuklappen lässt die Leiste „Analyse einblenden“ stehen.</li>
+            <li>Die Breite wird nicht mit dem Arbeitsbereich gespeichert.</li>
+          </ul>
+
+          <h3 id="mx-24">24. Filter der Serie</h3>
+          <ul>
+            <li>„Neuen Filter hinzufügen“: Dimension der ausgewählten Serie, einschließen oder ausschließen, Werte aus dem Zeitraum.</li>
+            <li>Sortierung der Werteliste, Auswahl leeren, dann hinzufügen.</li>
+            <li>Gesetzte Filter stehen an der Serie und lassen sich einzeln entfernen.</li>
+            <li>Diese Filter gelten nur für diese Serie. Globale Filter kommen zusätzlich dazu.</li>
+          </ul>
+
+          <h3 id="mx-25">25. Bezugslinien</h3>
+          <ul>
+            <li>Horizontale Linie im Diagramm.</li>
+            <li>Entweder eine Konstante oder eine Berechnung (zum Beispiel Mittel oder Maximum) über einen eigenen Zeitraum.</li>
+            <li>Beschriftung optional. „Wert anzeigen“ schreibt die Zahl an die Linie.</li>
+            <li>Jede Linie lässt sich wieder entfernen.</li>
+          </ul>
+
+          <h3 id="mx-26">26. Serie</h3>
+          <ul>
+            <li>Kopf zeigt den vollen Metriknamen. Klonen kopiert die Serie, das Kreuz entfernt sie. Die letzte Serie zu entfernen entfernt das Diagramm.</li>
+            <li>Aggregation: aus der Liste wählen oder tippen. Metriken: Avg, Sum, Min, Max, Count, Range, Median, Std Dev, Varianz, Sum of squares, Perzentile, Latest, Earliest, Rate, Rate (Avg), Rate (Sum). Rate ist für Zähler gedacht.</li>
+            <li>Ereignisse und Datensätze zusätzlich: Distinct Count, Estimated Distinct Count, Mode, Values, First, Last, exactperc. Ohne Rate (Avg) und Rate (Sum).</li>
+            <li>Perzentil: Methode <code>perc</code> oder <code>upperperc</code>, bei Ereignissen und Datensätzen auch <code>exactperc</code>. Voreinstellungen 50, 75, 90, 95, 99, 99.9 oder ein eigener Wert von 0 bis unter 100 mit bis zu drei Nachkommastellen.</li>
+            <li>„Auf der rechten Achse überlagern“ legt die Serie auf die rechte Y-Achse.</li>
+            <li>Unterteilung: eigene Dimension, mit Richtung und Limit, oder die globale Unterteilung erben.</li>
+            <li>Zeitversatz schiebt diese Serie gegen die anderen: fest vorgegebene Abstände oder eine eigene Zahl mit Einheit.</li>
+            <li>Bei Ereignissen steht zusätzlich das Feld, das aggregiert wird.</li>
+          </ul>
+
+          <h3 id="mx-27">27. Diagrammeinstellungen</h3>
+          <ul>
+            <li>Diagrammtyp. Zeitdiagramme und kategorische Diagramme stehen in getrennten Gruppen. Beide Gruppen enthalten ein Säulendiagramm; das kategorische ist das zweite.</li>
+            <li>Inhalt: nur Diagramm, nur Statistiktabelle, oder beides.</li>
+            <li>„Globale Unterteilung für dieses Diagramm verwenden“ schaltet die Übernahme aus der Leiste für dieses Diagramm ein oder aus.</li>
+            <li>Zeitspanne: leer heißt automatisch und folgt dann der Leiste. Eine gesetzte Spanne gilt nur hier. Zurücksetzen stellt auf automatisch.</li>
+            <li>Y-Achse: Minimum, Maximum, linear oder logarithmisch. Leere Grenzen heißen automatisch. Zurücksetzen löscht die eigenen Grenzen.</li>
+            <li>Nachkommastellen im Tooltip, 0 bis 4. Voreinstellung 4.</li>
+            <li>„Zahlen auf der Achse abkürzen“ schaltet die Kurzform wie <code>214K</code> ein oder aus.</li>
+          </ul>
+
+          <h2>Speichern</h2>
+          <ul>
+            <li>Titel ist Pflicht. Beschreibung ist optional.</li>
+            <li>Berechtigung: „Privat“ speichert beim aktuellen Benutzer. „In App freigegeben“ macht das Objekt für die App sichtbar.</li>
+            <li>Dashboard: neu oder vorhandenes. Die ID eines neuen Dashboards darf nur Buchstaben, Ziffern und Unterstriche enthalten. Teilfenstertitel, optional ein Zeitsteuerelement auf dem Dashboard. Bei einem Bericht zusätzlich die Wahl, ob das Teilfenster Diagramm, Tabelle oder beides enthält.</li>
+            <li>Geplante Benachrichtigung: Intervall, Auslöser (größer, kleiner oder gleich einem Schwellenwert), Fenster „in den letzten“, optionale Unterdrückung, Aktionen.</li>
+            <li>Streaming-Benachrichtigung: nur für eine Metrikserie und nur, wenn die Instanz Streaming-Metrikbenachrichtigungen kann. Trigger und Unterdrückung in Minuten, ohne das geplante Fenster.</li>
+            <li>Aktionen: zu ausgelösten Benachrichtigungen hinzufügen (mit Schweregrad), E-Mail, Webhook (http oder https), Skript (Dateiname im Skriptverzeichnis von Splunk, ohne Pfad).</li>
+            <li>Nach dem Speichern steht der Link auf das neue Objekt. Dashboards aus diesem Dialog erscheinen unter dem Menüpunkt Dashboards.</li>
+          </ul>
+
+          <h2>Menü Dashboards</h2>
+          <ul>
+            <li>Öffnet die Dashboard-Liste von Splunk im Kontext dieser App.</li>
+            <li>Dort stehen die Classic Dashboards und Dashboard-Studio-Dashboards, deren App <code>metrics_explorer</code> ist.</li>
+            <li>Anlegen, Öffnen, Bearbeiten, Berechtigungen und Export laufen über diese Splunk-Seite, nicht über eine eigene Liste in Metric Explorer NG.</li>
+            <li>Der App-Filter der Seite steht auf dieser App. Über den Filter lassen sich bei Bedarf die Dashboards anderer Apps einblenden.</li>
+          </ul>
+        </div>
+      </html>
+    </panel>
+  </row>
+</dashboard>
