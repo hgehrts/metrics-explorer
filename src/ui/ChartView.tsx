@@ -22,9 +22,14 @@ import { buildSeriesSearch } from '../spl/seriesSearch';
 import { t } from '../i18n';
 import { zoomWindow } from '../chart/zoom';
 import { formatTooltipValue } from '../chart/tooltip';
+import { chartCardLayout } from './chartFrame';
 
 const Card = styled.section<{ $selected: boolean }>`
     margin: 0;
+    box-sizing: ${chartCardLayout.boxSizing};
+    min-width: ${chartCardLayout.minWidth};
+    height: ${chartCardLayout.height};
+    align-self: ${chartCardLayout.alignSelf};
     padding: 12px 12px 4px;
     border: 1px solid ${variables.neutral200};
     ${(props) =>
@@ -46,6 +51,7 @@ const TitleRow = styled.div`
 
 const Actions = styled.div`
     display: flex;
+    flex: none;
     gap: 6px;
     position: relative;
 `;
@@ -75,6 +81,9 @@ const IconAction = styled.button`
 `;
 
 const Title = styled.div`
+    min-width: ${chartCardLayout.titleMinWidth};
+    flex: 1 1 auto;
+    overflow-wrap: ${chartCardLayout.titleOverflowWrap};
     font-size: 12px;
 
     h2 {
@@ -82,6 +91,7 @@ const Title = styled.div`
         margin: 0 6px 0 0;
         font-size: 12px;
         font-weight: 700;
+        overflow-wrap: inherit;
     }
 
     span {

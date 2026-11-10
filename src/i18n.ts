@@ -21,6 +21,8 @@ const GERMAN: Record<string, string> = {
     'Data': 'Daten',
     'Analysis': 'Analyse',
     'Hide data': 'Daten ausblenden',
+    'Resize data pane': 'Datenbereich in der Breite ändern',
+    'Resize analysis pane': 'Analysebereich in der Breite ändern',
     'Show data': 'Daten einblenden',
     'Hide analysis': 'Analyse ausblenden',
     'Show analysis': 'Analyse einblenden',

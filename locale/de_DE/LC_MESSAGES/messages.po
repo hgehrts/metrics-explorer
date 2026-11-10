@@ -67,6 +67,12 @@ msgstr "Analyse"
 msgid "Hide data"
 msgstr "Daten ausblenden"
 
+msgid "Resize data pane"
+msgstr "Datenbereich in der Breite ändern"
+
+msgid "Resize analysis pane"
+msgstr "Analysebereich in der Breite ändern"
+
 msgid "Show data"
 msgstr "Daten einblenden"
 

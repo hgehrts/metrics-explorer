@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styled, { css } from 'styled-components';
 import { variables } from '@splunk/themes';
 import {
@@ -59,6 +59,7 @@ import { SaveDialog, SaveMode } from './SaveDialog';
 import { SplitDialog } from './SplitDialog';
 import { TimeRangeDialog } from './TimeRangeDialog';
 import { t } from '../i18n';
+import { clampPaneWidth, LEFT_PANE_DEFAULT, RIGHT_PANE_DEFAULT, shellColumns } from './panes';
 import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
 import { splunkGet } from '../api/splunkd';
 import { buildCatalogSearch, DataFilter, filterLabel, indexFromSearch } from '../model/dataFilters';
@@ -161,9 +162,9 @@ function Highlight(props: { text: string; query: string }): React.ReactElement {
     );
 }
 
-const Shell = styled.div<{ $left: boolean; $right: boolean }>`
+const Shell = styled.div<{ $columns: string }>`
     display: grid;
-    grid-template-columns: ${(props) => (props.$left ? '260px' : '36px')} minmax(0, 1fr) ${(props) => (props.$right ? '280px' : '36px')};
+    grid-template-columns: ${(props) => props.$columns};
     height: 100%;
     background: ${variables.backgroundColorPage};
     color: ${variables.contentColorDefault};
@@ -172,15 +173,33 @@ const Shell = styled.div<{ $left: boolean; $right: boolean }>`
 const Pane = styled.aside`
     display: flex;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
-    border-right: 1px solid ${variables.neutral200};
+    overflow: auto;
     background: ${variables.backgroundColorSidebar};
 `;
 
 const Analysis = styled(Pane)`
-    border-right: 0;
-    border-left: 1px solid ${variables.neutral200};
     overflow: auto;
+`;
+
+const Splitter = styled.div`
+    position: relative;
+    cursor: col-resize;
+    touch-action: none;
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 2px;
+        width: 2px;
+        background: ${variables.neutral200};
+    }
+    &:hover::before,
+    &:focus-visible::before {
+        background: ${variables.interactiveColorPrimary};
+    }
 `;
 
 const PaneHeader = styled.div`
@@ -779,6 +798,9 @@ export function Explorer(): React.ReactElement {
     const [expandedSeriesId, setExpandedSeriesId] = useState('');
     const [leftOpen, setLeftOpen] = useState(true);
     const [rightOpen, setRightOpen] = useState(true);
+    const [leftWidth, setLeftWidth] = useState(LEFT_PANE_DEFAULT);
+    const [rightWidth, setRightWidth] = useState(RIGHT_PANE_DEFAULT);
+    const shellRef = useRef<HTMLDivElement>(null);
     const [layout, setLayout] = useState<'stack' | 'grid'>('stack');
     /** A maximized chart fills the stage alone. Minimized charts show only their title row. Neither is saved. */
     const [maximizedId, setMaximizedId] = useState('');
@@ -1526,9 +1548,70 @@ export function Explorer(): React.ReactElement {
             ? 'Enter a time range that starts before it ends.'
             : '';
 
+    function resizePane(side: 'left' | 'right', requested: number): void {
+        const container = shellRef.current?.getBoundingClientRect().width ?? 0;
+        const sibling = side === 'left' ? (rightOpen ? rightWidth + 6 : 36) + 6 : (leftOpen ? leftWidth + 6 : 36) + 6;
+        const width = clampPaneWidth(requested, container || requested + sibling + 280, sibling);
+        if (side === 'left') {
+            setLeftWidth(width);
+        } else {
+            setRightWidth(width);
+        }
+    }
+
+    function dragPane(side: 'left' | 'right', event: React.PointerEvent<HTMLDivElement>): void {
+        event.preventDefault();
+        const handle = event.currentTarget;
+        handle.setPointerCapture(event.pointerId);
+        const originX = event.clientX;
+        const origin = side === 'left' ? leftWidth : rightWidth;
+        const previousCursor = document.body.style.cursor;
+        document.body.style.cursor = 'col-resize';
+        function move(next: PointerEvent): void {
+            const delta = next.clientX - originX;
+            resizePane(side, side === 'left' ? origin + delta : origin - delta);
+        }
+        function stop(): void {
+            handle.removeEventListener('pointermove', move);
+            handle.removeEventListener('pointerup', stop);
+            handle.removeEventListener('pointercancel', stop);
+            document.body.style.cursor = previousCursor;
+        }
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', stop);
+        handle.addEventListener('pointercancel', stop);
+    }
+
+    function splitter(side: 'left' | 'right'): React.ReactElement {
+        const width = side === 'left' ? leftWidth : rightWidth;
+        return (
+            <Splitter
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t(side === 'left' ? 'Resize data pane' : 'Resize analysis pane')}
+                aria-valuemin={180}
+                aria-valuenow={width}
+                tabIndex={0}
+                onPointerDown={(event) => dragPane(side, event)}
+                onKeyDown={(event) => {
+                    const step = event.shiftKey ? 48 : 16;
+                    if (event.key === 'ArrowLeft') {
+                        resizePane(side, side === 'left' ? width - step : width + step);
+                    } else if (event.key === 'ArrowRight') {
+                        resizePane(side, side === 'left' ? width + step : width - step);
+                    } else {
+                        return;
+                    }
+                    event.preventDefault();
+                }}
+            />
+        );
+    }
+
     return (
-        <Shell $left={leftOpen} $right={rightOpen}>
+        <Shell ref={shellRef} $columns={shellColumns(leftOpen, rightOpen, leftWidth, rightWidth)}>
             {leftOpen ? (
+            <>
             <Pane>
                 <PaneHeader>
                     <span>{t('Data')}</span>
@@ -1738,6 +1821,8 @@ export function Explorer(): React.ReactElement {
                     <div>{t('Changing this time setting will affect performance.')}</div>
                 </Footer>
             </Pane>
+            {splitter('left')}
+            </>
             ) : (
                 <Rail $edge="left">
                     <IconButton type="button" aria-label={t('Show data')} onClick={() => setLeftOpen(true)}>
@@ -2068,6 +2153,8 @@ export function Explorer(): React.ReactElement {
                 )}
             </Stage>
             {rightOpen ? (
+            <>
+            {splitter('right')}
             <Analysis role="group" aria-label={t('Analysis')}>
                 <PaneHeader>
                     {t('Analysis')}
@@ -2878,6 +2965,7 @@ export function Explorer(): React.ReactElement {
                     </datalist>
                 ) : null}
             </Analysis>
+            </>
             ) : (
                 <Rail $edge="right">
                     <IconButton type="button" aria-label={t('Show analysis')} onClick={() => setRightOpen(true)}>
