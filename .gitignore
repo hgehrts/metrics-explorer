@@ -15,3 +15,6 @@ test-results/
 # Design notes and the original Analytics Workspace reference extracts.
 # Kept on disk for local work, not published with the app.
 docs/superpowers/
+
+# Azure and Splunk lab scripts. Kept on disk, not published.
+lab/
