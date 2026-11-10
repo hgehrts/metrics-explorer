@@ -563,8 +563,11 @@ export function ChartView(props: {
             ) : null}
             {props.chart.settings.span && estimatedPoints(timeWindow.earliest, timeWindow.latest, props.chart.settings.span) > 1000 ? (
                 <Note role="status">
-                    This span draws about {estimatedPoints(timeWindow.earliest, timeWindow.latest, props.chart.settings.span)} points.
-                    A chart stays readable under 1,000.{' '}
+                    {t('This span draws about {0} points.').replace(
+                        '{0}',
+                        String(estimatedPoints(timeWindow.earliest, timeWindow.latest, props.chart.settings.span))
+                    )}{' '}
+                    {t('A chart stays readable under 1,000.')}{' '}
                     <SmallButton
                         type="button"
                         onClick={() => props.onWidenSpan(spanForRange(timeWindow.earliest, timeWindow.latest))}

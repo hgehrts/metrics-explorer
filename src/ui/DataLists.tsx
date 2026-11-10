@@ -158,7 +158,7 @@ export function DataLists(props: {
                                     </Item>
                                 ))
                               : null}
-                          {openBase === item.saved && measures.length === 0 ? <Item as="div">No fields in the preview.</Item> : null}
+                          {openBase === item.saved && measures.length === 0 ? <Item as="div">{t('No fields in the preview.')}</Item> : null}
                       </div>
                   ))}
             {shownBases.length === 0 ? <Item as="div">{t('No base searches.')}</Item> : null}
