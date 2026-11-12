@@ -63,6 +63,9 @@ test('the catalog names every metric index the user may search, including intern
     expect(buildCatalogSearch([{ kind: 'index', value: 'secret' }], '', ['_metrics'])).toBe(
         '| mcatalog values(metric_name) WHERE index="__mx_none__"'
     );
+    expect(buildCatalogSearch([], '', ['_metrics', 'metrics_lab'], true)).toBe(
+        '| mcatalog values(metric_name) WHERE index="__mx_none__"'
+    );
 });
 
 test('an index from the URL is used only when it is a valid index name', () => {

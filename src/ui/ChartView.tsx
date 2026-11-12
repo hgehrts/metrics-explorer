@@ -7,6 +7,7 @@ import { variables } from '@splunk/themes';
 import { mergeCategoryTables, toCategoryTable, toLineTable } from '../chart/columns';
 import { addReferenceLines, referenceWindow } from '../chart/reference';
 import { axisOptions, isCategorical, visualFor } from '../chart/settings';
+import { chartTimeBounds } from '../chart/timeAxis';
 import { heatmapTable } from '../chart/heatmap';
 import { formatStatColumns, formatTimeCell } from '../chart/stats';
 import { HeatmapChart } from './HeatmapChart';
@@ -645,6 +646,7 @@ export function ChartView(props: {
                         xAxisTitleVisibility: 'collapsed',
                         yAxisTitleVisibility: 'collapsed',
                         ...axisOptions(props.chart.settings),
+                        ...(categorical ? {} : (chartTimeBounds(timeWindow.earliest, timeWindow.latest) ?? {})),
                         ...(visual.stacked ? { stackMode: 'stacked' } : {}),
                         ...(categorical ? { dataValuesDisplay: 'all' } : {}),
                     }}

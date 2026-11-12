@@ -59,9 +59,17 @@ function dimensionClause(filter: Extract<DataFilter, { kind: 'dimension' }>): st
     return filter.op === '=' ? `(${any})` : `NOT (${any})`;
 }
 
-/** Index part of the catalog search: the chosen index filters, limited to the indexes the user may search. */
-function indexPart(filters: DataFilter[], metricIndexes?: string[]): string {
+/**
+ * Index part of the catalog search: the chosen index filters, limited to the indexes the user may search.
+ * `explicit` means the filter list is the whole selection. An empty list then matches no index.
+ * Without it, an empty list means every index the user may search.
+ */
+function indexPart(filters: DataFilter[], metricIndexes?: string[], explicit = false): string {
     const indexes = filters.filter((item) => item.kind === 'index').map((item) => item.value.trim());
+    if (explicit) {
+        const allowed = metricIndexes === undefined ? indexes : indexes.filter((value) => metricIndexes.includes(value));
+        return metricIndexClause(allowed);
+    }
     const allowed = metricIndexes === undefined ? null : new Set(metricIndexes);
     const chosen = allowed ? (indexes.length > 0 ? indexes.filter((value) => allowed.has(value)) : metricIndexes) : indexes;
     return metricIndexes === undefined && indexes.length === 0
@@ -86,10 +94,10 @@ export function buildCatalogValueSearch(dimension: string, filters: DataFilter[]
  * `metricIndexes` is the metric indexes the signed-in user may search. It replaces `index=*`,
  * which never includes an internal index such as `_metrics`.
  */
-export function buildCatalogSearch(filters: DataFilter[], by = '', metricIndexes?: string[]): string {
+export function buildCatalogSearch(filters: DataFilter[], by = '', metricIndexes?: string[], explicitIndexes = false): string {
     const excludes = filters.filter((item) => item.kind === 'exclude').map((item) => item.value.trim());
     const clauses = [
-        indexPart(filters, metricIndexes),
+        indexPart(filters, metricIndexes, explicitIndexes),
         ...excludes.map((value) => `NOT metric_name=${quoteSpl(value)}`),
         ...filters.flatMap((item) => (item.kind === 'dimension' && validateFilter(item) === null ? [dimensionClause(item)] : [])),
     ];

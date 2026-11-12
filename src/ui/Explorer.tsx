@@ -64,6 +64,7 @@ import { clampPaneWidth, LEFT_PANE_DEFAULT, RIGHT_PANE_DEFAULT, shellColumns } f
 import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
 import { splunkGet } from '../api/splunkd';
 import { buildCatalogSearch, DataFilter, filterLabel, indexFromSearch } from '../model/dataFilters';
+import { buildIndexActivitySearch, indexesWithData } from '../model/indexActivity';
 import { loadAllowedMetricIndexes } from '../model/metricIndexes';
 import { DEFAULT_MAX_METRICS, loadSettings } from '../model/loadDefaults';
 import { formatZoomRange } from '../spl/zoomLabel';
@@ -122,7 +123,11 @@ const RANGES = [
     { id: '-30d', label: 'Last 30 days' },
 ];
 
-type Section = 'metrics' | 'events' | 'datasets' | ListSection;
+type Section = 'indexes' | 'metrics' | 'events' | 'datasets' | ListSection;
+
+type IndexChoice = { mode: 'all' } | { mode: 'picked'; names: string[] };
+
+const NO_INDEXES: string[] = [];
 
 /** The chart type picker groups types as the original does. */
 const CHART_GROUPS: Array<{ label: string; types: string[] }> = [
@@ -387,6 +392,37 @@ const SectionItem = styled.button`
     color: ${variables.contentColorDefault};
     text-align: left;
     cursor: pointer;
+`;
+
+const IndexList = styled.div`
+    max-height: 240px;
+    overflow: auto;
+`;
+
+const IndexRow = styled.label`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: ${variables.contentColorDefault};
+    cursor: pointer;
+`;
+
+const IndexName = styled.span`
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+`;
+
+const ActivityDot = styled.span<{ $state: 'on' | 'off' | 'unknown' }>`
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    background: ${(props) => (props.$state === 'on' ? '#2da44e' : props.$state === 'off' ? '#cf222e' : 'transparent')};
 `;
 
 const Tree = styled.div`
@@ -879,6 +915,7 @@ export function Explorer(): React.ReactElement {
     const [catalogRange, setCatalogRange] = useState('-24h');
     /** One section of the data pane is open at a time, as in the original. */
     const [section, setSection] = useState<Section | ''>('metrics');
+    const indexesOpen = section === 'indexes';
     const eventsOpen = section === 'events';
     const datasetsOpen = section === 'datasets';
     const metricsOpen = section === 'metrics';
@@ -897,6 +934,10 @@ export function Explorer(): React.ReactElement {
     const [separator, setSeparator] = useState('.');
     const [valueRows, setValueRows] = useState<ValueRow[]>([]);
     const [dataFilters, setDataFilters] = useState<DataFilter[]>([]);
+    /** `all` charts every allowed index. `picked` is the explicit list, and an empty list charts none. */
+    const [indexChoice, setIndexChoice] = useState<IndexChoice>({ mode: 'all' });
+    /** Null until the activity search finishes. An empty list means no index had data. */
+    const [activeIndexes, setActiveIndexes] = useState<string[] | null>(null);
     const [defaultsReady, setDefaultsReady] = useState(false);
     const [dataFilterOpen, setDataFilterOpen] = useState(false);
     const [globalFilterOpen, setGlobalFilterOpen] = useState(false);
@@ -966,6 +1007,8 @@ export function Explorer(): React.ReactElement {
                 const start = urlIndex
                     ? [...settings.filters.filter((item) => item.kind !== 'index'), { kind: 'index' as const, value: urlIndex }]
                     : settings.filters;
+                const picked = start.filter((item) => item.kind === 'index').map((item) => item.value);
+                setIndexChoice(picked.length > 0 ? { mode: 'picked', names: picked } : { mode: 'all' });
                 setDefaultFilters(settings.filters);
                 setMaxMetrics(settings.maxMetrics);
                 setCatalogRange(settings.catalogRange);
@@ -1009,6 +1052,23 @@ export function Explorer(): React.ReactElement {
         };
     }, []);
 
+    const indexNames = metricIndexes ?? NO_INDEXES
+    const explicitIndexes = indexChoice.mode === 'picked';
+    const checkedIndexes = useMemo(() => {
+        if (indexChoice.mode === 'all') {
+            return indexNames;
+        }
+        const allowed = new Set(indexNames);
+        return indexChoice.names.filter((name) => allowed.size === 0 || allowed.has(name));
+    }, [indexChoice, indexNames]);
+    const searchFilters = useMemo(
+        () =>
+            explicitIndexes
+                ? [...dataFilters.filter((item) => item.kind !== 'index'), ...checkedIndexes.map((value) => ({ kind: 'index' as const, value }))]
+                : dataFilters.filter((item) => item.kind !== 'index'),
+        [explicitIndexes, dataFilters, checkedIndexes]
+    );
+
     useEffect(() => {
         if (!defaultsReady || !metricIndexesReady) {
             return undefined;
@@ -1016,7 +1076,7 @@ export function Explorer(): React.ReactElement {
         setCatalogError('');
         setCatalogReady(false);
         return runSearch(
-            buildCatalogSearch(dataFilters, '', metricIndexes),
+            buildCatalogSearch(searchFilters, '', metricIndexes, explicitIndexes),
             catalogRange,
             (payload) => {
                 const limited = limitMetricNames(collectMetricNames(payload), maxMetrics);
@@ -1029,7 +1089,20 @@ export function Explorer(): React.ReactElement {
                 setCatalogReady(true);
             }
         );
-    }, [catalogRange, dataFilters, defaultsReady, metricIndexes, metricIndexesReady]);
+    }, [catalogRange, searchFilters, explicitIndexes, defaultsReady, metricIndexes, metricIndexesReady]);
+
+    useEffect(() => {
+        if (!indexesOpen || !metricIndexesReady || !metricIndexes) {
+            return undefined;
+        }
+        setActiveIndexes(null);
+        return runSearch(
+            buildIndexActivitySearch(metricIndexes),
+            catalogRange,
+            (payload) => setActiveIndexes(indexesWithData(payload)),
+            () => setActiveIndexes(null)
+        );
+    }, [indexesOpen, metricIndexes, metricIndexesReady, catalogRange]);
 
     useEffect(() => {
         if (charts.length === 0) {
@@ -1119,7 +1192,7 @@ export function Explorer(): React.ReactElement {
             return undefined;
         }
         return runSearch(
-            buildCatalogSearch(dataFilters, groupBy, metricIndexes),
+            buildCatalogSearch(searchFilters, groupBy, metricIndexes, explicitIndexes),
             catalogRange,
             (payload) => {
                 const limited = limitValueRows(collectValueMetrics(payload, groupBy), maxMetrics);
@@ -1128,7 +1201,7 @@ export function Explorer(): React.ReactElement {
             },
             () => setValueRows([])
         );
-    }, [groupBy, dataFilters, catalogRange, defaultsReady, metricIndexes, metricIndexesReady]);
+    }, [groupBy, searchFilters, explicitIndexes, catalogRange, defaultsReady, metricIndexes, metricIndexesReady]);
 
     useEffect(() => {
         if (!eventsOpen) {
@@ -1215,11 +1288,22 @@ export function Explorer(): React.ReactElement {
             ),
         [names, valueRows, groupBy, separator, query]
     );
+    const shownIndexes = indexNames.filter((name) => matchesQuery(name, query));
     const shownSourcetypes = sourcetypes.filter((name) => matchesQuery(name, query));
     const shownDatamodels = datamodels.filter((name) => matchesQuery(name, query));
 
     function toggleSection(next: Section): void {
         setSection((current) => (current === next ? '' : next));
+    }
+
+    function toggleIndex(name: string): void {
+        const current = indexChoice.mode === 'all' ? indexNames : indexChoice.names;
+        const next = current.includes(name) ? current.filter((item) => item !== name) : [...current, name].sort();
+        setIndexChoice({ mode: 'picked', names: next });
+        setDataFilters((filters) => [
+            ...filters.filter((item) => item.kind !== 'index'),
+            ...next.map((value) => ({ kind: 'index' as const, value })),
+        ]);
     }
 
     function matchCount(count: number): string {
@@ -1647,13 +1731,18 @@ export function Explorer(): React.ReactElement {
                 </PaneHeader>
                 {dataFilterOpen ? (
                     <DataFilterForm
-                        filters={dataFilters}
+                        filters={[
+                            ...dataFilters.filter((item) => item.kind !== 'index'),
+                            ...checkedIndexes.map((value) => ({ kind: 'index' as const, value })),
+                        ]}
                         indexes={metricIndexes ?? []}
                         dimensions={allDimensions}
                         metricIndexes={metricIndexes}
                         range={catalogRange}
                         onCancel={() => setDataFilterOpen(false)}
                         onApply={(next) => {
+                            const picked = next.filter((item) => item.kind === 'index').map((item) => item.value);
+                            setIndexChoice({ mode: 'picked', names: picked });
                             setDataFilters(next);
                             setDataFilterOpen(false);
                         }}
@@ -1677,6 +1766,39 @@ export function Explorer(): React.ReactElement {
                         </SearchIcon>
                     )}
                 </SearchWrap>
+                <SectionButton type="button" aria-expanded={indexesOpen} onClick={() => toggleSection('indexes')}>
+                    <span aria-hidden>{indexesOpen ? '▾' : '▸'}</span> <SectionTitle>{t('Indexes')}</SectionTitle>
+                    {query && indexesOpen ? <Count>{matchCount(shownIndexes.length)}</Count> : null}
+                </SectionButton>
+                {indexesOpen ? (
+                        <IndexList role="group" aria-label={t('Indexes')}>
+                            {shownIndexes.map((name) => {
+                                const checked = checkedIndexes.includes(name);
+                                const dot = activeIndexes === null ? 'unknown' : activeIndexes.includes(name) ? 'on' : 'off';
+                                return (
+                                    <IndexRow key={name}>
+                                        <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            aria-label={name}
+                                            onChange={() => toggleIndex(name)}
+                                        />
+                                        <IndexName title={name}>{<Highlight text={name} query={query} />}</IndexName>
+                                        <ActivityDot
+                                            $state={dot}
+                                            title={dot === 'on' ? t('Receiving metric data') : dot === 'off' ? t('No metric data') : ''}
+                                            aria-label={
+                                                dot === 'unknown'
+                                                    ? undefined
+                                                    : `${name}: ${dot === 'on' ? t('Receiving metric data') : t('No metric data')}`
+                                            }
+                                        />
+                                    </IndexRow>
+                                );
+                            })}
+                            {metricIndexesReady && shownIndexes.length === 0 ? <Note>{t('No metric indexes.')}</Note> : null}
+                        </IndexList>
+                ) : null}
                 <SectionButton type="button" aria-expanded={metricsOpen} onClick={() => toggleSection('metrics')}>
                     <span aria-hidden>{metricsOpen ? '▾' : '▸'}</span> <SectionTitle>{t('Metrics')}</SectionTitle>
                     {query ? <Count>{matchCount(countLeaves(tree))}</Count> : null}
@@ -1684,7 +1806,7 @@ export function Explorer(): React.ReactElement {
                 {metricsOpen ? (
                 <SectionBody>
                 <FilterBox aria-label={t('Data filters')}>
-                    {dataFilters.map((filter) => (
+                    {dataFilters.filter((filter) => filter.kind !== 'index').map((filter) => (
                         <Chip key={`${filter.kind}:${filter.value}`}>
                             {filterLabel(filter)}
                             <ChipRemove
@@ -1698,7 +1820,15 @@ export function Explorer(): React.ReactElement {
                         </Chip>
                     ))}
                     {sameFilters(dataFilters, defaultFilters) ? null : (
-                        <TextLink type="button" disabled={!defaultsReady} onClick={() => setDataFilters(defaultFilters)}>
+                        <TextLink
+                            type="button"
+                            disabled={!defaultsReady}
+                            onClick={() => {
+                                const picked = defaultFilters.filter((item) => item.kind === 'index').map((item) => item.value);
+                                setIndexChoice(picked.length > 0 ? { mode: 'picked', names: picked } : { mode: 'all' });
+                                setDataFilters(defaultFilters);
+                            }}
+                        >
                             {t('Reset to defaults')}
                         </TextLink>
                     )}

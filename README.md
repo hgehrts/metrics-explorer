@@ -8,7 +8,7 @@ Browse Splunk metric indexes and chart them without writing SPL.
 
 Splunk removes the Analytics Workspace in Splunk Enterprise 10.6 and Splunk Cloud Platform 10.6 and does not ship a replacement. Metric Explorer NG is the app I built so that work still has a place: open a metric, see the chart, split it, filter it, and save it. The app covers the Analytics Workspace 2.56.0 functions and keeps a few additions that were already useful in daily work: events, datasets, base searches, named workspaces, the full `mstats` aggregations, and a global time span.
 
-The current package is [1.1.1](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.1.1.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. In the app, the same documentation is available in English and, on a `de-DE` Splunk URL, in German.
+The current package is [1.1.2](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.1.2.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. In the app, the same documentation is available in English and, on a `de-DE` Splunk URL, in German.
 
 ## Documentation
 
@@ -19,6 +19,8 @@ The numbers in the picture match the sections below.
 ### Data, left column
 
 The column lists what can be charted. It filters the list, not the points of a chart that is already drawn.
+
+Indexes is its own section, above Metrics, and it collapses like the others. Check the indexes whose metrics should be listed. The search box filters that list and the metric names. A green dot means the index received metric data in the catalog time range at the bottom of the column. A red dot means it did not.
 
 #### 1. Search
 
@@ -91,7 +93,7 @@ The column lists what can be charted. It filters the list, not the points of a c
 
 #### 12. Time range
 
-- The search window of the charts. Presets, or your own start and end.
+- The search window of the charts. Presets, or your own start and end. The time axis covers this whole window, including the stretch before the first point.
 - Changing the time range clears a zoom.
 - With Auto, the time span is chosen from this window so a series stays under about 1,000 points.
 

@@ -41,6 +41,7 @@
 
           <h2>Data, left column</h2>
           <p>The column lists what can be charted. It filters the list, not the points of a chart that is already drawn.</p>
+          <p>Indexes is its own section, above Metrics, and it collapses like the others. Check the indexes whose metrics should be listed. The search box filters that list and the metric names. A green dot means the index received metric data in the catalog time range at the bottom of the column. A red dot means it did not.</p>
 
           <h3 id="mx-1">1. Search</h3>
           <ul>
@@ -124,7 +125,7 @@
 
           <h3 id="mx-12">12. Time range</h3>
           <ul>
-            <li>The search window of the charts. Presets, or your own start and end.</li>
+            <li>The search window of the charts. Presets, or your own start and end. The time axis covers this whole window, including the stretch before the first point.</li>
             <li>Changing the time range clears a zoom.</li>
             <li>With Auto, the time span is chosen from this window so a series stays under about 1,000 points.</li>
           </ul>

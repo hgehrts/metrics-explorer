@@ -41,6 +41,7 @@
 
           <h2>Daten, linke Spalte</h2>
           <p>Die Spalte listet, was sich zeichnen lässt. Sie filtert die Liste, nicht die Punkte eines schon gezeichneten Diagramms.</p>
+          <p>Indexe ist eine eigene Sektion über Metriken und lässt sich wie die anderen zuklappen. Die Häkchen wählen die Indexe, deren Metriken in der Liste stehen. Das Suchfeld filtert diese Liste und die Metriknamen. Ein grüner Punkt bedeutet, dass in dem Index im Katalog-Zeitraum unten in der Spalte Metrikdaten angekommen sind. Ein roter Punkt bedeutet, dass keine angekommen sind.</p>
 
           <h3 id="mx-1">1. Suche</h3>
           <ul>
@@ -124,7 +125,7 @@
 
           <h3 id="mx-12">12. Zeitraum</h3>
           <ul>
-            <li>Das Suchfenster der Diagramme. Voreinstellungen und ein eigener Anfang und ein eigenes Ende.</li>
+            <li>Das Suchfenster der Diagramme. Voreinstellungen und ein eigener Anfang und ein eigenes Ende. Die Zeitachse deckt das ganze Fenster ab, auch die Spanne vor dem ersten Punkt.</li>
             <li>Ein Wechsel des Zeitraums setzt einen Zoom zurück.</li>
             <li>Bei „Automatisch“ wird die Zeitspanne aus diesem Fenster neu gewählt, so dass eine Serie unter etwa 1.000 Punkten bleibt.</li>
           </ul>
