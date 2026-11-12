@@ -418,11 +418,13 @@ const IndexName = styled.span`
 `;
 
 const ActivityDot = styled.span<{ $state: 'on' | 'off' | 'unknown' }>`
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     flex: 0 0 auto;
-    background: ${(props) => (props.$state === 'on' ? '#2da44e' : props.$state === 'off' ? '#cf222e' : 'transparent')};
+    box-sizing: border-box;
+    border: 1px solid ${(props) => (props.$state === 'on' ? '#1f7a32' : props.$state === 'off' ? '#a11d24' : '#8a8f98')};
+    background: ${(props) => (props.$state === 'on' ? '#3fb950' : props.$state === 'off' ? '#f85149' : '#8a8f98')};
 `;
 
 const Tree = styled.div`
@@ -938,6 +940,7 @@ export function Explorer(): React.ReactElement {
     const [indexChoice, setIndexChoice] = useState<IndexChoice>({ mode: 'all' });
     /** Null until the activity search finishes. An empty list means no index had data. */
     const [activeIndexes, setActiveIndexes] = useState<string[] | null>(null);
+    const [activityError, setActivityError] = useState('');
     const [defaultsReady, setDefaultsReady] = useState(false);
     const [dataFilterOpen, setDataFilterOpen] = useState(false);
     const [globalFilterOpen, setGlobalFilterOpen] = useState(false);
@@ -1092,17 +1095,24 @@ export function Explorer(): React.ReactElement {
     }, [catalogRange, searchFilters, explicitIndexes, defaultsReady, metricIndexes, metricIndexesReady]);
 
     useEffect(() => {
-        if (!indexesOpen || !metricIndexesReady || !metricIndexes) {
+        if (!metricIndexesReady || !metricIndexes || metricIndexes.length === 0) {
             return undefined;
         }
         setActiveIndexes(null);
+        setActivityError('');
         return runSearch(
             buildIndexActivitySearch(metricIndexes),
             catalogRange,
-            (payload) => setActiveIndexes(indexesWithData(payload)),
-            () => setActiveIndexes(null)
+            (payload) => {
+                setActiveIndexes(indexesWithData(payload, metricIndexes));
+                setActivityError('');
+            },
+            (message) => {
+                setActiveIndexes(null);
+                setActivityError(message);
+            }
         );
-    }, [indexesOpen, metricIndexes, metricIndexesReady, catalogRange]);
+    }, [metricIndexes, metricIndexesReady, catalogRange]);
 
     useEffect(() => {
         if (charts.length === 0) {
@@ -1797,6 +1807,7 @@ export function Explorer(): React.ReactElement {
                                 );
                             })}
                             {metricIndexesReady && shownIndexes.length === 0 ? <Note>{t('No metric indexes.')}</Note> : null}
+                            {activityError ? <Note>{activityError}</Note> : null}
                         </IndexList>
                 ) : null}
                 <SectionButton type="button" aria-expanded={metricsOpen} onClick={() => toggleSection('metrics')}>

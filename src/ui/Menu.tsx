@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import styled, { css } from 'styled-components';
 import { variables } from '@splunk/themes';
 
@@ -15,7 +16,7 @@ const Anchor = styled.div<{ $right: boolean }>`
 /** Fixed to the window, so a scrolling stage or a chart card cannot clip it. */
 const List = styled.div`
     position: fixed;
-    z-index: 30;
+    z-index: 4000;
     display: flex;
     flex-direction: column;
     min-width: 200px;
@@ -68,8 +69,32 @@ export const MenuItem = styled.button.attrs({ type: 'button', role: 'menuitem' }
     }
 `;
 
+/** Puts the menu in the window, above the trigger when the space below would clip it. */
+function menuPlace(box: DOMRect, alignRight: boolean): React.CSSProperties {
+    const gap = 4;
+    const margin = 8;
+    const spaceBelow = window.innerHeight - box.bottom - margin;
+    const spaceAbove = box.top - margin;
+    const horizontal = alignRight
+        ? { right: Math.max(margin, window.innerWidth - box.right) }
+        : { left: Math.max(margin, box.left) };
+    if (spaceBelow < 180 && spaceAbove > spaceBelow) {
+        return {
+            bottom: window.innerHeight - box.top + gap,
+            maxHeight: Math.max(80, spaceAbove - gap),
+            ...horizontal,
+        };
+    }
+    return {
+        top: box.bottom + gap,
+        maxHeight: Math.max(80, Math.min(420, spaceBelow)),
+        ...horizontal,
+    };
+}
+
 /**
- * A button that opens a list below it. Clicking outside or pressing Escape closes it.
+ * A button that opens a list. The list is portaled to the page so a pane cannot clip it.
+ * It opens upward when the trigger sits on the bottom edge. Clicking outside or pressing Escape closes it.
  * `children` gets a close function, so an item can close the menu after it ran.
  */
 export function DropdownMenu(props: {
@@ -82,29 +107,38 @@ export function DropdownMenu(props: {
     const [open, setOpen] = useState(false);
     const [place, setPlace] = useState<React.CSSProperties>({});
     const anchor = useRef<HTMLDivElement>(null);
+    const list = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (!open || !anchor.current) {
             return;
         }
-        const box = anchor.current.getBoundingClientRect();
-        const top = box.bottom + 4;
-        setPlace({
-            top,
-            maxHeight: Math.max(160, Math.min(420, window.innerHeight - top - 8)),
-            ...(props.alignRight ? { right: Math.max(4, window.innerWidth - box.right) } : { left: Math.max(4, box.left) }),
-        });
+        const position = (): void => {
+            if (anchor.current) {
+                setPlace(menuPlace(anchor.current.getBoundingClientRect(), Boolean(props.alignRight)));
+            }
+        };
+        position();
+        const onScroll = (event: Event): void => {
+            if (event.target instanceof Node && list.current?.contains(event.target)) {
+                return;
+            }
+            position();
+        };
+        window.addEventListener('resize', position);
+        document.addEventListener('scroll', onScroll, true);
+        return () => {
+            window.removeEventListener('resize', position);
+            document.removeEventListener('scroll', onScroll, true);
+        };
     }, [open, props.alignRight]);
     useEffect(() => {
         if (!open) {
             return undefined;
         }
-        const onMove = (event: Event): void => {
-            if (!(event.target instanceof Node && anchor.current?.contains(event.target))) {
-                setOpen(false);
-            }
-        };
+        const inside = (target: EventTarget | null): boolean =>
+            target instanceof Node && Boolean(anchor.current?.contains(target) || list.current?.contains(target));
         const onDown = (event: MouseEvent): void => {
-            if (anchor.current && !anchor.current.contains(event.target as Node)) {
+            if (!inside(event.target)) {
                 setOpen(false);
             }
         };
@@ -115,23 +149,22 @@ export function DropdownMenu(props: {
         };
         document.addEventListener('mousedown', onDown);
         document.addEventListener('keydown', onKey);
-        window.addEventListener('resize', onMove);
-        document.addEventListener('scroll', onMove, true);
         return () => {
             document.removeEventListener('mousedown', onDown);
             document.removeEventListener('keydown', onKey);
-            window.removeEventListener('resize', onMove);
-            document.removeEventListener('scroll', onMove, true);
         };
     }, [open]);
     return (
         <Anchor ref={anchor} $right={Boolean(props.pushRight)}>
             {props.trigger(open, () => setOpen((current) => !current))}
-            {open ? (
-                <List role="menu" aria-label={props.label} style={place}>
-                    {props.children(() => setOpen(false))}
-                </List>
-            ) : null}
+            {open
+                ? createPortal(
+                      <List ref={list} role="menu" aria-label={props.label} style={place}>
+                          {props.children(() => setOpen(false))}
+                      </List>,
+                      document.body
+                  )
+                : null}
         </Anchor>
     );
 }
