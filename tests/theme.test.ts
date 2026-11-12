@@ -20,7 +20,7 @@ test('asks Splunk to reload when the page theme disagrees with the user', () => 
     expect(themeQuery('dark', null)).toBe('dark');
     expect(themeQuery('light', 'dark')).toBe('enterprise');
     expect(themeQuery('dark', 'dark')).toBeNull();
-    expect(themeUrl('http://splunk/de-DE/app/metrics_explorer/explorer', 'dark')).toBe(
-        'http://splunk/de-DE/app/metrics_explorer/explorer?theme=dark'
+    expect(themeUrl('http://splunk/de-DE/app/metric_explorer_ng/explorer', 'dark')).toBe(
+        'http://splunk/de-DE/app/metric_explorer_ng/explorer?theme=dark'
     );
 });

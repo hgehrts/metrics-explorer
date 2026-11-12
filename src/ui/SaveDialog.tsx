@@ -382,7 +382,7 @@ export function SaveDialog(props: {
             const current = typeof entry?.content['eai:data'] === 'string' ? entry.content['eai:data'] : '';
             await splunkPost(`data/ui/views/${encodeURIComponent(existing)}`, { 'eai:data': appendClassicPanels(current, list) });
             setDone(`${t('Added the charts to')} ${existing}.`);
-            setLink(`/${locale()}/app/metrics_explorer/${encodeURIComponent(existing)}`);
+            setLink(`/${locale()}/app/metric_explorer_ng/${encodeURIComponent(existing)}`);
             return;
         }
         const id = dashboardId.trim();
@@ -397,7 +397,7 @@ export function SaveDialog(props: {
         );
         await share(`data/ui/views/${encodeURIComponent(id)}`);
         setDone(`${t('Saved dashboard')} ${title}.`);
-        setLink(`/${locale()}/app/metrics_explorer/${encodeURIComponent(id)}`);
+        setLink(`/${locale()}/app/metric_explorer_ng/${encodeURIComponent(id)}`);
     }
 
     async function saveStudio(title: string): Promise<void> {
@@ -409,7 +409,7 @@ export function SaveDialog(props: {
         );
         await share(`data/ui/views/${encodeURIComponent(id)}`);
         setDone(`${t('Saved dashboard')} ${title}.`);
-        setLink(`/${locale()}/app/metrics_explorer/${encodeURIComponent(id)}`);
+        setLink(`/${locale()}/app/metric_explorer_ng/${encodeURIComponent(id)}`);
     }
 
     function throttle(units: readonly string[]): string {

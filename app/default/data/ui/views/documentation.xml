@@ -6,9 +6,9 @@
     <panel>
       <html>
         <div class="mx-docs mx-docs-en">
-          <p>The app name in the bar is Metric Explorer NG. The app ID stays <code>metrics_explorer</code>. Dashboards, reports, alerts, base searches, and workspaces saved here belong to this app. The numbers in the picture match the sections below.</p>
+          <p>The app name in the bar is Metric Explorer NG. The app ID is <code>metric_explorer_ng</code>. Dashboards, reports, alerts, base searches, and workspaces saved here belong to this app. The numbers in the picture match the sections below.</p>
           <div class="mx-figure mx-figure-en">
-          <img src="/static/app/metrics_explorer/docs-annotated-en.png" alt="Metric Explorer NG with numbered areas"/>
+          <img src="/static/app/metric_explorer_ng/docs-annotated-en.png" alt="Metric Explorer NG with numbered areas"/>
           <a class="mx-hot mx-n-1" href="#mx-1">1</a>
           <a class="mx-hot mx-n-2" href="#mx-2">2</a>
           <a class="mx-hot mx-n-3" href="#mx-3">3</a>
@@ -287,7 +287,7 @@
           <h2>Dashboards menu</h2>
           <ul>
             <li>Opens Splunk's dashboard list in this app's context.</li>
-            <li>It lists Classic dashboards and Dashboard Studio dashboards whose app is <code>metrics_explorer</code>.</li>
+            <li>It lists Classic dashboards and Dashboard Studio dashboards whose app is <code>metric_explorer_ng</code>.</li>
             <li>Creating, opening, editing, permissions, and export happen on that Splunk page, not in a separate list inside Metric Explorer NG.</li>
             <li>The page's app filter is set to this app. The filter can show dashboards from other apps when you need them.</li>
           </ul>

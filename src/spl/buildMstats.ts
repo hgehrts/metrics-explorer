@@ -366,7 +366,7 @@ export function buildBaseChartSearch(input: {
     const saved = baseSavedName(input.name);
     const head =
         input.mode === 'cached'
-            ? `| loadjob savedsearch=${quoteSpl(`${input.owner}:metrics_explorer:${saved}`)}`
+            ? `| loadjob savedsearch=${quoteSpl(`${input.owner}:metric_explorer_ng:${saved}`)}`
             : `| savedsearch ${quoteSpl(saved)}`;
     const call = aggregation.name === 'count' ? 'count' : `${aggregation.name}(${quoteSpl(field)})`;
     if (input.categorical) {

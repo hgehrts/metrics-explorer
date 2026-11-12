@@ -46,7 +46,7 @@ export async function loadSettings(): Promise<ExplorerSettings> {
     const [context] = await getEntries('/services/authentication/current-context?output_mode=json');
     const roles = Array.isArray(context?.content?.roles) ? (context.content.roles as string[]) : [];
     const entries = await getEntries(
-        '/servicesNS/nobody/metrics_explorer/configs/conf-metrics_explorer?output_mode=json&count=0'
+        '/servicesNS/nobody/metric_explorer_ng/configs/conf-metric_explorer_ng?output_mode=json&count=0'
     );
     const stanzas = entries
         .filter((entry): entry is Entry & { name: string } => typeof entry.name === 'string')

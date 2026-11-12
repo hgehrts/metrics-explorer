@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Build dist/metrics_explorer-<version>.tar.gz from app/ plus the webpack bundle.
+# Build dist/metric_explorer_ng-<version>.tar.gz from app/ plus the webpack bundle.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(node -p "require('${ROOT}/package.json').version")"
-STAGE="${ROOT}/stage/metrics_explorer"
+STAGE="${ROOT}/stage/metric_explorer_ng"
 DIST="${ROOT}/dist"
 BUNDLE="${ROOT}/build/appserver/static/build/explorer.js"
 
@@ -21,9 +21,9 @@ cp -R "${ROOT}/build/appserver/static/build" "${STAGE}/appserver/static/build"
 find "$STAGE" -name '.DS_Store' -delete
 find "$STAGE" -name '._*' -delete
 
-COPYFILE_DISABLE=1 tar -czf "${DIST}/metrics_explorer-${VERSION}.tar.gz" \
+COPYFILE_DISABLE=1 tar -czf "${DIST}/metric_explorer_ng-${VERSION}.tar.gz" \
   --exclude='.*' \
-  -C "${ROOT}/stage" metrics_explorer
+  -C "${ROOT}/stage" metric_explorer_ng
 
 COMPAT_STAGE="${ROOT}/stage/mx_compat_analytics_workspace"
 rm -rf "$COMPAT_STAGE"
@@ -34,4 +34,4 @@ COPYFILE_DISABLE=1 tar -czf "${DIST}/mx_compat_analytics_workspace-1.0.0.tar.gz"
   --exclude='.*' \
   -C "${ROOT}/stage" mx_compat_analytics_workspace
 
-echo "Wrote ${DIST}/metrics_explorer-${VERSION}.tar.gz"
+echo "Wrote ${DIST}/metric_explorer_ng-${VERSION}.tar.gz"

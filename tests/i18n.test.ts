@@ -1,6 +1,6 @@
 import { t } from '../src/i18n';
 
-const GERMAN_PATH = '/de-DE/app/metrics_explorer/explorer';
+const GERMAN_PATH = '/de-DE/app/metric_explorer_ng/explorer';
 
 beforeEach(() => {
     window.history.pushState({}, '', GERMAN_PATH);

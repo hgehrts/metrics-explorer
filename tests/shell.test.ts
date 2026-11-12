@@ -19,7 +19,7 @@ test('the explorer view is a Splunk dashboard that keeps the platform chrome', (
 test('the app name, icons, dashboards link, and documentation view are packaged', () => {
     const conf = fs.readFileSync(path.join(root, 'app/default/app.conf'), 'utf8');
     expect(conf).toContain('label = Metric Explorer NG');
-    expect(conf).toContain('name = metrics_explorer');
+    expect(conf).toContain('name = metric_explorer_ng');
     const nav = fs.readFileSync(path.join(root, 'app/default/data/ui/nav/default.xml'), 'utf8');
     expect(nav).toContain('<view name="dashboards"/>');
     expect(nav).toContain('<view name="documentation"/>');

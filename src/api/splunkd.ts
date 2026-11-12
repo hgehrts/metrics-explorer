@@ -2,7 +2,7 @@ import { createFetchInit, findErrorMessage } from '@splunk/splunk-utils/fetch';
 import { createRESTURL } from '@splunk/splunk-utils/url';
 
 function endpoint(path: string, owner = 'nobody'): string {
-    const url = createRESTURL(path.replace(/^\//, ''), { app: 'metrics_explorer', owner });
+    const url = createRESTURL(path.replace(/^\//, ''), { app: 'metric_explorer_ng', owner });
     return url.includes('?') ? `${url}&output_mode=json` : `${url}?output_mode=json`;
 }
 

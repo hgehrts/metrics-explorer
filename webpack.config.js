@@ -10,7 +10,7 @@ const config = merge(create({ babelTypescript: true }), {
         path: path.resolve(__dirname, 'build/appserver/static/build'),
         filename: '[name].js',
         chunkFilename: '[name].js',
-        publicPath: '/static/app/metrics_explorer/build/',
+        publicPath: '/static/app/metric_explorer_ng/build/',
         clean: true,
     },
     optimization: {

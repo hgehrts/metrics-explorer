@@ -6,9 +6,9 @@
     <panel>
       <html>
         <div class="mx-docs mx-docs-de">
-          <p>Die App heißt in der Leiste Metric Explorer NG. Die App-ID bleibt <code>metrics_explorer</code>. Dashboards, Berichte, Benachrichtigungen, Base Searches und Arbeitsbereiche, die hier gespeichert werden, liegen in dieser App. Die Nummern im Bild entsprechen den Abschnitten darunter.</p>
+          <p>Die App heißt in der Leiste Metric Explorer NG. Die App-ID ist <code>metric_explorer_ng</code>. Dashboards, Berichte, Benachrichtigungen, Base Searches und Arbeitsbereiche, die hier gespeichert werden, liegen in dieser App. Die Nummern im Bild entsprechen den Abschnitten darunter.</p>
           <div class="mx-figure mx-figure-de">
-          <img src="/static/app/metrics_explorer/docs-annotated-de.png" alt="Metric Explorer NG mit nummerierten Bereichen"/>
+          <img src="/static/app/metric_explorer_ng/docs-annotated-de.png" alt="Metric Explorer NG mit nummerierten Bereichen"/>
           <a class="mx-hot mx-n-1" href="#mx-1">1</a>
           <a class="mx-hot mx-n-2" href="#mx-2">2</a>
           <a class="mx-hot mx-n-3" href="#mx-3">3</a>
@@ -287,7 +287,7 @@
           <h2>Menü Dashboards</h2>
           <ul>
             <li>Öffnet die Dashboard-Liste von Splunk im Kontext dieser App.</li>
-            <li>Dort stehen die Classic Dashboards und Dashboard-Studio-Dashboards, deren App <code>metrics_explorer</code> ist.</li>
+            <li>Dort stehen die Classic Dashboards und Dashboard-Studio-Dashboards, deren App <code>metric_explorer_ng</code> ist.</li>
             <li>Anlegen, Öffnen, Bearbeiten, Berechtigungen und Export laufen über diese Splunk-Seite, nicht über eine eigene Liste in Metric Explorer NG.</li>
             <li>Der App-Filter der Seite steht auf dieser App. Über den Filter lassen sich bei Bedarf die Dashboards anderer Apps einblenden.</li>
           </ul>

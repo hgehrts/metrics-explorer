@@ -1,4 +1,4 @@
-# metrics_explorer.conf
+# metric_explorer_ng.conf
 
 [metadata]
 earliest = <string>
