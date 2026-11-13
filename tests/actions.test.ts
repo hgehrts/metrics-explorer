@@ -61,6 +61,21 @@ test('a trellis chart is stored in classic XML and in Dashboard Studio', () => {
     expect(studio).toContain('"trellisRowHeight":220');
 });
 
+test('a studio trellis panel is as tall as one page of small charts', () => {
+    const trellis = { ...panel, trellis: { splitBy: 'host', minColumnWidth: 280, rowHeight: 220, columns: 2, pageSize: 8 } };
+    const definition = JSON.parse(studioDashboard('Lab', [panel, trellis]).split('<![CDATA[')[1].split(']]>')[0]);
+    expect(definition.layout.structure.map((item: { position: unknown }) => item.position)).toEqual([
+        { x: 0, y: 0, w: 1200, h: 300 },
+        { x: 0, y: 320, w: 1200, h: 960 },
+    ]);
+});
+
+test('exported dashboards use the theme of the explorer', () => {
+    expect(classicDashboard('Lab', [panel], { theme: 'dark' })).toContain('<dashboard version="1.1" theme="dark">');
+    expect(classicDashboard('Lab', [panel])).toContain('<dashboard version="1.1" theme="light">');
+    expect(studioDashboard('Lab', [panel], { theme: 'dark' })).toContain('<dashboard version="2" theme="dark">');
+});
+
 test('a studio dashboard keeps the search in the definition', () => {
     const xml = studioDashboard('Lab', [{ ...panel, chart: 'column', stacked: true }]);
     expect(xml).toContain('version="2"');

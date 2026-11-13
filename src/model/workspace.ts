@@ -218,6 +218,7 @@ export function cloneChart(chart: ChartModel): ChartModel {
         series: chart.series.map((series) => ({ ...series, id: nextId('series') })),
         settings: { ...chart.settings },
         useGlobalSplit: chart.useGlobalSplit,
+        ...(chart.trellis ? { trellis: { ...chart.trellis } } : {}),
     };
 }
 

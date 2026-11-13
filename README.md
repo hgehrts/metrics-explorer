@@ -8,7 +8,7 @@ Browse Splunk metric indexes and chart them without writing SPL.
 
 Splunk removes the Analytics Workspace in Splunk Enterprise 10.6 and Splunk Cloud Platform 10.6 and does not ship a replacement. Metric Explorer NG is the app I built so that work still has a place: open a metric, see the chart, split it, filter it, and save it. The app covers the Analytics Workspace 2.56.0 functions and keeps a few additions that were already useful in daily work: events, datasets, base searches, named workspaces, the full `mstats` aggregations, and a global time span.
 
-The current package is [1.2b](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.2b.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. In the app, the same documentation is available in English and, on a `de-DE` Splunk URL, in German.
+The current package is [1.3b](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.3b.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. In the app, the same documentation is available in English and, on a `de-DE` Splunk URL, in German.
 
 ## Documentation
 

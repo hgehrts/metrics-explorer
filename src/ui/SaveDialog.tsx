@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { variables } from '@splunk/themes';
 
-import { restEntries, splunkDelete, splunkGet, splunkPost, splunkPostJson } from '../api/splunkd';
+import { restEntries, splunkGet, splunkPost, splunkPostJson } from '../api/splunkd';
 import {
     alertComparator,
     alertCron,
@@ -27,7 +27,8 @@ import {
 } from '../actions/dashboards';
 import { isCategorical } from '../chart/settings';
 import { t } from '../i18n';
-import { parseSession, SavedSession, serializeSession } from '../model/session';
+import { serializeSession } from '../model/session';
+import { readPageTheme } from '../theme';
 import { ChartModel, GlobalSplitLimit, globalFiltersFor, resolveSeries, SeriesFilter } from '../model/workspace';
 import { baseSavedName, buildBaseSearchSpl } from '../spl/buildMstats';
 import { resolveForSource } from '../spl/functions';
@@ -38,7 +39,10 @@ import { Button, FormRow, Hint, Inline, Input, Modal, Picker } from './Modal';
 
 export type SaveMode = ChartSaveMode | 'all-classic' | 'all-studio' | 'workspace';
 
-type WorkspaceRow = { _key?: string; name?: string; description?: string; state?: string; owner?: string; sharing?: string };
+/** Exported dashboards use the theme the explorer is shown in. */
+function pageTheme(): 'light' | 'dark' {
+    return readPageTheme(window) ?? 'light';
+}
 type Sharing = 'private' | 'app';
 
 const TITLES: Record<SaveMode, string> = {
@@ -50,7 +54,7 @@ const TITLES: Record<SaveMode, string> = {
     base: 'Save as base search',
     'alert-scheduled': 'Save as scheduled alert',
     'alert-streaming': 'Save as streaming alert',
-    workspace: 'Workspaces',
+    workspace: 'Save workspace',
 };
 
 const Area = styled.textarea`
@@ -62,6 +66,11 @@ const Area = styled.textarea`
     font: inherit;
     min-height: 48px;
     resize: vertical;
+
+    &::placeholder {
+        color: ${variables.contentColorMuted};
+        opacity: 1;
+    }
 `;
 
 const Column = styled.div`
@@ -190,7 +199,6 @@ export function SaveDialog(props: {
     eventIndexes: string[];
     metricIndexes?: string[];
     onClose: () => void;
-    onOpenWorkspace: (session: SavedSession) => void;
 }): React.ReactElement {
     const { mode } = props;
     const chart = props.charts.find((item) => item.id === props.chartId) ?? props.charts[0];
@@ -205,7 +213,8 @@ export function SaveDialog(props: {
     const [description, setDescription] = useState('');
     const [sharing, setSharing] = useState<Sharing>('private');
     const [dashboard, setDashboard] = useState<'new' | 'existing'>('new');
-    const [dashboardId, setDashboardId] = useState('');
+    const [typedId, setTypedId] = useState<string | null>(null);
+    const dashboardId = typedId ?? (name.trim() ? dashboardIdFromTitle(name) : '');
     const [existing, setExisting] = useState('');
     const [views, setViews] = useState<Array<{ name: string; label: string }>>([]);
     const [timeInput, setTimeInput] = useState(true);
@@ -234,7 +243,6 @@ export function SaveDialog(props: {
     const [script, setScript] = useState(false);
     const [scriptName, setScriptName] = useState('');
     const [streamingOk, setStreamingOk] = useState(true);
-    const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
     const [error, setError] = useState('');
     const [done, setDone] = useState('');
     const [link, setLink] = useState('');
@@ -281,18 +289,6 @@ export function SaveDialog(props: {
         return () => {
             alive = false;
         };
-    }, [mode]);
-
-    function reloadWorkspaces(): void {
-        splunkGet('storage/collections/data/mx_workspaces?limit=100')
-            .then((body) => setWorkspaces(Array.isArray(body) ? (body as WorkspaceRow[]) : []))
-            .catch(() => setWorkspaces([]));
-    }
-
-    useEffect(() => {
-        if (mode === 'workspace') {
-            reloadWorkspaces();
-        }
     }, [mode]);
 
     function panels(): PanelSpec[] {
@@ -403,7 +399,7 @@ export function SaveDialog(props: {
         }
         await splunkPost(
             'data/ui/views',
-            { name: id, 'eai:data': classicDashboard(title, list, { description, timeInput }) },
+            { name: id, 'eai:data': classicDashboard(title, list, { description, timeInput, theme: pageTheme() }) },
             currentUser()
         );
         await share(`data/ui/views/${encodeURIComponent(id)}`);
@@ -415,7 +411,7 @@ export function SaveDialog(props: {
         const id = dashboardIdFromTitle(title);
         await splunkPost(
             'data/ui/views',
-            { name: id, 'eai:data': studioDashboard(title, panels(), { description, layout: studioLayout }) },
+            { name: id, 'eai:data': studioDashboard(title, panels(), { description, layout: studioLayout, theme: pageTheme() }) },
             currentUser()
         );
         await share(`data/ui/views/${encodeURIComponent(id)}`);
@@ -584,12 +580,9 @@ export function SaveDialog(props: {
             sharing,
             updated: new Date().toISOString(),
         });
-        setDone(`${t('Saved workspace')} ${title}.`);
-        reloadWorkspaces();
+        props.onClose();
     }
 
-    const user = currentUser();
-    const visibleWorkspaces = workspaces.filter((item) => item.sharing === 'app' || !item.owner || item.owner === user);
     const span = chart?.settings.span || props.span;
     const finished = Boolean(done);
 
@@ -632,12 +625,12 @@ export function SaveDialog(props: {
             width={alert ? 640 : 560}
             onClose={props.onClose}
             onSubmit={() => {
-                if (!finished && mode !== 'workspace') {
+                if (!finished) {
                     void save();
                 }
             }}
             footer={
-                finished && mode !== 'workspace' ? (
+                finished ? (
                     <>
                         {link ? (
                             <Button as="a" href={link} target="_blank" rel="noopener">
@@ -651,9 +644,9 @@ export function SaveDialog(props: {
                 ) : (
                     <>
                         <Button type="button" onClick={props.onClose}>
-                            {mode === 'workspace' ? t('Close') : t('Cancel')}
+                            {t('Cancel')}
                         </Button>
-                        <Button type={mode === 'workspace' ? 'button' : 'submit'} $primary disabled={busy} onClick={mode === 'workspace' ? () => void save() : undefined}>
+                        <Button type="submit" $primary disabled={busy}>
                             {busy ? t('Saving…') : t('Save')}
                         </Button>
                     </>
@@ -731,13 +724,7 @@ export function SaveDialog(props: {
                                     <Input
                                         aria-label={t('Dashboard ID')}
                                         value={dashboardId}
-                                        placeholder={dashboardIdFromTitle(name)}
-                                        onChange={(event) => setDashboardId(event.target.value)}
-                                        onFocus={() => {
-                                            if (!dashboardId && name.trim()) {
-                                                setDashboardId(dashboardIdFromTitle(name));
-                                            }
-                                        }}
+                                        onChange={(event) => setTypedId(event.target.value)}
                                     />
                                     <Hint>{t('The dashboard ID may only contain letters, numbers, and underscores.')}</Hint>
                                 </Column>
@@ -1028,38 +1015,6 @@ export function SaveDialog(props: {
                     {titleRow(t('Name'))}
                     {descriptionRow}
                     {sharingRow}
-                    {done ? <Message role="status">{done}</Message> : null}
-                    <Section>{t('Saved workspaces')}</Section>
-                    {visibleWorkspaces.length === 0 ? <Hint>{t('No saved workspaces.')}</Hint> : null}
-                    {visibleWorkspaces.map((item) => (
-                        <Inline key={item._key ?? item.name} style={{ justifyContent: 'space-between' }}>
-                            <Button
-                                type="button"
-                                onClick={() => {
-                                    const session = parseSession(typeof item.state === 'string' ? item.state : null);
-                                    if (!session) {
-                                        setError(t('That workspace cannot be opened.'));
-                                        return;
-                                    }
-                                    props.onOpenWorkspace(session);
-                                    props.onClose();
-                                }}
-                            >
-                                {t('Open workspace')} {item.name}
-                            </Button>
-                            {item._key ? (
-                                <Button
-                                    type="button"
-                                    aria-label={`${t('Delete workspace')} ${item.name ?? ''}`}
-                                    onClick={() => {
-                                        void splunkDelete(`storage/collections/data/mx_workspaces/${encodeURIComponent(item._key ?? '')}`).then(reloadWorkspaces);
-                                    }}
-                                >
-                                    {t('Delete')}
-                                </Button>
-                            ) : null}
-                        </Inline>
-                    ))}
                 </>
             ) : null}
             {error ? (

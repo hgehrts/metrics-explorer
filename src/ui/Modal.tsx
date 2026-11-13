@@ -124,6 +124,11 @@ export const Input = styled.input`
     font-size: 12px;
     min-width: 0;
     box-sizing: border-box;
+
+    &::placeholder {
+        color: ${variables.contentColorMuted};
+        opacity: 1;
+    }
 `;
 
 export const Picker = styled.select`

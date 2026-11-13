@@ -2420,12 +2420,13 @@ export function Explorer(): React.ReactElement {
                                     {t('Save all charts to Dashboard Studio')}
                                 </MenuItem>
                                 <MenuItem
+                                    disabled={charts.length === 0}
                                     onClick={() => {
                                         close();
                                         setSaveMode('workspace');
                                     }}
                                 >
-                                    {t('Workspaces')}
+                                    {t('Save workspace')}
                                 </MenuItem>
                             </>
                         )}
@@ -2715,56 +2716,9 @@ export function Explorer(): React.ReactElement {
                                                 >
                                                     {minimizedIds.has(chart.id) ? '▸' : '▾'}
                                                 </TextLink>
-                                                <DropdownMenu
-                                                    label={t('Chart actions')}
-                                                    alignRight
-                                                    trigger={(_open, toggle) => (
-                                                        <TextLink type="button" aria-label={t('Chart actions')} onClick={toggle}>
-                                                            ▾
-                                                        </TextLink>
-                                                    )}
-                                                >
-                                                    {(close) => (
-                                                        <>
-                                                            <MenuItem
-                                                                onClick={() => {
-                                                                    close();
-                                                                    view.onClone();
-                                                                }}
-                                                            >
-                                                                {t('Clone this panel')}
-                                                            </MenuItem>
-                                                            {(
-                                                                [
-                                                                    ['report', 'Save as report'],
-                                                                    ['panel-classic', 'Save to Classic Dashboards'],
-                                                                    ['panel-studio', 'Save to Dashboard Studio'],
-                                                                    ['base', 'Save as base search'],
-                                                                    ['alert-scheduled', 'Save as scheduled alert'],
-                                                                    ['alert-streaming', 'Save as streaming alert'],
-                                                                ] as Array<[ChartSaveMode, string]>
-                                                            ).map(([mode, label]) => (
-                                                                <MenuItem
-                                                                    key={mode}
-                                                                    onClick={() => {
-                                                                        close();
-                                                                        view.onSave(mode);
-                                                                    }}
-                                                                >
-                                                                    {t(label)}
-                                                                </MenuItem>
-                                                            ))}
-                                                            <MenuItem
-                                                                onClick={() => {
-                                                                    close();
-                                                                    view.onRemove();
-                                                                }}
-                                                            >
-                                                                {t('Remove chart')}
-                                                            </MenuItem>
-                                                        </>
-                                                    )}
-                                                </DropdownMenu>
+                                                <TextLink type="button" aria-label={t('Remove chart')} onClick={view.onRemove}>
+                                                    ×
+                                                </TextLink>
                                             </span>
                                         </TrellisHead>
                                         {minimizedIds.has(chart.id) ? null : (
@@ -3687,7 +3641,6 @@ export function Explorer(): React.ReactElement {
                     eventIndexes={eventIndexes}
                     metricIndexes={metricIndexes}
                     onClose={() => setSaveMode(null)}
-                    onOpenWorkspace={applySession}
                 />
             ) : null}
         </Shell>

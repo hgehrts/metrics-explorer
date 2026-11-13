@@ -78,7 +78,7 @@ function panelXml(panel: PanelSpec, timeInput = false): string {
 export function classicDashboard(
     label: string,
     panels: PanelSpec[],
-    options: { description?: string; timeInput?: boolean } = {}
+    options: { description?: string; timeInput?: boolean; theme?: 'light' | 'dark' } = {}
 ): string {
     if (panels.length === 0) {
         throw new Error('Nothing to save.');
@@ -96,7 +96,7 @@ export function classicDashboard(
     </input>
   </fieldset>`
         : '';
-    return `<dashboard version="1.1">
+    return `<dashboard version="1.1" theme="${options.theme === 'dark' ? 'dark' : 'light'}">
   <label>${xml(label)}</label>${description}${fieldset}
 ${panels.map((panel) => panelXml(panel, Boolean(options.timeInput))).join('\n')}
 </dashboard>
@@ -143,6 +143,16 @@ function studioOptions(panel: PanelSpec): Record<string, unknown> {
     return options;
 }
 
+/** A trellis panel is as tall as one page of small charts, plus the title and the pager. */
+function studioHeight(panel: PanelSpec): number {
+    if (!panel.trellis) {
+        return 300;
+    }
+    const columns = Math.max(1, panel.trellis.columns);
+    const rows = Math.ceil(Math.max(1, panel.trellis.pageSize) / columns);
+    return rows * Math.max(80, panel.trellis.rowHeight) + 80;
+}
+
 function studioViz(panel: PanelSpec, id: string): Record<string, unknown> {
     return {
         type: panel.chart === 'area' ? 'splunk.area' : panel.chart === 'column' ? 'splunk.column' : 'splunk.line',
@@ -156,7 +166,7 @@ function studioViz(panel: PanelSpec, id: string): Record<string, unknown> {
 export function studioDashboard(
     label: string,
     panels: PanelSpec[],
-    options: { description?: string; layout?: 'absolute' | 'grid' } = {}
+    options: { description?: string; layout?: 'absolute' | 'grid'; theme?: 'light' | 'dark' } = {}
 ): string {
     if (panels.length === 0) {
         throw new Error('Nothing to save.');
@@ -164,6 +174,7 @@ export function studioDashboard(
     const visualizations: Record<string, unknown> = {};
     const dataSources: Record<string, unknown> = {};
     const structure: unknown[] = [];
+    let top = 0;
     panels.forEach((panel, index) => {
         const id = `chart_${index + 1}`;
         visualizations[`viz_${id}`] = studioViz(panel, id);
@@ -175,16 +186,19 @@ export function studioDashboard(
                 queryParameters: { earliest: panel.earliest, latest: panel.latest },
             },
         };
+        const height = studioHeight(panel);
         structure.push({
             item: `viz_${id}`,
             type: 'block',
-            position: { x: 0, y: index * 320, w: 1200, h: 300 },
+            position: { x: 0, y: top, w: 1200, h: height },
         });
+        top += height + 20;
     });
+    const size = { width: 1200, height: Math.max(320, top) };
     const layout =
         options.layout === 'grid'
-            ? { type: 'grid', options: { width: 1200, height: Math.max(320, panels.length * 320) }, structure, globalInputs: [] }
-            : { type: 'absolute', options: { width: 1200, height: Math.max(320, panels.length * 320) }, structure, globalInputs: [] };
+            ? { type: 'grid', options: size, structure, globalInputs: [] }
+            : { type: 'absolute', options: size, structure, globalInputs: [] };
     const definition = {
         title: label,
         description: options.description?.trim() ?? '',
@@ -194,7 +208,7 @@ export function studioDashboard(
         dataSources,
         layout,
     };
-    return `<dashboard version="2" theme="light">
+    return `<dashboard version="2" theme="${options.theme === 'dark' ? 'dark' : 'light'}">
   <label>${xml(label)}</label>
   <definition>${cdata(JSON.stringify(definition))}</definition>
 </dashboard>

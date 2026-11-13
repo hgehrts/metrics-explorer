@@ -163,14 +163,21 @@ export function buildMstats(input: {
     const extra = filterClause(input.filters);
     const where = extra ? `${indexClause} AND ${extra}` : indexClause;
     if (input.trellisBy) {
-        assertIdentifier(input.trellisBy, 'Filter field');
-        const groups = [input.trellisBy];
-        if (input.splitBy) {
-            assertIdentifier(input.splitBy, 'Split field');
-            groups.push(input.splitBy);
+        const trellis = input.trellisBy;
+        assertIdentifier(trellis, 'Filter field');
+        const split = input.splitBy ?? '';
+        if (split) {
+            assertIdentifier(split, 'Split field');
         }
-        const span = input.categorical ? '' : ` span=${input.span}`;
-        return `${base} WHERE ${where}${span} BY ${groups.join(', ')}${timeShiftClause(input.timeShift)}`;
+        if (input.categorical) {
+            return `${base} AS value WHERE ${where} BY ${split ? `${trellis}, ${split}` : trellis}`;
+        }
+        const tail = ` | timechart span=${input.span} limit=0 useother=f`;
+        if (!split) {
+            return `${base} AS value WHERE ${where} span=${input.span} BY ${trellis}${timeShiftClause(input.timeShift)}${tail} first(value) AS value BY ${trellis}`;
+        }
+        // Each split value becomes its own aggregation, so every small chart draws one line per split value.
+        return `${base} AS value WHERE ${where} span=${input.span} BY ${trellis}, ${split}${timeShiftClause(input.timeShift)} | eval {${split}}=value | fields - ${split}, value${tail} first(*) AS * BY ${trellis}`;
     }
     if (input.categorical) {
         const aggregate = `${base} AS value WHERE ${where}`;

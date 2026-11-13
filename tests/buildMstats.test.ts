@@ -31,7 +31,7 @@ test('splits a series by a dimension and keeps the five highest values', () => {
     );
 });
 
-test('a trellis export keeps the trellis field and the line split as columns', () => {
+test('a trellis export is a timechart split by the trellis field, with one aggregation per line', () => {
     expect(
         buildMstats({
             aggregation: 'Avg',
@@ -40,7 +40,21 @@ test('a trellis export keeps the trellis field and the line split as columns', (
             splitBy: 'ifName',
             trellisBy: 'host',
         })
-    ).toBe('| mstats avg("cpu_metric.pctUser") WHERE index=* span=10s BY host, ifName');
+    ).toBe(
+        '| mstats avg("cpu_metric.pctUser") AS value WHERE index=* span=10s BY host, ifName | eval {ifName}=value | fields - ifName, value | timechart span=10s limit=0 useother=f first(*) AS * BY host'
+    );
+});
+
+test('a trellis export without a line split draws one line per small chart', () => {
+    expect(buildMstats({ aggregation: 'Avg', metric: 'cpu', span: '1m', trellisBy: 'host' })).toBe(
+        '| mstats avg("cpu") AS value WHERE index=* span=1m BY host | timechart span=1m limit=0 useother=f first(value) AS value BY host'
+    );
+});
+
+test('a categorical trellis export stays a table the trellis splits by rows', () => {
+    expect(buildMstats({ aggregation: 'Avg', metric: 'cpu', span: '1m', splitBy: 'ifName', trellisBy: 'host', categorical: true })).toBe(
+        '| mstats avg("cpu") AS value WHERE index=* BY host, ifName'
+    );
 });
 
 test('uses the lowest values when that limit is selected', () => {

@@ -11,7 +11,18 @@ import {
     trellisDimensions,
     withTrellisValue,
     createChart,
+    reviveChart,
+    DEFAULT_TRELLIS,
 } from '../src/model/workspace';
+
+test('a reopened chart keeps its trellis', () => {
+    const chart = createChart('cpu');
+    chart.trellis = { ...DEFAULT_TRELLIS, dimension: 'region' };
+    const revived = reviveChart(chart);
+    expect(revived.id).not.toBe(chart.id);
+    expect(revived.trellis).toEqual(chart.trellis);
+    expect(revived.trellis).not.toBe(chart.trellis);
+});
 
 test('a split applies only when the rows carry that dimension', () => {
     expect(hasSplitValues([{ extracted_host: 'lab-a' }], 'extracted_host')).toBe(true);
