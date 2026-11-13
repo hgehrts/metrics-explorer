@@ -31,6 +31,18 @@ test('splits a series by a dimension and keeps the five highest values', () => {
     );
 });
 
+test('a trellis export keeps the trellis field and the line split as columns', () => {
+    expect(
+        buildMstats({
+            aggregation: 'Avg',
+            metric: 'cpu_metric.pctUser',
+            span: '10s',
+            splitBy: 'ifName',
+            trellisBy: 'host',
+        })
+    ).toBe('| mstats avg("cpu_metric.pctUser") WHERE index=* span=10s BY host, ifName');
+});
+
 test('uses the lowest values when that limit is selected', () => {
     expect(
         buildMstats({

@@ -69,18 +69,27 @@ export const MenuItem = styled.button.attrs({ type: 'button', role: 'menuitem' }
     }
 `;
 
-/** Puts the menu in the window, above the trigger when the space below would clip it. */
-function menuPlace(box: DOMRect, alignRight: boolean): React.CSSProperties {
+export type MenuAnchor = { left: number; right: number; top: number; bottom: number };
+
+/** Puts the menu in the window. A trigger on the right edge opens the list toward the left, so it stays on screen. */
+export function menuPlace(
+    box: MenuAnchor,
+    alignRight: boolean,
+    viewport = { width: window.innerWidth, height: window.innerHeight },
+    menuWidth = 320
+): React.CSSProperties {
     const gap = 4;
     const margin = 8;
-    const spaceBelow = window.innerHeight - box.bottom - margin;
+    const width = Math.min(menuWidth, Math.max(160, viewport.width - margin * 2));
+    const spaceBelow = viewport.height - box.bottom - margin;
     const spaceAbove = box.top - margin;
-    const horizontal = alignRight
-        ? { right: Math.max(margin, window.innerWidth - box.right) }
-        : { left: Math.max(margin, box.left) };
+    const preferRight = alignRight || box.left + width > viewport.width - margin;
+    const horizontal = preferRight
+        ? { right: Math.max(margin, viewport.width - box.right), maxWidth: viewport.width - margin * 2 }
+        : { left: Math.max(margin, box.left), maxWidth: viewport.width - margin * 2 };
     if (spaceBelow < 180 && spaceAbove > spaceBelow) {
         return {
-            bottom: window.innerHeight - box.top + gap,
+            bottom: viewport.height - box.top + gap,
             maxHeight: Math.max(80, spaceAbove - gap),
             ...horizontal,
         };

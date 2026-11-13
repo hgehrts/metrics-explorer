@@ -30,12 +30,30 @@ export type Series = {
     referenceLines: ReferenceLine[];
 };
 
+/** Layout of the small charts drawn for one dimension of the selected chart. */
+export type TrellisLayout = {
+    dimension: string;
+    minColumnWidth: number;
+    rowHeight: number;
+    columns: number;
+    pageSize: number;
+};
+
+export const DEFAULT_TRELLIS = {
+    minColumnWidth: 280,
+    rowHeight: 220,
+    columns: 2,
+    pageSize: 8,
+} as const;
+
 export type ChartModel = {
     id: string;
     series: Series[];
     settings: ChartSettings;
     /** When false, series that inherit the global split draw unsplit, so this chart keeps its own view. */
     useGlobalSplit: boolean;
+    /** Set only while this chart is split into one small chart per dimension value. */
+    trellis?: TrellisLayout;
 };
 
 export const AUTO_REFRESH_MS = 10000;
@@ -51,6 +69,11 @@ export const INHERIT_SPLIT = '*global*';
  * Nothing is selected, or a metric's dimensions are not loaded yet: the list stays empty.
  * Several metrics offer only the dimensions every one of them has.
  */
+/** Dimensions a trellis can use: the shared ones, without the field that already splits the lines. */
+export function trellisDimensions(shared: string[], splitBy: string): string[] {
+    return shared.filter((name) => name !== splitBy);
+}
+
 export function sharedDimensions(metrics: string[], known: Record<string, string[] | undefined>): string[] {
     const unique = [...new Set(metrics.filter(Boolean))];
     if (unique.length === 0) {
@@ -100,7 +123,8 @@ export function resolveSeries(
         useGlobalSplit &&
         globalSplit &&
         item.source !== 'event' &&
-        item.source !== 'dataset'
+        item.source !== 'dataset' &&
+        item.source !== 'search'
             ? { ...item, splitBy: globalSplit, splitDirection: globalLimit.direction, splitLimit: globalLimit.limit }
             : { ...item, splitBy: resolveSplit(item, globalSplit, useGlobalSplit) }
     );
@@ -155,9 +179,9 @@ export function createSeries(metric: string, filters: SeriesFilter[] = [], sourc
         field: '',
         baseMode: 'live',
         baseOwner: '',
-        aggregation: source === 'metric' ? 'Avg' : 'Count',
-        // The workspace split is a metric dimension. Events and datasets start unsplit so a missing field does not blank the chart.
-        splitBy: source === 'event' || source === 'dataset' ? '' : INHERIT_SPLIT,
+        aggregation: source === 'metric' ? 'Avg' : source === 'search' ? 'Search' : 'Count',
+        // The workspace split is a metric dimension. Events, datasets, and saved searches start unsplit.
+        splitBy: source === 'event' || source === 'dataset' || source === 'search' ? '' : INHERIT_SPLIT,
         splitDirection: 'highest',
         splitLimit: 5,
         timeShift: '',
@@ -173,6 +197,18 @@ export function createChart(metric: string, filters: SeriesFilter[] = [], source
         series: [createSeries(metric, filters, source)],
         settings: defaultSettings(),
         useGlobalSplit: true,
+    };
+}
+
+/** One small chart for a single trellis value. Metric series gain an include filter. The chart id stays. */
+export function withTrellisValue(chart: ChartModel, dimension: string, value: string): ChartModel {
+    return {
+        ...chart,
+        series: chart.series.map((item) =>
+            (item.source ?? 'metric') === 'metric'
+                ? { ...item, filters: [...item.filters, { dimension, mode: 'include', values: [value] }] }
+                : item
+        ),
     };
 }
 

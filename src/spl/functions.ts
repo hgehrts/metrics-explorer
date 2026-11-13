@@ -81,13 +81,60 @@ export const EVENT_FUNCTIONS: MetricFunction[] = [
 
 const EVENT_BY_NAME = new Map(EVENT_FUNCTIONS.map((entry) => [entry.name, entry]));
 
-export type SeriesSource = 'metric' | 'event' | 'dataset' | 'base';
+export type SeriesSource = 'metric' | 'event' | 'dataset' | 'base' | 'search';
+
+/** A saved SPL search is already a chart. It has no aggregation to pick. */
+const SEARCH_FUNCTION: MetricFunction = { name: 'search', label: 'Search', chart: 'line', rate: false };
+
+export type AggregationGroup = 'basic' | 'percentile' | 'rate' | 'time' | 'event';
+
+/** Puts every offered function in one menu section. The browser datalist was hiding most of them. */
+export function aggregationGroup(name: string): AggregationGroup {
+    if (name.startsWith('rate')) {
+        return 'rate';
+    }
+    if (name === 'latest' || name === 'earliest' || name.startsWith('latest_') || name.startsWith('earliest_')) {
+        return 'time';
+    }
+    if (name.startsWith('perc') || name.startsWith('upperperc') || name.startsWith('exactperc') || name.startsWith('p')) {
+        return 'percentile';
+    }
+    if (name === 'dc' || name === 'estdc' || name === 'mode' || name === 'values' || name === 'first' || name === 'last') {
+        return 'event';
+    }
+    return 'basic';
+}
+
+const GROUP_ORDER: AggregationGroup[] = ['basic', 'percentile', 'rate', 'time', 'event'];
+
+export const AGGREGATION_GROUP_LABEL: Record<AggregationGroup, string> = {
+    basic: 'Basic',
+    percentile: 'Percentiles',
+    rate: 'Rate',
+    time: 'Time',
+    event: 'Events',
+};
+
+/** Functions for one source, in menu order, without rate functions on a categorical chart. */
+export function aggregationMenu(source: SeriesSource, categorical: boolean): Array<{ group: AggregationGroup; label: string; items: MetricFunction[] }> {
+    const available = functionsFor(source).filter((item) => !categorical || !item.rate);
+    return GROUP_ORDER.flatMap((group) => {
+        const items = available.filter((item) => aggregationGroup(item.name) === group);
+        return items.length > 0 ? [{ group, label: AGGREGATION_GROUP_LABEL[group], items }] : [];
+    });
+}
 
 export function resolveForSource(source: SeriesSource | undefined, value: string): MetricFunction | null {
+    if (source === 'search') {
+        return SEARCH_FUNCTION;
+    }
     return (source ?? 'metric') === 'metric' ? resolveMetricFunction(value) : resolveEventFunction(value);
 }
 
 export function functionsFor(source: SeriesSource): MetricFunction[] {
+    if (source === 'search') {
+        return [];
+    }
     return source === 'metric' ? METRIC_FUNCTIONS : EVENT_FUNCTIONS;
 }
 

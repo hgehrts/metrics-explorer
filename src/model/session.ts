@@ -1,6 +1,6 @@
 import { SPLIT_LIMITS } from '../spl/buildMstats';
 import { spanSeconds } from '../spl/span';
-import { ChartModel, DEFAULT_GLOBAL_LIMIT, GlobalSplitLimit, SeriesFilter } from './workspace';
+import { ChartModel, DEFAULT_GLOBAL_LIMIT, DEFAULT_TRELLIS, GlobalSplitLimit, SeriesFilter, TrellisLayout } from './workspace';
 
 /** What is kept between visits: the charts and the view around them. Never credentials or search results. */
 export interface SavedSession {
@@ -61,6 +61,24 @@ function isChart(value: unknown): value is ChartModel {
     );
 }
 
+function bounded(value: unknown, fallback: number, min: number, max: number): number {
+    return typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
+}
+
+/** Drops a trellis block that is not a dimension plus four layout numbers. */
+function cleanTrellis(value: unknown): TrellisLayout | undefined {
+    if (!isRecord(value) || typeof value.dimension !== 'string' || !/^[A-Za-z_][A-Za-z0-9_.:-]{0,79}$/.test(value.dimension)) {
+        return undefined;
+    }
+    return {
+        dimension: value.dimension,
+        minColumnWidth: bounded(value.minColumnWidth, DEFAULT_TRELLIS.minColumnWidth, 120, 800),
+        rowHeight: bounded(value.rowHeight, DEFAULT_TRELLIS.rowHeight, 140, 600),
+        columns: bounded(value.columns, DEFAULT_TRELLIS.columns, 1, 6),
+        pageSize: bounded(value.pageSize, DEFAULT_TRELLIS.pageSize, 1, 50),
+    };
+}
+
 /** Reads a saved session. Anything unexpected returns null, so a damaged value never breaks the page. */
 export function parseSession(text: string | null): SavedSession | null {
     if (!text) {
@@ -108,6 +126,12 @@ export function parseSession(text: string | null): SavedSession | null {
     for (const chart of value.charts as Array<ChartModel & { useGlobalSplit?: unknown }>) {
         if (typeof chart.useGlobalSplit !== 'boolean') {
             chart.useGlobalSplit = true;
+        }
+        const trellis = cleanTrellis(chart.trellis);
+        if (trellis) {
+            chart.trellis = trellis;
+        } else {
+            delete chart.trellis;
         }
     }
     return value as unknown as SavedSession;

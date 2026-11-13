@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import styled, { css } from 'styled-components';
+import styled, { css, keyframes } from 'styled-components';
 import { variables } from '@splunk/themes';
 import {
     buildMetricTree,
@@ -15,7 +15,6 @@ import {
 } from '../catalog/metricTree';
 import {
     isPercentText,
-    functionsFor,
     needsField,
     parsePercentile,
     percentileMethods,
@@ -27,7 +26,7 @@ import {
     SeriesSource,
 } from '../spl/functions';
 import { parseTimeShift, SHIFT_UNITS, ShiftUnit, timeShiftToken } from '../spl/timeShift';
-import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, buildFieldSearch, buildSourcetypeSearch, readableFields, SPLIT_LIMITS } from '../spl/buildMstats';
+import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearch, buildFieldSearch, buildSourcetypeSearch, buildTrellisValueSearch, readableFields, SPLIT_LIMITS } from '../spl/buildMstats';
 import { activeSpan, SPAN_PRESETS } from '../spl/span';
 import { boundForInput } from '../spl/timeRange';
 import { isSeriesFilter } from '../model/session';
@@ -41,6 +40,7 @@ import {
     cloneSeries,
     createChart,
     DEFAULT_GLOBAL_LIMIT,
+    DEFAULT_TRELLIS,
     GlobalSplitLimit,
     reviveChart,
     createSeries,
@@ -48,20 +48,26 @@ import {
     refreshStatus,
     resolveSplit,
     sharedDimensions,
+    TrellisLayout,
+    trellisDimensions,
+    withTrellisValue,
     Series,
     SeriesFilter,
     seriesLegend,
 } from '../model/workspace';
-import { ChartView } from './ChartView';
+import { ChartSaveMode, ChartView, FittingTitle } from './ChartView';
 import { DataLists, ListSection } from './DataLists';
 import { DataFilterForm } from './DataFilterForm';
 import { DropdownMenu, MenuHeading, MenuItem } from './Menu';
+import { AggregationField } from './AggregationField';
+import { EventSearches } from './EventSearches';
 import { SaveDialog, SaveMode } from './SaveDialog';
 import { SplitDialog } from './SplitDialog';
 import { TimeRangeDialog } from './TimeRangeDialog';
 import { t } from '../i18n';
 import { clampPaneWidth, LEFT_PANE_DEFAULT, RIGHT_PANE_DEFAULT, shellColumns } from './panes';
 import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
+import { readRecent, rememberRecent } from '../model/recent';
 import { splunkGet } from '../api/splunkd';
 import { buildCatalogSearch, DataFilter, filterLabel, indexFromSearch } from '../model/dataFilters';
 import { buildIndexActivitySearch, indexesWithData } from '../model/indexActivity';
@@ -339,7 +345,9 @@ const FilterForm = styled.form`
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
+    box-sizing: border-box;
     width: 100%;
+    padding: 6px 12px 8px;
 `;
 
 const FilterInput = styled.input`
@@ -631,8 +639,14 @@ const ToolButton = styled.button<{ $pressed?: boolean }>`
     }
 `;
 
+const swapMotion = keyframes`
+    0% { transform: translateY(0); opacity: 1; }
+    40% { transform: translateY(-7px); opacity: 0.35; }
+    100% { transform: translateY(0); opacity: 1; }
+`;
+
 /** Toolbar buttons are flat, with an icon and a label, as in the original toolbar. */
-const Bar = styled.button<{ $pressed?: boolean }>`
+const Bar = styled.button<{ $pressed?: boolean; $pulse?: boolean }>`
     display: inline-flex;
     gap: 5px;
     align-items: center;
@@ -644,6 +658,11 @@ const Bar = styled.button<{ $pressed?: boolean }>`
     font-size: 12px;
     white-space: nowrap;
     cursor: pointer;
+    ${(props) =>
+        props.$pulse &&
+        css`
+            animation: ${swapMotion} 420ms ease;
+        `}
     &:hover:not(:disabled) {
         background: ${variables.interactiveColorOverlayHover};
     }
@@ -656,6 +675,53 @@ const Bar = styled.button<{ $pressed?: boolean }>`
 const Muted = styled.span`
     color: ${variables.contentColorMuted};
     font-size: 11px;
+`;
+
+const TrellisBoard = styled.div`
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    overflow-x: auto;
+`;
+
+const TrellisGrid = styled.div<{ $columns: number; $min: number }>`
+    display: grid;
+    grid-template-columns: repeat(${(props) => props.$columns}, minmax(${(props) => props.$min}px, 1fr));
+    gap: 12px;
+`;
+
+const TrellisHead = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+
+    h2 {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+`;
+
+const MenuFields = styled.div`
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 72px;
+    gap: 6px 8px;
+    align-items: center;
+    padding: 6px 12px 8px;
+    font-size: 12px;
+    color: ${variables.contentColorDefault};
+`;
+
+const TinyInput = styled.input`
+    width: 64px;
+    padding: 2px 6px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid ${variables.interactiveColorBorder};
+    background: ${variables.backgroundColorSection};
+    color: ${variables.contentColorDefault};
 `;
 
 const ChartList = styled.div<{ $grid: boolean }>`
@@ -839,6 +905,14 @@ function TreeRows(props: {
 }
 
 
+function clampNumber(value: string, fallback: number, min: number, max: number): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+        return fallback;
+    }
+    return Math.min(max, Math.max(min, Math.round(parsed)));
+}
+
 export function Explorer(): React.ReactElement {
     const [query, setQuery] = useState('');
     const [names, setNames] = useState<string[]>([]);
@@ -915,6 +989,9 @@ export function Explorer(): React.ReactElement {
     const [splitDialog, setSplitDialog] = useState(false);
     const [globalLimit, setGlobalLimit] = useState<GlobalSplitLimit>(DEFAULT_GLOBAL_LIMIT);
     const [catalogRange, setCatalogRange] = useState('-24h');
+    const [trellisByChart, setTrellisByChart] = useState<Record<string, string[] | null>>({});
+    const [trellisPages, setTrellisPages] = useState<Record<string, number>>({});
+    const applyingSession = useRef(false);
     /** One section of the data pane is open at a time, as in the original. */
     const [section, setSection] = useState<Section | ''>('metrics');
     const indexesOpen = section === 'indexes';
@@ -943,7 +1020,7 @@ export function Explorer(): React.ReactElement {
     const [activityError, setActivityError] = useState('');
     const [defaultsReady, setDefaultsReady] = useState(false);
     const [dataFilterOpen, setDataFilterOpen] = useState(false);
-    const [globalFilterOpen, setGlobalFilterOpen] = useState(false);
+    const [swapPulse, setSwapPulse] = useState(false);
     const [percentileOpen, setPercentileOpen] = useState(false);
     /** The chart settings fold. Opening it closes the series, as the original analysis pane does. */
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -957,7 +1034,7 @@ export function Explorer(): React.ReactElement {
     }
 
     /** Adds a filter for every chart. The values are typed as a comma separated list. */
-    function addGlobalFilter(): void {
+    function addGlobalFilter(): boolean {
         const dimension = globalDimension.trim();
         const values = globalValues
             .split(',')
@@ -965,29 +1042,29 @@ export function Explorer(): React.ReactElement {
             .filter(Boolean);
         if (!dimension) {
             setGlobalFilterError('Select a dimension.');
-            return;
+            return false;
         }
         if (values.length === 0) {
             setGlobalFilterError('Enter at least one value.');
-            return;
+            return false;
         }
         if (values.length > 50) {
             setGlobalFilterError('Use at most 50 values.');
-            return;
+            return false;
         }
         const candidate: SeriesFilter = { dimension, mode: globalMode, values };
         if (!isSeriesFilter(candidate)) {
             setGlobalFilterError('Use letters, digits, dots, colons, dashes, and underscores. Values may not contain line breaks.');
-            return;
+            return false;
         }
         if (globalFilters.some((item) => item.dimension === dimension && item.mode === globalMode && item.values.join(',') === values.join(','))) {
             setGlobalFilterError('This global filter is already active.');
-            return;
+            return false;
         }
         setGlobalFilters((current) => [...current, candidate]);
         setGlobalValues('');
         setGlobalFilterError('');
-        setGlobalFilterOpen(false);
+        return true;
     }
 
     useEffect(() => {
@@ -1136,6 +1213,7 @@ export function Explorer(): React.ReactElement {
     }, [range, latest]);
 
     function applySession(saved: SavedSession): void {
+        applyingSession.current = true;
         const revived = saved.charts.map(reviveChart);
         setCharts(revived);
         setSelectedId(revived[0]?.id ?? '');
@@ -1161,8 +1239,42 @@ export function Explorer(): React.ReactElement {
     }
 
     useEffect(() => {
-        const key = new URLSearchParams(window.location.search).get('workspace');
+        const chart = charts[0];
+        const metric = chart?.series[0]?.metric;
+        if (!metric) {
+            return;
+        }
+        if (applyingSession.current) {
+            applyingSession.current = false;
+            return;
+        }
+        const session = serializeSession(
+            { charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit, globalSpan },
+            Date.now()
+        );
+        rememberRecent(currentUser(), metric, session, Date.now(), chart.id);
+    }, [charts[0]?.id]);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const recentId = params.get('recent');
+        if (recentId) {
+            const entry = readRecent(currentUser()).find((item) => item.id === recentId);
+            const session = entry ? parseSession(entry.state) : null;
+            if (session) {
+                applySession(session);
+            }
+            return undefined;
+        }
+        const key = params.get('workspace');
         if (!key) {
+            return undefined;
+        }
+        if (key === 'default') {
+            const session = readSavedSession();
+            if (session) {
+                applySession(session);
+            }
             return undefined;
         }
         let alive = true;
@@ -1328,6 +1440,82 @@ export function Explorer(): React.ReactElement {
         metricDims
     );
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
+    const trellisChoices = trellisDimensions(globalSplitDimensions, globalSplit);
+    const trellisJobKey = charts
+        .map((chart) => {
+            const dimension = chart.trellis?.dimension ?? '';
+            if (!dimension) {
+                return '';
+            }
+            const metrics = chart.series
+                .filter((item) => (item.source ?? 'metric') === 'metric')
+                .map((item) => item.metric)
+                .join(',');
+            return `${chart.id}:${dimension}:${metrics}`;
+        })
+        .filter(Boolean)
+        .join('|');
+    const chartsRef = useRef(charts);
+    chartsRef.current = charts;
+
+    useEffect(() => {
+        const stops: Array<() => void> = [];
+        const jobs = chartsRef.current.flatMap((chart) => {
+            const dimension = chart.trellis?.dimension ?? '';
+            if (!dimension) {
+                return [];
+            }
+            const metrics = chart.series
+                .filter((item) => (item.source ?? 'metric') === 'metric')
+                .map((item) => item.metric)
+                .filter(Boolean);
+            return [{ id: chart.id, dimension, metrics }];
+        });
+        for (const job of jobs) {
+            if (!metricIndexesReady || job.metrics.length === 0) {
+                setTrellisByChart((current) => ({ ...current, [job.id]: [] }));
+                continue;
+            }
+            setTrellisByChart((current) => ({ ...current, [job.id]: null }));
+            try {
+                stops.push(
+                    runSearch(
+                        buildTrellisValueSearch(job.metrics, job.dimension, metricIndexes),
+                        range,
+                        (payload) =>
+                            setTrellisByChart((current) => ({
+                                ...current,
+                                [job.id]: collectFieldValues(payload, job.dimension),
+                            })),
+                        () => setTrellisByChart((current) => ({ ...current, [job.id]: [] })),
+                        latest
+                    )
+                );
+            } catch {
+                setTrellisByChart((current) => ({ ...current, [job.id]: [] }));
+            }
+        }
+        return () => stops.forEach((stop) => stop());
+    }, [trellisJobKey, range, latest, metricIndexes, metricIndexesReady]);
+
+    function updateTrellis(next: TrellisLayout | undefined): void {
+        if (!selected) {
+            return;
+        }
+        setCharts((current) => current.map((chart) => (chart.id === selected.id ? { ...chart, trellis: next } : chart)));
+    }
+
+    function swapSplitAndTrellis(): void {
+        if (!selected?.trellis?.dimension || !globalSplit) {
+            return;
+        }
+        const nextSplit = selected.trellis.dimension;
+        const nextTrellis = globalSplit;
+        setGlobalSplit(nextSplit);
+        updateTrellis({ ...selected.trellis, dimension: nextTrellis });
+        setSwapPulse(true);
+        window.setTimeout(() => setSwapPulse(false), 420);
+    }
 
     useEffect(() => {
         const source = series?.source ?? 'metric';
@@ -1447,6 +1635,12 @@ export function Explorer(): React.ReactElement {
         setExpandedSeriesId(chart.series[0].id);
         setSettingsOpen(false);
         refreshNow();
+    }
+
+    function addSearchChart(name: string, spl: string): void {
+        const chart = createChart(name, [], 'search');
+        chart.series[0].field = spl;
+        showNewChart(chart);
     }
 
     function addBaseChart(name: string, field: string, mode: 'live' | 'cached', owner: string): void {
@@ -1925,6 +2119,7 @@ export function Explorer(): React.ReactElement {
                             </SectionItem>
                         ))}
                         {sourcetypesReady && shownSourcetypes.length === 0 ? <Note>{t('No sourcetypes in this time range.')}</Note> : null}
+                        <EventSearches open={eventsOpen} query={query} onOpen={addSearchChart} />
                     </SectionBody>
                 ) : null}
                 <SectionButton type="button" aria-expanded={datasetsOpen} onClick={() => toggleSection('datasets')}>
@@ -2162,7 +2357,7 @@ export function Explorer(): React.ReactElement {
                         </Muted>
                     ) : null}
                     <Divider />
-                    <Bar type="button" aria-label={t('Split By')} onClick={() => setSplitDialog(true)}>
+                    <Bar type="button" aria-label={t('Split By')} $pulse={swapPulse} onClick={() => setSplitDialog(true)}>
                         <span aria-hidden="true">⑃</span>
                         {globalSplit ? `${t('Split By')}: ${globalSplit}` : t('Split By')}
                     </Bar>
@@ -2236,65 +2431,180 @@ export function Explorer(): React.ReactElement {
                         )}
                     </DropdownMenu>
                 </Toolbar>
-                {charts.length > 0 || globalFilters.length > 0 ? (
-                <FilterBox aria-label={t('Global filters')}>
-                    {globalFilters.map((filter) => (
-                        <Chip key={`${filter.dimension}:${filter.mode}:${filter.values.join(',')}`}>
-                            {filter.dimension} {filter.mode === 'include' ? 'includes' : 'excludes'} {filter.values.join(', ')}
-                            <ChipRemove
-                                type="button"
-                                aria-label={`Remove global filter ${filter.dimension}`}
-                                onClick={() => setGlobalFilters((current) => current.filter((item) => item !== filter))}
-                            >
-                                ×
-                            </ChipRemove>
-                        </Chip>
-                    ))}
-                    {globalFilterOpen ? (
-                        <FilterForm
-                            onSubmit={(event) => {
-                                event.preventDefault();
-                                addGlobalFilter();
-                            }}
-                        >
-                            <Select
-                                aria-label={t('Global filter dimension')}
-                                value={globalDimension}
-                                onChange={(event) => setGlobalDimension(event.target.value)}
-                            >
-                                <option value="">{t('Select a dimension')}</option>
-                                {allDimensions.map((name) => (
-                                    <option key={name} value={name}>
-                                        {name}
-                                    </option>
+                {charts.length > 0 ? (
+                <Toolbar aria-label={t('Global filters')}>
+                    <DropdownMenu
+                        label={t('Global filters')}
+                        trigger={(isOpen, toggle) => (
+                            <Bar type="button" aria-label={t('Global filters')} aria-expanded={isOpen} onClick={toggle}>
+                                {globalFilters.length > 0 ? `${t('Filters')} (${globalFilters.length})` : t('Filters')} ▾
+                            </Bar>
+                        )}
+                    >
+                        {(close) => (
+                            <>
+                                {globalFilters.length === 0 ? <MenuHeading>{t('No global filters.')}</MenuHeading> : null}
+                                {globalFilters.map((filter) => (
+                                    <MenuItem
+                                        key={`${filter.dimension}:${filter.mode}:${filter.values.join(',')}`}
+                                        onClick={() => setGlobalFilters((current) => current.filter((item) => item !== filter))}
+                                    >
+                                        {filter.dimension} {filter.mode === 'include' ? t('includes') : t('excludes')} {filter.values.join(', ')} ×
+                                    </MenuItem>
                                 ))}
-                            </Select>
-                            <Select
-                                aria-label={t('Global filter mode')}
-                                value={globalMode}
-                                onChange={(event) => setGlobalMode(event.target.value === 'exclude' ? 'exclude' : 'include')}
-                            >
-                                <option value="include">{t('Include')}</option>
-                                <option value="exclude">{t('Exclude')}</option>
-                            </Select>
-                            <FilterInput
-                                aria-label={t('Global filter values')}
-                                value={globalValues}
-                                placeholder={t('Values, comma separated')}
-                                onChange={(event) => setGlobalValues(event.target.value)}
-                            />
-                            <TextLink type="submit">{t('Add')}</TextLink>
-                            <TextLink type="button" onClick={() => setGlobalFilterOpen(false)}>
-                                {t('Cancel')}
-                            </TextLink>
-                        </FilterForm>
-                    ) : (
-                        <TextLink type="button" onClick={() => setGlobalFilterOpen(true)}>
-                            {t('+ Add global filter')}
-                        </TextLink>
-                    )}
-                    {globalFilterError ? <Note role="alert">{t(globalFilterError)}</Note> : null}
-                </FilterBox>
+                                <MenuHeading>{t('+ Add global filter')}</MenuHeading>
+                                <FilterForm
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        if (addGlobalFilter()) {
+                                            close();
+                                        }
+                                    }}
+                                >
+                                    <Select
+                                        aria-label={t('Global filter dimension')}
+                                        value={globalDimension}
+                                        onChange={(event) => setGlobalDimension(event.target.value)}
+                                    >
+                                        <option value="">{t('Select a dimension')}</option>
+                                        {allDimensions.map((name) => (
+                                            <option key={name} value={name}>
+                                                {name}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                    <Select
+                                        aria-label={t('Global filter mode')}
+                                        value={globalMode}
+                                        onChange={(event) => setGlobalMode(event.target.value === 'exclude' ? 'exclude' : 'include')}
+                                    >
+                                        <option value="include">{t('Include')}</option>
+                                        <option value="exclude">{t('Exclude')}</option>
+                                    </Select>
+                                    <FilterInput
+                                        aria-label={t('Global filter values')}
+                                        value={globalValues}
+                                        placeholder={t('Values, comma separated')}
+                                        onChange={(event) => setGlobalValues(event.target.value)}
+                                    />
+                                    <TextLink type="submit">{t('Add')}</TextLink>
+                                </FilterForm>
+                                {globalFilterError ? <Note role="alert">{t(globalFilterError)}</Note> : null}
+                            </>
+                        )}
+                    </DropdownMenu>
+                    {globalSplit && selected && (trellisChoices.length > 0 || selected.trellis?.dimension) ? (
+                        <DropdownMenu
+                            label={t('Trellis')}
+                            trigger={(isOpen, toggle) => (
+                                <Bar type="button" aria-label={t('Trellis')} aria-expanded={isOpen} $pulse={swapPulse} onClick={toggle}>
+                                    {selected.trellis?.dimension ? `${t('Trellis')}: ${selected.trellis.dimension}` : t('Trellis')} ▾
+                                </Bar>
+                            )}
+                        >
+                            {(close) => (
+                                <>
+                                    <MenuItem
+                                        $checked={!selected.trellis?.dimension}
+                                        onClick={() => {
+                                            updateTrellis(undefined);
+                                            close();
+                                        }}
+                                    >
+                                        {t('None')}
+                                    </MenuItem>
+                                    {trellisChoices.map((name) => (
+                                        <MenuItem
+                                            key={name}
+                                            $checked={selected.trellis?.dimension === name}
+                                            onClick={() => {
+                                                updateTrellis({
+                                                    dimension: name,
+                                                    minColumnWidth: selected.trellis?.minColumnWidth ?? DEFAULT_TRELLIS.minColumnWidth,
+                                                    rowHeight: selected.trellis?.rowHeight ?? DEFAULT_TRELLIS.rowHeight,
+                                                    columns: selected.trellis?.columns ?? DEFAULT_TRELLIS.columns,
+                                                    pageSize: selected.trellis?.pageSize ?? DEFAULT_TRELLIS.pageSize,
+                                                });
+                                                close();
+                                            }}
+                                        >
+                                            {name}
+                                        </MenuItem>
+                                    ))}
+                                    {selected.trellis?.dimension ? (
+                                        <MenuFields>
+                                            <span>{t('Min column width')}</span>
+                                            <TinyInput
+                                                aria-label={t('Min column width')}
+                                                type="number"
+                                                min={120}
+                                                max={800}
+                                                value={selected.trellis.minColumnWidth}
+                                                onChange={(event) =>
+                                                    updateTrellis({
+                                                        ...selected.trellis!,
+                                                        minColumnWidth: clampNumber(event.target.value, DEFAULT_TRELLIS.minColumnWidth, 120, 800),
+                                                    })
+                                                }
+                                            />
+                                            <span>{t('Row height')}</span>
+                                            <TinyInput
+                                                aria-label={t('Row height')}
+                                                type="number"
+                                                min={140}
+                                                max={600}
+                                                value={selected.trellis.rowHeight}
+                                                onChange={(event) =>
+                                                    updateTrellis({
+                                                        ...selected.trellis!,
+                                                        rowHeight: clampNumber(event.target.value, DEFAULT_TRELLIS.rowHeight, 140, 600),
+                                                    })
+                                                }
+                                            />
+                                            <span>{t('Columns per row')}</span>
+                                            <TinyInput
+                                                aria-label={t('Columns per row')}
+                                                type="number"
+                                                min={1}
+                                                max={6}
+                                                value={selected.trellis.columns}
+                                                onChange={(event) =>
+                                                    updateTrellis({
+                                                        ...selected.trellis!,
+                                                        columns: clampNumber(event.target.value, DEFAULT_TRELLIS.columns, 1, 6),
+                                                    })
+                                                }
+                                            />
+                                            <span>{t('Charts per page')}</span>
+                                            <TinyInput
+                                                aria-label={t('Charts per page')}
+                                                type="number"
+                                                min={1}
+                                                max={50}
+                                                value={selected.trellis.pageSize}
+                                                onChange={(event) =>
+                                                    updateTrellis({
+                                                        ...selected.trellis!,
+                                                        pageSize: clampNumber(event.target.value, DEFAULT_TRELLIS.pageSize, 1, 50),
+                                                    })
+                                                }
+                                            />
+                                        </MenuFields>
+                                    ) : null}
+                                    <MenuItem
+                                        disabled={!selected.trellis?.dimension}
+                                        onClick={() => {
+                                            swapSplitAndTrellis();
+                                            close();
+                                        }}
+                                    >
+                                        {t('Swap with Split By')}
+                                    </MenuItem>
+                                </>
+                            )}
+                        </DropdownMenu>
+                    ) : null}
+                </Toolbar>
                 ) : null}
                 {recovered && charts.length > 0 ? (
                     <Note role="status">
@@ -2323,13 +2633,11 @@ export function Explorer(): React.ReactElement {
                     </Empty>
                 ) : (
                     <ChartList $grid={layout === 'grid' && !maximizedId} data-layout={layout}>
-                        {(maximizedId ? charts.filter((chart) => chart.id === maximizedId) : charts).map((chart) => (
-                            <ChartView
-                                key={chart.id}
-                                chart={chart}
-                                minimized={minimizedIds.has(chart.id)}
-                                maximized={chart.id === maximizedId}
-                                onMinimize={() =>
+                        {(maximizedId ? charts.filter((chart) => chart.id === maximizedId) : charts).map((chart) => {
+                            const view = {
+                                minimized: minimizedIds.has(chart.id),
+                                maximized: chart.id === maximizedId,
+                                onMinimize: () =>
                                     setMinimizedIds((current) => {
                                         const next = new Set(current);
                                         if (next.has(chart.id)) {
@@ -2338,40 +2646,39 @@ export function Explorer(): React.ReactElement {
                                             next.add(chart.id);
                                         }
                                         return next;
-                                    })
-                                }
-                                onMaximize={() => setMaximizedId((current) => (current === chart.id ? '' : chart.id))}
-                                range={range}
-                                latest={latest}
-                                span={span}
-                                spanManual={Boolean(globalSpan)}
-                                refreshToken={refreshToken}
-                                globalSplit={globalSplit}
-                                globalLimit={globalLimit}
-                                globalFilters={globalFilters}
-                                metricDims={metricDims}
-                                eventIndexes={eventIndexes}
-                                metricIndexes={metricIndexes}
-                                zoom={zoom}
-                                onZoom={setZoom}
-                                selected={chart.id === selected?.id}
-                                onSelect={() => {
+                                    }),
+                                onMaximize: () => setMaximizedId((current) => (current === chart.id ? '' : chart.id)),
+                                range,
+                                latest,
+                                span,
+                                spanManual: Boolean(globalSpan),
+                                refreshToken,
+                                globalSplit,
+                                globalLimit,
+                                globalFilters,
+                                metricDims,
+                                eventIndexes,
+                                metricIndexes,
+                                zoom,
+                                onZoom: setZoom,
+                                selected: chart.id === selected?.id,
+                                onSelect: () => {
                                     if (chart.id !== selected?.id) {
                                         setSelectedId(chart.id);
                                         setSelectedSeriesId(chart.series[0]?.id ?? '');
                                         setExpandedSeriesId(chart.series[0]?.id ?? '');
                                         setSettingsOpen(false);
                                     }
-                                }}
-                                onRemove={() => removeChart(chart.id)}
-                                onClone={() => {
+                                },
+                                onRemove: () => removeChart(chart.id),
+                                onClone: () => {
                                     const copy = cloneChart(chart);
                                     setCharts((current) => current.flatMap((item) => (item.id === chart.id ? [item, copy] : [item])));
                                     setSelectedId(copy.id);
                                     setSelectedSeriesId(copy.series[0]?.id ?? '');
                                     setExpandedSeriesId(copy.series[0]?.id ?? '');
-                                }}
-                                onWidenSpan={(next) => {
+                                },
+                                onWidenSpan: (next: string) => {
                                     if (chart.settings.span) {
                                         setCharts((current) =>
                                             current.map((item) =>
@@ -2381,13 +2688,130 @@ export function Explorer(): React.ReactElement {
                                         return;
                                     }
                                     setGlobalSpan(next);
-                                }}
-                                onSave={(mode) => {
+                                },
+                                onSave: (mode: ChartSaveMode) => {
                                     setSelectedId(chart.id);
                                     setSaveMode(mode);
-                                }}
-                            />
-                        ))}
+                                },
+                            };
+                            const layout = chart.trellis?.dimension ? chart.trellis : undefined;
+                            if (layout?.dimension) {
+                                const pageSize = Math.max(1, layout.pageSize);
+                                const loaded = trellisByChart[chart.id];
+                                const values = loaded ?? [];
+                                const pageKey = `${chart.id}:${layout.dimension}`;
+                                const pages = Math.max(1, Math.ceil(values.length / pageSize));
+                                const page = Math.min(trellisPages[pageKey] ?? 0, pages - 1);
+                                const slice = values.slice(page * pageSize, page * pageSize + pageSize);
+                                return (
+                                    <TrellisBoard key={chart.id}>
+                                        <TrellisHead>
+                                            <FittingTitle text={chart.series.map((item) => item.metric).join(', ')} />
+                                            <span>
+                                                <TextLink
+                                                    type="button"
+                                                    aria-label={minimizedIds.has(chart.id) ? t('Restore chart') : t('Minimize chart')}
+                                                    onClick={view.onMinimize}
+                                                >
+                                                    {minimizedIds.has(chart.id) ? '▸' : '▾'}
+                                                </TextLink>
+                                                <DropdownMenu
+                                                    label={t('Chart actions')}
+                                                    alignRight
+                                                    trigger={(_open, toggle) => (
+                                                        <TextLink type="button" aria-label={t('Chart actions')} onClick={toggle}>
+                                                            ▾
+                                                        </TextLink>
+                                                    )}
+                                                >
+                                                    {(close) => (
+                                                        <>
+                                                            <MenuItem
+                                                                onClick={() => {
+                                                                    close();
+                                                                    view.onClone();
+                                                                }}
+                                                            >
+                                                                {t('Clone this panel')}
+                                                            </MenuItem>
+                                                            {(
+                                                                [
+                                                                    ['report', 'Save as report'],
+                                                                    ['panel-classic', 'Save to Classic Dashboards'],
+                                                                    ['panel-studio', 'Save to Dashboard Studio'],
+                                                                    ['base', 'Save as base search'],
+                                                                    ['alert-scheduled', 'Save as scheduled alert'],
+                                                                    ['alert-streaming', 'Save as streaming alert'],
+                                                                ] as Array<[ChartSaveMode, string]>
+                                                            ).map(([mode, label]) => (
+                                                                <MenuItem
+                                                                    key={mode}
+                                                                    onClick={() => {
+                                                                        close();
+                                                                        view.onSave(mode);
+                                                                    }}
+                                                                >
+                                                                    {t(label)}
+                                                                </MenuItem>
+                                                            ))}
+                                                            <MenuItem
+                                                                onClick={() => {
+                                                                    close();
+                                                                    view.onRemove();
+                                                                }}
+                                                            >
+                                                                {t('Remove chart')}
+                                                            </MenuItem>
+                                                        </>
+                                                    )}
+                                                </DropdownMenu>
+                                            </span>
+                                        </TrellisHead>
+                                        {minimizedIds.has(chart.id) ? null : (
+                                            <>
+                                        {loaded === undefined || loaded === null ? <Note>{t('Loading trellis…')}</Note> : null}
+                                        {loaded && loaded.length === 0 ? (
+                                            <Note>{t('No values for this dimension.')}</Note>
+                                        ) : null}
+                                        <TrellisGrid $columns={Math.max(1, layout.columns)} $min={layout.minColumnWidth}>
+                                            {slice.map((value) => (
+                                                <ChartView
+                                                    key={`${chart.id}:${value}`}
+                                                    {...view}
+                                                    chart={withTrellisValue(chart, layout.dimension, value)}
+                                                    minimized={false}
+                                                    maximized={false}
+                                                    selected
+                                                    compact
+                                                    plotHeight={layout.rowHeight}
+                                                    titleText={value}
+                                                />
+                                            ))}
+                                        </TrellisGrid>
+                                        {values.length > pageSize ? (
+                                            <TrellisHead>
+                                                <TextLink type="button" disabled={page === 0} onClick={() => setTrellisPages((current) => ({ ...current, [pageKey]: page - 1 }))}>
+                                                    {t('Previous page')}
+                                                </TextLink>
+                                                <span>
+                                                    {page + 1} / {pages}
+                                                </span>
+                                                <TextLink
+                                                    type="button"
+                                                    disabled={page >= pages - 1}
+                                                    onClick={() => setTrellisPages((current) => ({ ...current, [pageKey]: page + 1 }))}
+                                                >
+                                                    {t('Next page')}
+                                                </TextLink>
+                                            </TrellisHead>
+                                        ) : null}
+                                            </>
+                                        )}
+                                    </TrellisBoard>
+                                );
+                            }
+                            return <ChartView key={chart.id} chart={chart} {...view} />;
+                        })}
                     </ChartList>
                 )}
             </Stage>
@@ -2526,13 +2950,22 @@ export function Explorer(): React.ReactElement {
                         <Field>
                             {t('Value')}
                             <Help>{referenceKind === 'constant' ? t('Enter a constant here.') : t('Select or type an aggregation.')}</Help>
-                            <TextInput
-                                aria-label={t('Reference value')}
-                                list={referenceKind === 'constant' ? undefined : 'metric-aggregations'}
-                                value={referenceValue}
-                                placeholder={referenceKind === 'constant' ? '25' : 'Avg'}
-                                onChange={(event) => setReferenceValue(event.target.value)}
-                            />
+                            {referenceKind === 'constant' ? (
+                                <TextInput
+                                    aria-label={t('Reference value')}
+                                    value={referenceValue}
+                                    placeholder="25"
+                                    onChange={(event) => setReferenceValue(event.target.value)}
+                                />
+                            ) : (
+                                <AggregationField
+                                    label={t('Reference value')}
+                                    source={series?.source ?? 'metric'}
+                                    categorical={isCategorical(selected?.settings.type ?? '')}
+                                    value={referenceValue}
+                                    onChange={setReferenceValue}
+                                />
+                            )}
                         </Field>
                         {referenceKind === 'aggregation' ? (
                             <Field as="div">
@@ -2670,25 +3103,29 @@ export function Explorer(): React.ReactElement {
                         <Field>
                             <SectionTitle>{t('Aggregation')}</SectionTitle>
                             <Help>{t('Select or type an aggregation.')}</Help>
-                            <TextInput
-                                aria-label={t('Aggregation')}
-                                list="metric-aggregations"
-                                value={series.aggregation}
-                                onChange={(event) => {
-                                    const aggregation = event.target.value;
-                                    const next = resolveForSource(series.source, aggregation);
-                                    patchSeries({ aggregation });
-                                    if (next?.chart === 'table' && selected.settings.content === 'chart') {
-                                        const othersPlot = selected.series.some(
-                                            (item) =>
-                                                item.id !== series.id &&
-                                                resolveForSource(item.source, item.aggregation)?.chart !== 'table'
-                                        );
-                                        patchSettings({ content: othersPlot ? 'both' : 'table' });
-                                    }
-                                }}
-                            />
-                            {(series.source ?? 'metric') !== 'metric' && needsField(chosen?.name ?? '') ? (
+                            {(series.source ?? 'metric') === 'search' ? (
+                                <Note>{series.field}</Note>
+                            ) : (
+                                <AggregationField
+                                    label={t('Aggregation')}
+                                    source={series.source ?? 'metric'}
+                                    categorical={isCategorical(selected.settings.type ?? '')}
+                                    value={series.aggregation}
+                                    onChange={(aggregation) => {
+                                        const next = resolveForSource(series.source, aggregation);
+                                        patchSeries({ aggregation });
+                                        if (next?.chart === 'table' && selected.settings.content === 'chart') {
+                                            const othersPlot = selected.series.some(
+                                                (item) =>
+                                                    item.id !== series.id &&
+                                                    resolveForSource(item.source, item.aggregation)?.chart !== 'table'
+                                            );
+                                            patchSettings({ content: othersPlot ? 'both' : 'table' });
+                                        }
+                                    }}
+                                />
+                            )}
+                            {(series.source ?? 'metric') !== 'metric' && (series.source ?? 'metric') !== 'search' && needsField(chosen?.name ?? '') ? (
                                 <>
                                     <TextInput
                                         aria-label={t('Event field')}
@@ -2715,6 +3152,7 @@ export function Explorer(): React.ReactElement {
                                 {t('Overlay on right axis')}
                             </span>
                         </Field>
+                        {(series.source ?? 'metric') === 'search' ? null : <>
                         {percentileOpen || percentilePreset !== '' ? (
                         <Field>
                             <SectionTitle>{t('Percentile')}</SectionTitle>
@@ -2925,6 +3363,7 @@ export function Explorer(): React.ReactElement {
                                 {t('+ Add new reference line')}
                             </TextLink>
                         </Field>
+                        </>}
                     </>
                 )}
                 {selected ? (
@@ -3195,15 +3634,6 @@ export function Explorer(): React.ReactElement {
                 ) : null}
                     </>
                 )}
-                {series ? (
-                    <datalist id="metric-aggregations">
-                        {functionsFor(series.source ?? 'metric')
-                            .filter((item) => !isCategorical(selected?.settings.type ?? '') || !item.rate)
-                            .map((item) => (
-                            <option key={item.name} value={item.label} />
-                        ))}
-                    </datalist>
-                ) : null}
             </Analysis>
             </>
             ) : (

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Area from '@splunk/visualizations/Area';
 import Column from '@splunk/visualizations/Column';
 import Line from '@splunk/visualizations/Line';
@@ -24,9 +24,10 @@ import { t } from '../i18n';
 import { zoomWindow } from '../chart/zoom';
 import { formatTooltipValue } from '../chart/tooltip';
 import { chartCardLayout } from './chartFrame';
-import { abbreviateMetricTitle } from '../chart/metricLabel';
+import { abbreviateMetricTitle, titleFits } from '../chart/metricLabel';
+import { timechartProblem } from '../chart/timechartShape';
 
-const Card = styled.section<{ $selected: boolean }>`
+const Card = styled.section<{ $selected: boolean; $compact: boolean }>`
     margin: 0;
     box-sizing: ${chartCardLayout.boxSizing};
     min-width: ${chartCardLayout.minWidth};
@@ -41,7 +42,7 @@ const Card = styled.section<{ $selected: boolean }>`
         `}
     border-radius: 2px;
     background: ${variables.backgroundColorSection};
-    min-height: 220px;
+    min-height: ${(props) => (props.$compact ? 0 : '220px')};
 `;
 
 const TitleRow = styled.div`
@@ -81,6 +82,48 @@ const IconAction = styled.button`
         background: ${variables.interactiveColorOverlayHover};
     }
 `;
+
+/** A metric name that stays whole when the line is wide enough and shortens only when it is not. */
+export function FittingTitle(props: { text: string }): React.ReactElement {
+    const ref = useRef<HTMLHeadingElement>(null);
+    const [fits, setFits] = useState(true);
+    useLayoutEffect(() => {
+        const node = ref.current;
+        if (!node) {
+            return undefined;
+        }
+        const measure = (): void => {
+            const probe = document.createElement('span');
+            probe.textContent = props.text;
+            probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-weight:700;font-size:12px;';
+            document.body.appendChild(probe);
+            const needed = probe.getBoundingClientRect().width;
+            probe.remove();
+            setFits(titleFits(needed + 6, node.clientWidth));
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [props.text]);
+    const shown = fits ? props.text : abbreviateMetricTitle(props.text);
+    return (
+        <h2
+            ref={ref}
+            title={shown === props.text ? undefined : props.text}
+            aria-label={props.text}
+            style={{
+                margin: 0,
+                fontSize: 12,
+                fontWeight: 700,
+                whiteSpace: fits ? 'nowrap' : 'normal',
+                overflow: 'hidden',
+            }}
+        >
+            {shown}
+        </h2>
+    );
+}
 
 const Title = styled.div`
     min-width: ${chartCardLayout.titleMinWidth};
@@ -218,6 +261,10 @@ export function ChartView(props: {
     /** Replaces a manual span that would draw too many points. */
     onWidenSpan: (span: string) => void;
     onSave: (mode: ChartSaveMode) => void;
+    /** A trellis tile: the value is the title, and the plot uses the chosen row height. */
+    compact?: boolean;
+    plotHeight?: number;
+    titleText?: string;
 }): React.ReactElement {
     const [results, setResults] = useState<SeriesResult[]>([]);
     const [referenceNumbers, setReferenceNumbers] = useState<Array<number | null | undefined>>([]);
@@ -279,7 +326,9 @@ export function ChartView(props: {
                     search,
                     earliest,
                     (payload) => {
-                        next[index] = { ...next[index], rows: payload.results ?? [], error: '' };
+                        const rows = payload.results ?? [];
+                        const problem = item.source === 'search' ? timechartProblem(rows) : '';
+                        next[index] = { ...next[index], rows: problem ? [] : rows, error: problem };
                         setResults([...next]);
                         setLoading(false);
                     },
@@ -406,21 +455,50 @@ export function ChartView(props: {
     if (!categorical && stats.columns[0]) {
         stats.columns[0] = stats.columns[0].map((value) => formatTimeCell(value, locale));
     }
-    const title = [...new Set(props.chart.series.map((item) => item.metric))].join(', ');
-    const shownTitle = abbreviateMetricTitle(title);
+    const title = props.titleText ?? [...new Set(props.chart.series.map((item) => item.metric))].join(', ');
+    const titleBox = useRef<HTMLDivElement>(null);
+    const [fits, setFits] = useState(true);
+    useLayoutEffect(() => {
+        const box = titleBox.current;
+        if (!box) {
+            return undefined;
+        }
+        const measure = (): void => {
+            const span = box.querySelector('span');
+            const spanWidth = span ? span.getBoundingClientRect().width + 8 : 0;
+            const available = box.clientWidth - spanWidth;
+            const probe = document.createElement('span');
+            probe.textContent = title;
+            probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-weight:700;font-size:12px;';
+            document.body.appendChild(probe);
+            const needed = probe.getBoundingClientRect().width;
+            probe.remove();
+            setFits(titleFits(needed + 6, Math.max(0, available)));
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(box);
+        return () => observer.disconnect();
+    }, [title]);
+    const shownTitle = fits ? title : abbreviateMetricTitle(title);
     const visual = visualFor(props.chart.settings.type);
     const Viz = (visual.kind === 'area' ? Area : visual.kind === 'column' ? Column : Line) as typeof Line;
     const first = results[0];
 
     return (
-        <Card ref={cardRef} $selected={props.selected} onClick={props.onSelect}>
+        <Card ref={cardRef} $selected={props.selected} $compact={Boolean(props.compact)} onClick={props.onSelect}>
             <TitleRow>
-                <Title>
-                    <h2 title={shownTitle === title ? undefined : title} aria-label={title}>
+                <Title ref={titleBox}>
+                    <h2
+                        title={shownTitle === title ? undefined : title}
+                        aria-label={title}
+                        style={{ whiteSpace: fits ? 'nowrap' : 'normal' }}
+                    >
                         {shownTitle}
                     </h2>
                     {categorical ? null : <span>({t('Time span')}={span})</span>}
                 </Title>
+                {props.compact ? null : (
                 <Actions onClick={(event) => event.stopPropagation()}>
                     <IconAction
                         type="button"
@@ -559,6 +637,7 @@ export function ChartView(props: {
                         ×
                     </IconAction>
                 </Actions>
+                )}
             </TitleRow>
             {props.minimized ? null : (
                 <>
@@ -611,7 +690,7 @@ export function ChartView(props: {
                 <Viz
                     key={props.chart.settings.type}
                     width="100%"
-                    height={props.maximized ? 560 : 260}
+                    height={props.compact ? Math.max(120, (props.plotHeight ?? 220) - 48) : props.maximized ? 560 : 260}
                     y2Fields={y2Fields}
                     dataSources={{
                         primary: {

@@ -74,6 +74,20 @@ export function buildAllDimensionSearch(indexes?: string[]): string {
     return `| mcatalog values(_dims) WHERE ${metricIndexClause(indexes)} AND NOT metric_name="*_mrollup_*" | mvexpand values(_dims)`;
 }
 
+/** Distinct values of one dimension across the metrics of the selected chart. */
+export function buildTrellisValueSearch(metrics: string[], dimension: string, indexes?: string[]): string {
+    assertIdentifier(dimension, 'Filter field');
+    const names = [...new Set(metrics.map((name) => name.trim()).filter(Boolean))];
+    if (names.length === 0) {
+        throw new Error('Metric name is not allowed.');
+    }
+    names.forEach((name) => assertIdentifier(name, 'Metric name'));
+    const metricClause = names.map((name) => `metric_name=${quoteSpl(name)}`).join(' OR ');
+    const field = quoteSpl(dimension);
+    const where = names.length === 1 ? metricClause : `(${metricClause})`;
+    return `| mcatalog values(metric_name) WHERE ${where} AND ${metricIndexClause(indexes)} AND NOT metric_name="*_mrollup_*" BY ${field} | fields ${field}`;
+}
+
 export function buildDimensionValueSearch(metric: string, dimension: string, indexes?: string[]): string {
     assertIdentifier(metric, 'Metric name');
     assertIdentifier(dimension, 'Filter field');
@@ -125,6 +139,8 @@ export function buildMstats(input: {
     indexes?: string[];
     /** One value for the whole time range, per split value. The original categorical charts search this way. */
     categorical?: boolean;
+    /** Kept as its own column so a dashboard trellis can split on it. The line split stays beside it. */
+    trellisBy?: string;
 }): string {
     const aggregation = resolveMetricFunction(input.aggregation);
     if (!aggregation) {
@@ -146,6 +162,16 @@ export function buildMstats(input: {
     const base = `| mstats ${aggregation.name}(${metric})`;
     const extra = filterClause(input.filters);
     const where = extra ? `${indexClause} AND ${extra}` : indexClause;
+    if (input.trellisBy) {
+        assertIdentifier(input.trellisBy, 'Filter field');
+        const groups = [input.trellisBy];
+        if (input.splitBy) {
+            assertIdentifier(input.splitBy, 'Split field');
+            groups.push(input.splitBy);
+        }
+        const span = input.categorical ? '' : ` span=${input.span}`;
+        return `${base} WHERE ${where}${span} BY ${groups.join(', ')}${timeShiftClause(input.timeShift)}`;
+    }
     if (input.categorical) {
         const aggregate = `${base} AS value WHERE ${where}`;
         return input.splitBy ? `${aggregate}${categoryTail(input)}` : aggregate;

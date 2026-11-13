@@ -8,6 +8,9 @@ import {
     resolveSplit,
     sharedDimensions,
     seriesLegend,
+    trellisDimensions,
+    withTrellisValue,
+    createChart,
 } from '../src/model/workspace';
 
 test('a split applies only when the rows carry that dimension', () => {
@@ -28,6 +31,27 @@ test('global Split By lists only dimensions shared by the active chart metrics',
         })
     ).toEqual(['host', 'source']);
     expect(sharedDimensions(['cpu', 'cpu'], { cpu: ['host'] })).toEqual(['host']);
+});
+
+test('trellis offers the shared dimensions except the split field', () => {
+    expect(trellisDimensions(['host', 'region', 'source'], 'host')).toEqual(['region', 'source']);
+    expect(trellisDimensions(['host'], 'host')).toEqual([]);
+});
+
+test('a trellis value filters metric series and leaves an event series unchanged', () => {
+    const chart = createChart('cpu');
+    chart.series.push(createSeries('access_combined', [], 'event'));
+    const tiled = withTrellisValue(chart, 'region', 'eu');
+    expect(tiled.id).toBe(chart.id);
+    expect(tiled.series[0].filters).toEqual([{ dimension: 'region', mode: 'include', values: ['eu'] }]);
+    expect(tiled.series[1].filters).toEqual([]);
+    expect(chart.series[0].filters).toEqual([]);
+});
+
+test('a saved search series starts unsplit', () => {
+    const series = createSeries('errors', [], 'search');
+    expect(series.aggregation).toBe('Search');
+    expect(series.splitBy).toBe('');
 });
 
 test('a new series inherits the global split, and a chosen split overrides it', () => {

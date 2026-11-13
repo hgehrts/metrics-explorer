@@ -11,6 +11,11 @@ export function abbreviateMetricName(name: string): string {
     return short.length < name.length ? short : name;
 }
 
+/** The full title stays when it fits the title row. One pixel absorbs subpixel rounding. */
+export function titleFits(neededWidth: number, availableWidth: number): boolean {
+    return neededWidth <= availableWidth + 1;
+}
+
 /** Chart titles join several metric names with a comma. Each name is shortened on its own. */
 export function abbreviateMetricTitle(title: string): string {
     return title

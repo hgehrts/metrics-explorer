@@ -13,8 +13,16 @@ export function buildSeriesSearch(
     latest: string,
     indexes: string[],
     metricIndexes?: string[],
-    categorical = false
+    categorical = false,
+    trellisBy = ''
 ): SeriesQuery {
+    if (item.source === 'search') {
+        const spl = item.field.trim();
+        if (!spl) {
+            throw new Error('Search is empty.');
+        }
+        return { search: spl.startsWith('|') ? spl : `| ${spl}`, earliest, latest };
+    }
     const chosen = resolveForSource(item.source, item.aggregation);
     if (!chosen) {
         throw new Error('Unknown aggregation.');
@@ -32,6 +40,7 @@ export function buildSeriesSearch(
                   filters: item.filters,
                   indexes: metricIndexes,
                   categorical,
+                  trellisBy: trellisBy || undefined,
               })
             : item.source === 'base'
               ? buildBaseChartSearch({

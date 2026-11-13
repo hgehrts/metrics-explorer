@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<dashboard version="1.1" hideTitle="true" hideEdit="true" hideExport="true" hideFilters="true" script="build/explorer.js" stylesheet="build/explorer.css">
+  <label>Workspaces</label>
+  <description>Saved workspaces, the default workspace, and recent charts.</description>
+  <row>
+    <panel>
+      <html>
+        <div id="root"></div>
+      </html>
+    </panel>
+  </row>
+</dashboard>

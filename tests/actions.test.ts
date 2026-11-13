@@ -42,6 +42,25 @@ test('panels append to a classic dashboard and refuse a studio dashboard', () =>
     expect(() => appendClassicPanels('<dashboard version="2"></dashboard>', [panel])).toThrow('Classic');
 });
 
+test('a trellis chart is stored in classic XML and in Dashboard Studio', () => {
+    const trellis = {
+        ...panel,
+        search: '| mstats avg("lab.cpu.user") WHERE index=* span=30m BY host, ifName',
+        trellis: { splitBy: 'host', minColumnWidth: 280, rowHeight: 220, columns: 2, pageSize: 8 },
+    };
+    const classic = classicDashboard('Lab', [trellis]);
+    expect(classic).toContain('<option name="trellis.enabled">1</option>');
+    expect(classic).toContain('<option name="trellis.splitBy">host</option>');
+    expect(classic).toContain('<option name="trellis.size">medium</option>');
+    const studio = studioDashboard('Lab', [trellis]);
+    expect(studio).toContain('"splitByLayout":"trellis"');
+    expect(studio).toContain('"trellisSplitBy":"host"');
+    expect(studio).toContain('"trellisMinColumnWidth":280');
+    expect(studio).toContain('"trellisColumns":2');
+    expect(studio).toContain('"trellisPageCount":8');
+    expect(studio).toContain('"trellisRowHeight":220');
+});
+
 test('a studio dashboard keeps the search in the definition', () => {
     const xml = studioDashboard('Lab', [{ ...panel, chart: 'column', stacked: true }]);
     expect(xml).toContain('version="2"');

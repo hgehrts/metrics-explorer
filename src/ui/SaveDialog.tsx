@@ -140,6 +140,7 @@ function panelsFor(
         if (!item || resolveForSource(item.source, item.aggregation)?.chart === 'table') {
             continue;
         }
+        const trellis = chart.trellis?.dimension ? chart.trellis : undefined;
         const query = buildSeriesSearch(
             item,
             chart.settings.span || span,
@@ -147,7 +148,8 @@ function panelsFor(
             latest,
             indexes,
             metricIndexes,
-            isCategorical(chart.settings.type)
+            isCategorical(chart.settings.type),
+            trellis && (item.source ?? 'metric') === 'metric' ? trellis.dimension : ''
         );
         const kind = chartKind(chart.settings.type);
         panels.push({
@@ -157,6 +159,15 @@ function panelsFor(
             latest: query.latest,
             chart: kind.chart,
             stacked: kind.stacked,
+            trellis: trellis
+                ? {
+                      splitBy: trellis.dimension,
+                      minColumnWidth: trellis.minColumnWidth,
+                      rowHeight: trellis.rowHeight,
+                      columns: trellis.columns,
+                      pageSize: trellis.pageSize,
+                  }
+                : undefined,
         });
     }
     return panels;

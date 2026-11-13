@@ -6,6 +6,8 @@ export type PanelSpec = {
     /** line, area, or column. A heatmap is stored as a column chart, as in the original workspace. */
     chart: 'line' | 'area' | 'column';
     stacked: boolean;
+    /** Present when the chart is drawn as one small chart per value of this field. */
+    trellis?: { splitBy: string; minColumnWidth: number; rowHeight: number; columns: number; pageSize: number };
 };
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/;
@@ -52,6 +54,9 @@ const TIME_TOKEN = 'mx_time';
 
 function panelXml(panel: PanelSpec, timeInput = false): string {
     const stack = panel.stacked ? '\n          <option name="charting.chart.stackMode">stacked</option>' : '';
+    const trellis = panel.trellis
+        ? `\n          <option name="trellis.enabled">1</option>\n          <option name="trellis.splitBy">${xml(panel.trellis.splitBy)}</option>\n          <option name="trellis.size">${trellisSize(panel.trellis.minColumnWidth)}</option>\n          <option name="trellis.scales.shared">1</option>`
+        : '';
     const earliest = timeInput ? `$${TIME_TOKEN}.earliest$` : panel.earliest;
     const latest = timeInput ? `$${TIME_TOKEN}.latest$` : panel.latest;
     return `    <row>
@@ -63,7 +68,7 @@ function panelXml(panel: PanelSpec, timeInput = false): string {
             <earliest>${xml(earliest)}</earliest>
             <latest>${xml(latest)}</latest>
           </search>
-          <option name="charting.chart">${panel.chart}</option>${stack}
+          <option name="charting.chart">${panel.chart}</option>${stack}${trellis}
         </chart>
       </panel>
     </row>`;
@@ -111,12 +116,39 @@ export function appendClassicPanels(xmlText: string, panels: PanelSpec[]): strin
     return `${xmlText.slice(0, close)}${panels.map((panel) => panelXml(panel, timeInput)).join('\n')}\n${xmlText.slice(close)}`;
 }
 
+/** Classic trellis has three sizes. The pixel width used in the explorer picks the closest one. */
+export function trellisSize(minColumnWidth: number): 'small' | 'medium' | 'large' {
+    if (minColumnWidth <= 200) {
+        return 'small';
+    }
+    if (minColumnWidth <= 360) {
+        return 'medium';
+    }
+    return 'large';
+}
+
+function studioOptions(panel: PanelSpec): Record<string, unknown> {
+    const options: Record<string, unknown> = {};
+    if (panel.stacked) {
+        options.stackMode = 'stacked';
+    }
+    if (panel.trellis) {
+        options.splitByLayout = 'trellis';
+        options.trellisSplitBy = panel.trellis.splitBy;
+        options.trellisMinColumnWidth = panel.trellis.minColumnWidth;
+        options.trellisRowHeight = panel.trellis.rowHeight;
+        options.trellisColumns = panel.trellis.columns;
+        options.trellisPageCount = panel.trellis.pageSize;
+    }
+    return options;
+}
+
 function studioViz(panel: PanelSpec, id: string): Record<string, unknown> {
     return {
         type: panel.chart === 'area' ? 'splunk.area' : panel.chart === 'column' ? 'splunk.column' : 'splunk.line',
         title: panel.title,
         dataSources: { primary: `ds_${id}` },
-        options: panel.stacked ? { stackMode: 'stacked' } : {},
+        options: studioOptions(panel),
     };
 }
 
