@@ -26,12 +26,15 @@ const List = styled.div`
     border-radius: 4px;
     background: ${variables.backgroundColorPopup};
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    font-family: ${variables.fontFamily};
+    font-size: ${variables.fontSize};
+    line-height: ${variables.lineHeight};
 `;
 
 export const MenuHeading = styled.div`
     padding: 6px 12px 2px;
     color: ${variables.contentColorMuted};
-    font-size: 11px;
+    font-size: ${variables.fontSizeSmall};
     font-weight: 600;
     text-transform: uppercase;
 `;
@@ -40,11 +43,13 @@ export const MenuItem = styled.button.attrs({ type: 'button', role: 'menuitem' }
     display: flex;
     gap: 8px;
     align-items: center;
+    min-height: 32px;
     padding: 6px 12px 6px 28px;
     border: 0;
     background: transparent;
     color: ${variables.contentColorDefault};
-    font-size: 12px;
+    font-family: ${variables.fontFamily};
+    font-size: ${variables.fontSize};
     text-align: left;
     white-space: nowrap;
     cursor: pointer;

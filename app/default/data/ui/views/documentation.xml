@@ -74,9 +74,14 @@
           </ul>
 
           <h3 id="mx-5">5. Events</h3>
+          <div class="mx-figure">
+            <img src="/static/app/metric_explorer_ng/docs-events-en.png" alt="Sourcetypes grouped into folders"/>
+          </div>
           <ul>
-            <li>Lists sourcetypes in the catalog time range.</li>
+            <li>Lists sourcetypes in the catalog time range. Names that share a <code>:</code>, <code>.</code>, or <code>_</code> fold into folders, so a long list starts collapsed. A click on a folder opens it. A click on a name opens the chart. The icon on the right adds it to the selected chart.</li>
             <li>A click opens an event chart. The search runs with <code>tstats</code>, not <code>mstats</code>.</li>
+            <li>Under the list you can save your own event search. It has to be a time chart, for example <code>timechart count</code>.</li>
+            <li>Saved searches from other apps are optional. They are grouped by app, and a group stays closed until you open it.</li>
             <li>Analysis is where you pick the field to aggregate. <code>exactperc</code> is available here. <code>rate_avg</code> and <code>rate_sum</code> are not.</li>
           </ul>
 
@@ -176,22 +181,34 @@
           <ul>
             <li>Save all charts to Classic Dashboards writes each chart as a panel on a Classic dashboard, new or existing, in this app.</li>
             <li>Save all charts to Dashboard Studio does the same for Dashboard Studio. The layout there is absolute or grid.</li>
-            <li>Workspaces saves the current session under a name or opens a saved one. Saved are the charts, time range, catalog time range, global split, global filters, and the span from the bar. Column widths are not saved.</li>
+            <li>Save workspace stores the current session under a name and closes. Saved are the charts, including a trellis, the time range, catalog time range, global split, global filters, and the span from the bar. Column widths are not saved. Open and delete saved workspaces on the Workspaces page.</li>
             <li>The running session is also kept in the browser and restored the next time you open the page.</li>
           </ul>
 
           <h3 id="mx-20">20. Global filters</h3>
           <ul>
-            <li>Sit under the bar once a chart or a filter exists.</li>
-            <li>Dimension, include or exclude, values. They apply to every chart whose series has that dimension.</li>
-            <li>The cross removes a filter.</li>
+            <li>The Filters menu on the second toolbar row lists the active filters. A click on one removes it. A new filter is added in the same menu: dimension, include or exclude, values.</li>
+            <li>They apply to every chart whose series has that dimension.</li>
+          </ul>
+
+          <h2>Trellis</h2>
+          <p>One small chart per value of a dimension, for the selected chart. The menu is on the second toolbar row, next to Filters.</p>
+          <div class="mx-figure">
+            <img src="/static/app/metric_explorer_ng/docs-trellis-en.png" alt="A trellis board and the Trellis menu"/>
+          </div>
+          <ul>
+            <li>The menu offers None and the dimensions that are not already used by Split by.</li>
+            <li>Column width, row height, columns, and charts per page are number fields in that menu.</li>
+            <li>Swap with Split By exchanges the trellis dimension and the split. The two buttons trade places for a moment.</li>
+            <li>The board header shows the metric name and a × that removes the chart. Saving stays in the global actions menu, and Save all charts includes trellis charts together with the others.</li>
+            <li>An exported dashboard draws the trellis. The search is a time chart split by the trellis field, with one line per split value. Classic and Dashboard Studio both use the theme the explorer is showing, dark or light.</li>
           </ul>
 
           <h2>Chart</h2>
 
           <h3 id="mx-21">21. Title</h3>
           <ul>
-            <li>Shows the metric names of the series. With four or more name parts, the first stays, then <code>&lt;...&gt;</code>, then the last. Shorter names stay whole.</li>
+            <li>Shows the metric names of the series. The name stays whole when the line is wide enough, and shortens only when it does not fit: the first part stays, then <code>&lt;...&gt;</code>, then the last.</li>
             <li>Hover and the accessible name show the full name. PNG export uses the full title.</li>
             <li>Time charts also show the effective span, for example <code>(Time span=30s)</code>.</li>
             <li>A click on the card selects the chart. Analysis on the right belongs to that selection.</li>
@@ -278,11 +295,22 @@
           <ul>
             <li>Title is required. Description is optional.</li>
             <li>Permissions: Private saves the object for the current user. Shared in App makes it visible in the app.</li>
-            <li>Dashboard: new or existing. The ID of a new dashboard may contain only letters, digits, and underscores. Panel title, and optionally a time range picker on the dashboard. A report also asks whether the panel contains the chart, the table, or both.</li>
+            <li>Dashboard: new or existing. The ID of a new Classic dashboard is filled from the title as you type, and you can change it. It may contain only letters, digits, and underscores. Panel title, and optionally a time range picker on the dashboard. A report also asks whether the panel contains the chart, the table, or both.</li>
             <li>Scheduled alert: interval, trigger (greater than, less than, or equal to a threshold), an In the last window, optional throttle, actions.</li>
             <li>Streaming alert: only for one metric series, and only when the instance supports streaming metric alerts. Trigger and throttle are in minutes, without the scheduled window.</li>
             <li>Actions: add to triggered alerts (with a severity), email, webhook (http or https), script (a file name in Splunk's script directory, without a path).</li>
             <li>After saving, the dialog links to the new object. Dashboards from this dialog show up under the Dashboards menu.</li>
+          </ul>
+
+          <h2>Workspaces</h2>
+          <p>The Workspaces entry in the app menu lists what you can open again. It is separate from the save dialog.</p>
+          <div class="mx-figure">
+            <img src="/static/app/metric_explorer_ng/docs-workspaces-en.png" alt="The Workspaces page with Default, Recent, and saved workspaces"/>
+          </div>
+          <ul>
+            <li>Default opens the charts you are working on.</li>
+            <li>Recent lists metrics opened in this browser. The name is the part after the last dot, plus the date and time.</li>
+            <li>Saved workspaces are the ones stored with Save workspace. Delete removes one.</li>
           </ul>
 
           <h2>Dashboards menu</h2>

@@ -74,9 +74,14 @@
           </ul>
 
           <h3 id="mx-5">5. Ereignisse</h3>
+          <div class="mx-figure">
+            <img src="/static/app/metric_explorer_ng/docs-events-de.png" alt="Sourcetypes in Ordnern gruppiert"/>
+          </div>
           <ul>
-            <li>Listet Sourcetypes im Katalog-Zeitraum.</li>
+            <li>Listet Sourcetypes im Katalog-Zeitraum. Namen mit gemeinsamem <code>:</code>, <code>.</code> oder <code>_</code> werden zu Ordnern, eine lange Liste startet also eingeklappt. Ein Klick auf einen Ordner öffnet ihn. Ein Klick auf einen Namen öffnet das Diagramm. Das Symbol rechts fügt ihn dem ausgewählten Diagramm hinzu.</li>
             <li>Ein Klick öffnet ein Ereignisdiagramm. Die Suche läuft über <code>tstats</code>, nicht über <code>mstats</code>.</li>
+            <li>Unter der Liste lässt sich eine eigene Ereignissuche speichern. Sie muss ein Zeitdiagramm sein, zum Beispiel <code>timechart count</code>.</li>
+            <li>Gespeicherte Suchen anderer Apps sind optional. Sie sind nach App gruppiert, und eine Gruppe bleibt zu, bis man sie öffnet.</li>
             <li>In der Analyse wählt man das Feld, das aggregiert wird. <code>exactperc</code> ist hier möglich, <code>rate_avg</code> und <code>rate_sum</code> nicht.</li>
           </ul>
 
@@ -176,22 +181,34 @@
           <ul>
             <li>„Alle Diagramme unter Klassische Dashboards speichern“ schreibt jedes Diagramm als Teilfenster in ein Classic Dashboard, neu oder in ein vorhandenes dieser App.</li>
             <li>„Alle Diagramme in Dashboard Studio speichern“ macht dasselbe für Dashboard Studio. Layout dort ist absolut oder Raster.</li>
-            <li>„Arbeitsbereiche“ speichert die aktuelle Sitzung unter einem Namen oder öffnet eine gespeicherte. Gespeichert werden Diagramme, Zeitraum, Katalog-Zeitraum, globale Unterteilung, globale Filter und die Zeitspanne der Leiste. Die Breite der Spalten nicht.</li>
+            <li>„Arbeitsbereich speichern“ legt die aktuelle Sitzung unter einem Namen ab und schließt den Dialog. Gespeichert werden die Diagramme einschließlich Trellis, Zeitraum, Katalog-Zeitraum, globale Unterteilung, globale Filter und die Zeitspanne der Leiste. Die Breite der Spalten nicht. Öffnen und Löschen stehen auf der Seite Arbeitsbereiche.</li>
             <li>Die laufende Sitzung liegt zusätzlich im Browser und wird beim nächsten Öffnen wiederhergestellt.</li>
           </ul>
 
           <h3 id="mx-20">20. Globale Filter</h3>
           <ul>
-            <li>Stehen unter der Leiste, sobald ein Diagramm oder ein Filter da ist.</li>
-            <li>Dimension, einschließen oder ausschließen, Werte. Sie gelten für alle Diagramme, deren Serie diese Dimension hat.</li>
-            <li>Das Kreuz entfernt einen Filter.</li>
+            <li>Das Menü „Filter“ in der zweiten Leiste listet die aktiven Filter. Ein Klick auf einen Filter entfernt ihn. Ein neuer Filter entsteht im selben Menü: Dimension, einschließen oder ausschließen, Werte.</li>
+            <li>Sie gelten für alle Diagramme, deren Serie diese Dimension hat.</li>
+          </ul>
+
+          <h2>Trellis</h2>
+          <p>Ein kleines Diagramm je Wert einer Dimension, für das ausgewählte Diagramm. Das Menü steht in der zweiten Leiste, neben den Filtern.</p>
+          <div class="mx-figure">
+            <img src="/static/app/metric_explorer_ng/docs-trellis-de.png" alt="Ein Trellis-Brett und das Trellis-Menü"/>
+          </div>
+          <ul>
+            <li>Das Menü bietet „Keine“ und die Dimensionen, die die Unterteilung nicht schon verwendet.</li>
+            <li>Spaltenbreite, Zeilenhöhe, Spalten und Diagramme je Seite sind Zahlenfelder in diesem Menü.</li>
+            <li>„Mit Split By tauschen“ vertauscht die Trellis-Dimension und die Unterteilung. Die beiden Knöpfe tauschen kurz den Platz.</li>
+            <li>Die Kopfzeile zeigt den Metriknamen und ein ×, das das Diagramm entfernt. Speichern bleibt im Menü der globalen Aktionen, und „Alle Diagramme speichern“ umfasst Trellis-Diagramme zusammen mit den anderen.</li>
+            <li>Ein exportiertes Dashboard zeichnet das Trellis. Die Suche ist ein Zeitdiagramm, geteilt nach dem Trellis-Feld, mit einer Linie je Unterteilungswert. Classic und Dashboard Studio übernehmen das Theme, in dem der Explorer gerade läuft, dunkel oder hell.</li>
           </ul>
 
           <h2>Diagramm</h2>
 
           <h3 id="mx-21">21. Titel</h3>
           <ul>
-            <li>Zeigt die Metriknamen der Serien. Bei vier oder mehr Namensbestandteilen bleibt der erste, dann <code>&lt;...&gt;</code>, dann der letzte. Kürzere Namen bleiben ganz.</li>
+            <li>Zeigt die Metriknamen der Serien. Der Name bleibt ganz, wenn die Zeile breit genug ist, und wird nur gekürzt, wenn er nicht passt: der erste Teil bleibt, dann <code>&lt;...&gt;</code>, dann der letzte.</li>
             <li>Die Maus und die Barrierefreiheitsbezeichnung zeigen den vollen Namen. Der PNG-Export verwendet den vollen Titel.</li>
             <li>Bei Zeitdiagrammen steht die wirksame Zeitspanne daneben, zum Beispiel <code>(Zeitspanne=30s)</code>.</li>
             <li>Ein Klick auf die Karte wählt das Diagramm. Die Analyse rechts gehört zu dieser Auswahl.</li>
@@ -278,11 +295,22 @@
           <ul>
             <li>Titel ist Pflicht. Beschreibung ist optional.</li>
             <li>Berechtigung: „Privat“ speichert beim aktuellen Benutzer. „In App freigegeben“ macht das Objekt für die App sichtbar.</li>
-            <li>Dashboard: neu oder vorhandenes. Die ID eines neuen Dashboards darf nur Buchstaben, Ziffern und Unterstriche enthalten. Teilfenstertitel, optional ein Zeitsteuerelement auf dem Dashboard. Bei einem Bericht zusätzlich die Wahl, ob das Teilfenster Diagramm, Tabelle oder beides enthält.</li>
+            <li>Dashboard: neu oder vorhandenes. Die ID eines neuen Classic Dashboards füllt sich beim Tippen aus dem Titel und lässt sich ändern. Sie darf nur Buchstaben, Ziffern und Unterstriche enthalten. Teilfenstertitel, optional ein Zeitsteuerelement auf dem Dashboard. Bei einem Bericht zusätzlich die Wahl, ob das Teilfenster Diagramm, Tabelle oder beides enthält.</li>
             <li>Geplante Benachrichtigung: Intervall, Auslöser (größer, kleiner oder gleich einem Schwellenwert), Fenster „in den letzten“, optionale Unterdrückung, Aktionen.</li>
             <li>Streaming-Benachrichtigung: nur für eine Metrikserie und nur, wenn die Instanz Streaming-Metrikbenachrichtigungen kann. Trigger und Unterdrückung in Minuten, ohne das geplante Fenster.</li>
             <li>Aktionen: zu ausgelösten Benachrichtigungen hinzufügen (mit Schweregrad), E-Mail, Webhook (http oder https), Skript (Dateiname im Skriptverzeichnis von Splunk, ohne Pfad).</li>
             <li>Nach dem Speichern steht der Link auf das neue Objekt. Dashboards aus diesem Dialog erscheinen unter dem Menüpunkt Dashboards.</li>
+          </ul>
+
+          <h2>Arbeitsbereiche</h2>
+          <p>Der Eintrag Arbeitsbereiche im App-Menü listet, was sich wieder öffnen lässt. Er ist vom Speichern-Dialog getrennt.</p>
+          <div class="mx-figure">
+            <img src="/static/app/metric_explorer_ng/docs-workspaces-de.png" alt="Die Seite Arbeitsbereiche mit Standard, Zuletzt und gespeicherten Arbeitsbereichen"/>
+          </div>
+          <ul>
+            <li>Standard öffnet die Diagramme, an denen man gerade arbeitet.</li>
+            <li>Zuletzt listet Metriken, die in diesem Browser geöffnet wurden. Der Name ist der Teil nach dem letzten Punkt plus Datum und Uhrzeit.</li>
+            <li>Gespeicherte Arbeitsbereiche sind die mit „Arbeitsbereich speichern“ abgelegten. Löschen entfernt einen.</li>
           </ul>
 
           <h2>Menü Dashboards</h2>

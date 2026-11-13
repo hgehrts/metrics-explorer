@@ -19,16 +19,16 @@ const Scroll = styled.div`
     gap: 14px;
     padding: 4px 12px 12px;
     overflow: auto;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
 `;
 
 const Title = styled.div`
     padding: 4px 12px 8px;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
 
     strong {
         display: block;
-        font-size: 13px;
+        font-size: ${variables.fontSizeLarge};
     }
 `;
 
@@ -38,7 +38,7 @@ const Section = styled.div`
     gap: 6px;
 
     > strong {
-        font-size: 12px;
+        font-size: ${variables.fontSize};
     }
 `;
 
@@ -79,7 +79,8 @@ const Link = styled.button`
     border: 0;
     background: transparent;
     color: ${variables.contentColorActive};
-    font-size: 12px;
+    font-family: inherit;
+    font-size: ${variables.fontSize};
     cursor: pointer;
 `;
 

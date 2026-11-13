@@ -70,12 +70,15 @@ const SmallButton = styled.button`
 `;
 
 const IconAction = styled.button`
-    padding: 2px 6px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 4px 8px;
     border: 0;
     border-radius: 4px;
     background: transparent;
     color: ${variables.contentColorDefault};
-    font-size: 14px;
+    font-family: inherit;
+    font-size: 18px;
     line-height: 1;
     cursor: pointer;
     &:hover {
@@ -95,7 +98,7 @@ export function FittingTitle(props: { text: string }): React.ReactElement {
         const measure = (): void => {
             const probe = document.createElement('span');
             probe.textContent = props.text;
-            probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-weight:700;font-size:12px;';
+            probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-weight:700;font-size:14px;';
             document.body.appendChild(probe);
             const needed = probe.getBoundingClientRect().width;
             probe.remove();
@@ -114,7 +117,7 @@ export function FittingTitle(props: { text: string }): React.ReactElement {
             aria-label={props.text}
             style={{
                 margin: 0,
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: 700,
                 whiteSpace: fits ? 'nowrap' : 'normal',
                 overflow: 'hidden',
@@ -129,12 +132,12 @@ const Title = styled.div`
     min-width: ${chartCardLayout.titleMinWidth};
     flex: 1 1 auto;
     overflow-wrap: ${chartCardLayout.titleOverflowWrap};
-    font-size: 12px;
+    font-size: ${variables.fontSize};
 
     h2 {
         display: inline;
         margin: 0 6px 0 0;
-        font-size: 12px;
+        font-size: ${variables.fontSize};
         font-weight: 700;
         overflow-wrap: inherit;
     }
@@ -469,7 +472,7 @@ export function ChartView(props: {
             const available = box.clientWidth - spanWidth;
             const probe = document.createElement('span');
             probe.textContent = title;
-            probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-weight:700;font-size:12px;';
+            probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-weight:700;font-size:14px;';
             document.body.appendChild(probe);
             const needed = probe.getBoundingClientRect().width;
             probe.remove();

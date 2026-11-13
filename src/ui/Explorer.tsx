@@ -8,6 +8,7 @@ import {
     filterMetricTree,
     matchesQuery,
     HIERARCHY_SEPARATORS,
+    buildSourcetypeTree,
     limitMetricNames,
     limitValueRows,
     MetricNode,
@@ -180,6 +181,16 @@ const Shell = styled.div<{ $columns: string }>`
     height: 100%;
     background: ${variables.backgroundColorPage};
     color: ${variables.contentColorDefault};
+    font-family: ${variables.fontFamily};
+    font-size: ${variables.fontSize};
+    line-height: ${variables.lineHeight};
+
+    button,
+    input,
+    select,
+    textarea {
+        font-family: inherit;
+    }
 `;
 
 const Pane = styled.aside`
@@ -218,8 +229,8 @@ const PaneHeader = styled.div`
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
-    font-size: 13px;
+    padding: 10px 12px;
+    font-size: ${variables.fontSizeLarge};
     font-weight: 600;
 `;
 
@@ -255,12 +266,12 @@ const SearchWrap = styled.div`
 const SearchBox = styled.input`
     box-sizing: border-box;
     width: 100%;
-    padding: 5px 28px 5px 8px;
+    padding: 7px 28px 7px 10px;
     border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
-    font-size: 12px;
+    font-size: ${variables.fontSize};
 `;
 
 const SearchIcon = styled.button`
@@ -304,7 +315,7 @@ const Divider = styled.span`
 const Help = styled.span`
     display: block;
     color: ${variables.contentColorMuted};
-    font-size: 11px;
+    font-size: ${variables.fontSizeSmall};
 `;
 
 const SectionTitle = styled.span`
@@ -328,7 +339,7 @@ const Chip = styled.span`
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
-    font-size: 12px;
+    font-size: ${variables.fontSize};
 `;
 
 const ChipRemove = styled.button`
@@ -362,14 +373,13 @@ const FilterInput = styled.input`
 
 const GroupRow = styled.div`
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 6px;
     margin: 0 12px 8px;
 
     select {
-        flex: 1 1 0;
-        min-width: 0;
-        font-size: 12px;
+        width: 100%;
+        font-size: ${variables.fontSize};
     }
 `;
 
@@ -380,8 +390,8 @@ const SectionButton = styled.button`
     flex: 0 0 auto;
     width: 100%;
     margin: 0;
-    padding: 7px 12px;
-    font-size: 12px;
+    padding: 9px 12px;
+    font-size: ${variables.fontSize};
     border: 0;
     border-top: 1px solid ${variables.neutral200};
     background: ${variables.backgroundColorSection};
@@ -394,7 +404,7 @@ const SectionButton = styled.button`
 const SectionItem = styled.button`
     display: block;
     width: 100%;
-    padding: 4px 12px 4px 28px;
+    padding: 6px 12px 6px 28px;
     border: 0;
     background: transparent;
     color: ${variables.contentColorDefault};
@@ -412,7 +422,7 @@ const IndexRow = styled.label`
     align-items: center;
     gap: 8px;
     padding: 4px 12px;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
     color: ${variables.contentColorDefault};
     cursor: pointer;
 `;
@@ -505,7 +515,7 @@ const SeriesHeader = styled.button<{ $open: boolean }>`
     background: transparent;
     color: ${variables.contentColorDefault};
     cursor: pointer;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
     ${(props) =>
         props.$open &&
         css`
@@ -544,7 +554,7 @@ const SubPanel = styled.section`
 const SubHead = styled.div`
     padding: 4px 12px 8px;
     border-bottom: 1px solid ${variables.neutral200};
-    font-size: 12px;
+    font-size: ${variables.fontSize};
 
     strong {
         display: block;
@@ -578,7 +588,7 @@ const SpanCustom = styled.div`
     input,
     select {
         width: 72px;
-        font-size: 12px;
+        font-size: ${variables.fontSize};
         padding: 4px;
     }
 `;
@@ -588,14 +598,14 @@ const Toolbar = styled.div`
     gap: 6px;
     align-items: center;
     flex-wrap: nowrap;
-    padding: 6px 12px;
+    padding: 8px 12px;
     border-bottom: 1px solid ${variables.neutral200};
-    font-size: 12px;
+    font-size: ${variables.fontSize};
     overflow-x: auto;
 
     select,
     input {
-        font-size: 12px;
+        font-size: ${variables.fontSize};
         padding: 4px 8px;
     }
 `;
@@ -630,8 +640,9 @@ const ToolButton = styled.button<{ $pressed?: boolean }>`
         `}
     color: ${variables.contentColorDefault};
     border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 12px;
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: ${variables.fontSize};
     cursor: pointer;
     &:disabled {
         cursor: default;
@@ -650,12 +661,13 @@ const Bar = styled.button<{ $pressed?: boolean; $pulse?: boolean }>`
     display: inline-flex;
     gap: 5px;
     align-items: center;
-    padding: 4px 7px;
+    min-height: 32px;
+    padding: 6px 10px;
     border: 0;
     border-radius: 4px;
     background: ${(props) => (props.$pressed ? variables.interactiveColorOverlaySelected : 'transparent')};
     color: ${variables.contentColorDefault};
-    font-size: 12px;
+    font-size: ${variables.fontSize};
     white-space: nowrap;
     cursor: pointer;
     ${(props) =>
@@ -674,7 +686,7 @@ const Bar = styled.button<{ $pressed?: boolean; $pulse?: boolean }>`
 
 const Muted = styled.span`
     color: ${variables.contentColorMuted};
-    font-size: 11px;
+    font-size: ${variables.fontSizeSmall};
 `;
 
 const TrellisBoard = styled.div`
@@ -710,14 +722,14 @@ const MenuFields = styled.div`
     gap: 6px 8px;
     align-items: center;
     padding: 6px 12px 8px;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
     color: ${variables.contentColorDefault};
 `;
 
 const TinyInput = styled.input`
     width: 64px;
     padding: 2px 6px;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
     border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
@@ -744,12 +756,12 @@ const Field = styled.label`
     flex-direction: column;
     gap: 4px;
     padding: 8px 12px 0;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
 `;
 
 const Select = styled.select`
     padding: 4px 8px;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
     border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
@@ -777,7 +789,7 @@ const FilterChoices = styled.div`
 
 const TextInput = styled.input`
     padding: 4px 8px;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
     border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
@@ -787,7 +799,7 @@ const TextInput = styled.input`
 const Note = styled.p`
     margin: 4px 12px;
     color: ${variables.contentColorMuted};
-    font-size: 12px;
+    font-size: ${variables.fontSize};
 `;
 
 const TextLink = styled.button`
@@ -796,8 +808,26 @@ const TextLink = styled.button`
     padding: 0;
     color: ${variables.contentColorActive};
     cursor: pointer;
-    font-size: 12px;
+    font-size: ${variables.fontSize};
     text-align: left;
+`;
+
+const TrellisClose = styled.button`
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: ${variables.contentColorDefault};
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0 8px;
+
+    &:hover {
+        background: ${variables.interactiveColorOverlayHover};
+    }
 `;
 
 const SettingsFold = styled.details`
@@ -807,7 +837,7 @@ const SettingsFold = styled.details`
     > summary {
         cursor: pointer;
         padding: 8px 12px;
-        font-size: 12px;
+        font-size: ${variables.fontSize};
         font-weight: 600;
     }
 `;
@@ -816,7 +846,7 @@ const Footer = styled.div`
     margin-top: auto;
     padding: 12px 16px;
     border-top: 1px solid ${variables.neutral200};
-    font-size: 12px;
+    font-size: ${variables.fontSize};
 `;
 
 function referenceValueReady(kind: ReferenceLine['kind'], value: string): boolean {
@@ -919,6 +949,7 @@ export function Explorer(): React.ReactElement {
     const [catalogReady, setCatalogReady] = useState(false);
     const [catalogError, setCatalogError] = useState('');
     const [open, setOpen] = useState<Set<string>>(new Set());
+    const [eventOpen, setEventOpen] = useState<Set<string>>(new Set());
     const [charts, setCharts] = useState<ChartModel[]>([]);
     const [selectedId, setSelectedId] = useState('');
     const [selectedSeriesId, setSelectedSeriesId] = useState('');
@@ -1412,6 +1443,7 @@ export function Explorer(): React.ReactElement {
     );
     const shownIndexes = indexNames.filter((name) => matchesQuery(name, query));
     const shownSourcetypes = sourcetypes.filter((name) => matchesQuery(name, query));
+    const eventTree = filterMetricTree(buildSourcetypeTree(shownSourcetypes), query);
     const shownDatamodels = datamodels.filter((name) => matchesQuery(name, query));
 
     function toggleSection(next: Section): void {
@@ -2113,12 +2145,27 @@ export function Explorer(): React.ReactElement {
                 </SectionButton>
                 {eventsOpen ? (
                     <SectionBody>
-                        {shownSourcetypes.map((name) => (
-                            <SectionItem key={name} type="button" onClick={() => addChart(name, undefined, 'event')}>
-                                <Highlight text={name} query={query} />
-                            </SectionItem>
-                        ))}
                         {sourcetypesReady && shownSourcetypes.length === 0 ? <Note>{t('No sourcetypes in this time range.')}</Note> : null}
+                        <Tree role="list" aria-label={t('Events')}>
+                            <TreeRows
+                                nodes={eventTree}
+                                depth={0}
+                                open={eventOpen}
+                                query={query}
+                                selected={selectedMetrics}
+                                onToggle={(id) => {
+                                    const next = new Set(eventOpen);
+                                    if (next.has(id)) {
+                                        next.delete(id);
+                                    } else {
+                                        next.add(id);
+                                    }
+                                    setEventOpen(next);
+                                }}
+                                onSelect={(name) => addChart(name, undefined, 'event')}
+                                onAdd={(name) => addToSelected(name, undefined, 'event')}
+                            />
+                        </Tree>
                         <EventSearches open={eventsOpen} query={query} onOpen={addSearchChart} />
                     </SectionBody>
                 ) : null}
@@ -2708,21 +2755,10 @@ export function Explorer(): React.ReactElement {
                                     <TrellisBoard key={chart.id}>
                                         <TrellisHead>
                                             <FittingTitle text={chart.series.map((item) => item.metric).join(', ')} />
-                                            <span>
-                                                <TextLink
-                                                    type="button"
-                                                    aria-label={minimizedIds.has(chart.id) ? t('Restore chart') : t('Minimize chart')}
-                                                    onClick={view.onMinimize}
-                                                >
-                                                    {minimizedIds.has(chart.id) ? '▸' : '▾'}
-                                                </TextLink>
-                                                <TextLink type="button" aria-label={t('Remove chart')} onClick={view.onRemove}>
-                                                    ×
-                                                </TextLink>
-                                            </span>
+                                            <TrellisClose type="button" aria-label={t('Remove chart')} onClick={view.onRemove}>
+                                                ×
+                                            </TrellisClose>
                                         </TrellisHead>
-                                        {minimizedIds.has(chart.id) ? null : (
-                                            <>
                                         {loaded === undefined || loaded === null ? <Note>{t('Loading trellis…')}</Note> : null}
                                         {loaded && loaded.length === 0 ? (
                                             <Note>{t('No values for this dimension.')}</Note>
@@ -2759,8 +2795,6 @@ export function Explorer(): React.ReactElement {
                                                 </TextLink>
                                             </TrellisHead>
                                         ) : null}
-                                            </>
-                                        )}
                                     </TrellisBoard>
                                 );
                             }

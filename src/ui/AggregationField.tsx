@@ -15,7 +15,8 @@ const Input = styled.input`
     flex: 1 1 auto;
     min-width: 0;
     padding: 4px 8px;
-    font-size: 12px;
+    font-family: inherit;
+    font-size: ${variables.fontSize};
     border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};

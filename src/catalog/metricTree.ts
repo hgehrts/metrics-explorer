@@ -72,6 +72,69 @@ function compress(node: TrieNode, prefix: string[], separator: string): MetricNo
     return result.sort((left, right) => left.label.localeCompare(right.label));
 }
 
+/**
+ * Separator for a sourcetype list. Splunk sourcetypes usually use `:`, metric-like names use `.`.
+ * The character that appears in the most names wins, so the list folds into folders instead of one long column.
+ */
+function sourcetypeLeaf(name: string, label: string): MetricNode {
+    return { id: name, label, folder: false, metricName: name, children: [] };
+}
+
+/**
+ * Sourcetypes fold on the first `:`. Names without one fold on the first `.`, then on the first `_`, when several share it.
+ * A group of one stays a single row. Folders start closed, so a long list opens as a short one.
+ */
+export function buildSourcetypeTree(names: string[]): MetricNode[] {
+    const colon = new Map<string, string[]>();
+    const dot = new Map<string, string[]>();
+    const under = new Map<string, string[]>();
+    const loose: string[] = [];
+    for (const name of names) {
+        const text = name.trim();
+        if (!text) {
+            continue;
+        }
+        const colonAt = text.indexOf(':');
+        if (colonAt > 0) {
+            const head = text.slice(0, colonAt);
+            colon.set(head, [...(colon.get(head) ?? []), text]);
+            continue;
+        }
+        const dotAt = text.indexOf('.');
+        if (dotAt > 0) {
+            const head = text.slice(0, dotAt);
+            dot.set(head, [...(dot.get(head) ?? []), text]);
+            continue;
+        }
+        const underAt = text.indexOf('_');
+        if (underAt > 0) {
+            const head = text.slice(0, underAt);
+            under.set(head, [...(under.get(head) ?? []), text]);
+            continue;
+        }
+        loose.push(text);
+    }
+    const nodes: MetricNode[] = loose.map((name) => sourcetypeLeaf(name, name));
+    const addGroups = (groups: Map<string, string[]>, separator: string): void => {
+        for (const [head, members] of groups) {
+            if (members.length < 2) {
+                nodes.push(sourcetypeLeaf(members[0], members[0]));
+                continue;
+            }
+            nodes.push({
+                id: `${head}/`,
+                label: head,
+                folder: true,
+                children: [...members].sort().map((name) => sourcetypeLeaf(name, name.slice(head.length + separator.length))),
+            });
+        }
+    };
+    addGroups(colon, ':');
+    addGroups(dot, '.');
+    addGroups(under, '_');
+    return nodes.sort((left, right) => left.label.localeCompare(right.label));
+}
+
 /** The metric tree, split at the separator. Metric names are dotted, so `.` is the default. */
 export function buildMetricTree(metricNames: string[], separator = '.'): MetricNode[] {
     const root = makeNode('');

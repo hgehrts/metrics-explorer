@@ -15,6 +15,14 @@ const Page = styled.main`
     padding: 24px 28px 40px;
     background: ${variables.backgroundColor};
     color: ${variables.contentColorDefault};
+    font-family: ${variables.fontFamily};
+    font-size: ${variables.fontSize};
+    line-height: ${variables.lineHeight};
+
+    button {
+        font-family: inherit;
+        font-size: inherit;
+    }
 `;
 
 const Heading = styled.h1`
@@ -29,7 +37,7 @@ const Section = styled.section`
 
 const Title = styled.h2`
     margin: 0 0 8px;
-    font-size: 13px;
+    font-size: ${variables.fontSizeLarge};
     font-weight: 600;
 `;
 
@@ -60,7 +68,6 @@ const Name = styled.button`
     border: 0;
     background: transparent;
     color: ${variables.contentColorActive};
-    font-size: 13px;
     text-align: left;
     cursor: pointer;
 `;

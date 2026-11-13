@@ -23,6 +23,17 @@ const Box = styled.form<{ $width: number }>`
     background: ${variables.backgroundColorDialog};
     color: ${variables.contentColorDefault};
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    font-family: ${variables.fontFamily};
+    font-size: ${variables.fontSize};
+    line-height: ${variables.lineHeight};
+
+    button,
+    input,
+    select,
+    textarea {
+        font-family: inherit;
+        font-size: inherit;
+    }
 `;
 
 const Head = styled.div`
@@ -46,7 +57,6 @@ const Body = styled.div`
     gap: 14px;
     padding: 18px 20px;
     overflow: auto;
-    font-size: 12px;
 `;
 
 const Foot = styled.div`
@@ -72,7 +82,7 @@ export const Button = styled.button<{ $primary?: boolean }>`
     border-radius: 4px;
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
-    font-size: 12px;
+    min-height: 32px;
     cursor: pointer;
     ${(props) =>
         props.$primary &&
@@ -105,7 +115,7 @@ export const FormRow = styled.div`
 export const Hint = styled.div`
     margin-top: 4px;
     color: ${variables.contentColorMuted};
-    font-size: 11px;
+    font-size: ${variables.fontSizeSmall};
 `;
 
 export const Inline = styled.div`
@@ -121,7 +131,6 @@ export const Input = styled.input`
     border-radius: 4px;
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
-    font-size: 12px;
     min-width: 0;
     box-sizing: border-box;
 
@@ -139,7 +148,6 @@ export const Picker = styled.select`
     border-radius: 4px;
     background: ${variables.backgroundColorSection};
     color: ${variables.contentColorDefault};
-    font-size: 12px;
 `;
 
 /** A modal dialog with a title, a close button, and footer buttons. Escape closes it. */

@@ -1,6 +1,6 @@
 {
   "name": "metrics-explorer",
-  "version": "1.3b",
+  "version": "1.4b",
   "private": true,
   "engines": {
     "node": ">=22 <23"

@@ -15,14 +15,16 @@ const Block = styled.div`
 
 const Label = styled.div`
     color: ${variables.contentColorMuted};
-    font-size: 11px;
+    font-family: inherit;
+    font-size: ${variables.fontSizeSmall};
     font-weight: 600;
     text-transform: uppercase;
 `;
 
 const Input = styled.input`
     padding: 4px 8px;
-    font-size: 12px;
+    font-family: inherit;
+    font-size: ${variables.fontSize};
     border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
@@ -32,8 +34,8 @@ const Input = styled.input`
 const Area = styled.textarea`
     min-height: 72px;
     padding: 4px 8px;
-    font-size: 12px;
     font-family: inherit;
+    font-size: ${variables.fontSize};
     border-radius: 4px;
     border: 1px solid ${variables.interactiveColorBorder};
     background: ${variables.backgroundColorSection};
@@ -54,8 +56,27 @@ const Item = styled.button`
     text-align: left;
     border: 0;
     background: transparent;
-    padding: 4px 12px;
+    padding: 6px 12px;
     color: ${variables.contentColorDefault};
+    font-family: inherit;
+    font-size: ${variables.fontSize};
+    cursor: pointer;
+`;
+
+const AppFolder = styled.button`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 6px 12px;
+    border: 0;
+    background: transparent;
+    color: ${variables.contentColorDefault};
+    font-family: inherit;
+    font-size: ${variables.fontSize};
+    font-weight: 600;
+    text-align: left;
     cursor: pointer;
 `;
 
@@ -63,21 +84,24 @@ const Quiet = styled.button`
     border: 0;
     background: transparent;
     color: ${variables.contentColorMuted};
-    font-size: 12px;
+    font-family: inherit;
+    font-size: ${variables.fontSize};
     cursor: pointer;
 `;
 
 const Note = styled.p`
     margin: 0;
     color: ${variables.contentColorMuted};
-    font-size: 12px;
+    font-family: inherit;
+    font-size: ${variables.fontSize};
 `;
 
 const Check = styled.label`
     display: flex;
     gap: 6px;
     align-items: center;
-    font-size: 12px;
+    font-family: inherit;
+    font-size: ${variables.fontSize};
     color: ${variables.contentColorDefault};
 `;
 
@@ -91,6 +115,7 @@ export function EventSearches(props: { open: boolean; query: string; onOpen: (na
     const [showOthers, setShowOthers] = useState(false);
     const [others, setOthers] = useState<AppSearchGroup[]>([]);
     const [othersError, setOthersError] = useState('');
+    const [openApps, setOpenApps] = useState<Set<string>>(new Set());
 
     function reload(): void {
         splunkGet('storage/collections/data/mx_event_searches?limit=200')
@@ -254,10 +279,25 @@ export function EventSearches(props: { open: boolean; query: string; onOpen: (na
                       }
                       return (
                           <React.Fragment key={group.app}>
-                              <Block>
-                                  <Label>{group.app}</Label>
-                              </Block>
-                              {names.map((item) => (
+                              <AppFolder
+                                  type="button"
+                                  aria-expanded={props.query.trim() !== '' || openApps.has(group.app)}
+                                  onClick={() => {
+                                      const next = new Set(openApps);
+                                      if (next.has(group.app)) {
+                                          next.delete(group.app);
+                                      } else {
+                                          next.add(group.app);
+                                      }
+                                      setOpenApps(next);
+                                  }}
+                              >
+                                  <span aria-hidden>{props.query.trim() !== '' || openApps.has(group.app) ? '▾' : '▸'}</span>
+                                  {group.app}
+                                  <span style={{ marginLeft: 'auto', fontWeight: 400 }}>{names.length}</span>
+                              </AppFolder>
+                              {props.query.trim() !== '' || openApps.has(group.app)
+                                  ? names.map((item) => (
                                   <Item
                                       key={`${group.app}:${item}`}
                                       type="button"
@@ -271,7 +311,8 @@ export function EventSearches(props: { open: boolean; query: string; onOpen: (na
                                   >
                                       {item}
                                   </Item>
-                              ))}
+                              ))
+                                  : null}
                           </React.Fragment>
                       );
                   })
