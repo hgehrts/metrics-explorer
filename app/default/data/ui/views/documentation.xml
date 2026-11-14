@@ -80,7 +80,7 @@
           <ul>
             <li>Lists sourcetypes in the catalog time range. Names that share a <code>:</code>, <code>.</code>, or <code>_</code> fold into folders, so a long list starts collapsed. A click on a folder opens it. A click on a name opens the chart. The icon on the right adds it to the selected chart.</li>
             <li>A click opens an event chart. The search runs with <code>tstats</code>, not <code>mstats</code>.</li>
-            <li>Under the list you can save your own event search. It has to be a time chart, for example <code>timechart count</code>.</li>
+            <li>Under the list, Saved in this app starts closed. Open it to save a search. A normal search such as <code>index=_internal sourcetype=splunkd | timechart count by host</code> is kept as written. A command such as <code>timechart count</code> is run as a time chart.</li>
             <li>Saved searches from other apps are optional. They are grouped by app, and a group stays closed until you open it.</li>
             <li>Analysis is where you pick the field to aggregate. <code>exactperc</code> is available here. <code>rate_avg</code> and <code>rate_sum</code> are not.</li>
           </ul>
@@ -187,12 +187,12 @@
 
           <h3 id="mx-20">20. Global filters</h3>
           <ul>
-            <li>The Filters menu on the second toolbar row lists the active filters. A click on one removes it. A new filter is added in the same menu: dimension, include or exclude, values.</li>
+            <li>The Filters menu is in the same toolbar as the other controls and wraps with them. It lists the active filters. A click on one removes it. A new filter is added in the same menu: dimension, include or exclude, values.</li>
             <li>They apply to every chart whose series has that dimension.</li>
           </ul>
 
           <h2>Trellis</h2>
-          <p>One small chart per value of a dimension, for the selected chart. The menu is on the second toolbar row, next to Filters.</p>
+          <p>One small chart per value of a dimension, for the selected chart. Filters and Trellis are in the same toolbar as the other controls and wrap onto the next line when the middle pane is narrow.</p>
           <div class="mx-figure">
             <img src="/static/app/metric_explorer_ng/docs-trellis-en.png" alt="A trellis board and the Trellis menu"/>
           </div>

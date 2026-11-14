@@ -6,6 +6,7 @@ import { variables } from '@splunk/themes';
 const Anchor = styled.div<{ $right: boolean }>`
     position: relative;
     display: inline-flex;
+    flex-shrink: 0;
     ${(props) =>
         props.$right &&
         css`

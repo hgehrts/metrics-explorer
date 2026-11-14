@@ -307,6 +307,7 @@ const Count = styled.span`
 
 const Divider = styled.span`
     align-self: stretch;
+    flex-shrink: 0;
     width: 1px;
     margin: 0 4px;
     background: ${variables.neutral200};
@@ -448,6 +449,12 @@ const ActivityDot = styled.span<{ $state: 'on' | 'off' | 'unknown' }>`
 const Tree = styled.div`
     overflow: auto;
     padding: 0 8px 12px;
+`;
+
+/** The sourcetype list keeps a readable height. The save form below must not squeeze it away. */
+const EventTree = styled(Tree)`
+    flex: 1 1 auto;
+    min-height: 160px;
 `;
 
 const AddButton = styled.button`
@@ -597,17 +604,26 @@ const Toolbar = styled.div`
     display: flex;
     gap: 6px;
     align-items: center;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     padding: 8px 12px;
     border-bottom: 1px solid ${variables.neutral200};
     font-size: ${variables.fontSize};
-    overflow-x: auto;
+    overflow-x: visible;
 
     select,
     input {
         font-size: ${variables.fontSize};
         padding: 4px 8px;
     }
+`;
+
+/** Remove all, the layout buttons, and the actions menu travel together and stay on the right while the row has room. */
+const ToolbarTail = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
 `;
 
 const Overflow = styled.div`
@@ -668,6 +684,7 @@ const Bar = styled.button<{ $pressed?: boolean; $pulse?: boolean }>`
     background: ${(props) => (props.$pressed ? variables.interactiveColorOverlaySelected : 'transparent')};
     color: ${variables.contentColorDefault};
     font-size: ${variables.fontSize};
+    flex-shrink: 0;
     white-space: nowrap;
     cursor: pointer;
     ${(props) =>
@@ -685,8 +702,10 @@ const Bar = styled.button<{ $pressed?: boolean; $pulse?: boolean }>`
 `;
 
 const Muted = styled.span`
+    flex-shrink: 0;
     color: ${variables.contentColorMuted};
     font-size: ${variables.fontSizeSmall};
+    white-space: nowrap;
 `;
 
 const TrellisBoard = styled.div`
@@ -740,8 +759,11 @@ const ChartList = styled.div<{ $grid: boolean }>`
     display: grid;
     grid-template-columns: ${(props) => (props.$grid ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)')};
     gap: 16px;
+    flex: 1;
+    min-height: 0;
     padding: 16px;
     overflow: auto;
+    align-content: start;
 `;
 
 const Empty = styled.div`
@@ -2146,7 +2168,7 @@ export function Explorer(): React.ReactElement {
                 {eventsOpen ? (
                     <SectionBody>
                         {sourcetypesReady && shownSourcetypes.length === 0 ? <Note>{t('No sourcetypes in this time range.')}</Note> : null}
-                        <Tree role="list" aria-label={t('Events')}>
+                        <EventTree role="list" aria-label={t('Events')}>
                             <TreeRows
                                 nodes={eventTree}
                                 depth={0}
@@ -2165,7 +2187,7 @@ export function Explorer(): React.ReactElement {
                                 onSelect={(name) => addChart(name, undefined, 'event')}
                                 onAdd={(name) => addToSelected(name, undefined, 'event')}
                             />
-                        </Tree>
+                        </EventTree>
                         <EventSearches open={eventsOpen} query={query} onOpen={addSearchChart} />
                     </SectionBody>
                 ) : null}
@@ -2413,7 +2435,183 @@ export function Explorer(): React.ReactElement {
                             ×
                         </Bar>
                     ) : null}
-                    <Bar type="button" style={{ marginLeft: 'auto' }} disabled={charts.length === 0} onClick={removeAll}>
+                    {charts.length > 0 ? (
+                        <>
+                        <DropdownMenu
+                            label={t('Global filters')}
+                            trigger={(isOpen, toggle) => (
+                                <Bar type="button" aria-label={t('Global filters')} aria-expanded={isOpen} onClick={toggle}>
+                                    {globalFilters.length > 0 ? `${t('Filters')} (${globalFilters.length})` : t('Filters')} ▾
+                                </Bar>
+                            )}
+                        >
+                            {(close) => (
+                                <>
+                                    {globalFilters.length === 0 ? <MenuHeading>{t('No global filters.')}</MenuHeading> : null}
+                                    {globalFilters.map((filter) => (
+                                        <MenuItem
+                                            key={`${filter.dimension}:${filter.mode}:${filter.values.join(',')}`}
+                                            onClick={() => setGlobalFilters((current) => current.filter((item) => item !== filter))}
+                                        >
+                                            {filter.dimension} {filter.mode === 'include' ? t('includes') : t('excludes')} {filter.values.join(', ')} ×
+                                        </MenuItem>
+                                    ))}
+                                    <MenuHeading>{t('+ Add global filter')}</MenuHeading>
+                                    <FilterForm
+                                        onSubmit={(event) => {
+                                            event.preventDefault();
+                                            if (addGlobalFilter()) {
+                                                close();
+                                            }
+                                        }}
+                                    >
+                                        <Select
+                                            aria-label={t('Global filter dimension')}
+                                            value={globalDimension}
+                                            onChange={(event) => setGlobalDimension(event.target.value)}
+                                        >
+                                            <option value="">{t('Select a dimension')}</option>
+                                            {allDimensions.map((name) => (
+                                                <option key={name} value={name}>
+                                                    {name}
+                                                </option>
+                                            ))}
+                                        </Select>
+                                        <Select
+                                            aria-label={t('Global filter mode')}
+                                            value={globalMode}
+                                            onChange={(event) => setGlobalMode(event.target.value === 'exclude' ? 'exclude' : 'include')}
+                                        >
+                                            <option value="include">{t('Include')}</option>
+                                            <option value="exclude">{t('Exclude')}</option>
+                                        </Select>
+                                        <FilterInput
+                                            aria-label={t('Global filter values')}
+                                            value={globalValues}
+                                            placeholder={t('Values, comma separated')}
+                                            onChange={(event) => setGlobalValues(event.target.value)}
+                                        />
+                                        <TextLink type="submit">{t('Add')}</TextLink>
+                                    </FilterForm>
+                                    {globalFilterError ? <Note role="alert">{t(globalFilterError)}</Note> : null}
+                                </>
+                            )}
+                        </DropdownMenu>
+                        {globalSplit && selected && (trellisChoices.length > 0 || selected.trellis?.dimension) ? (
+                            <DropdownMenu
+                                label={t('Trellis')}
+                                trigger={(isOpen, toggle) => (
+                                    <Bar type="button" aria-label={t('Trellis')} aria-expanded={isOpen} $pulse={swapPulse} onClick={toggle}>
+                                        {selected.trellis?.dimension ? `${t('Trellis')}: ${selected.trellis.dimension}` : t('Trellis')} ▾
+                                    </Bar>
+                                )}
+                            >
+                                {(close) => (
+                                    <>
+                                        <MenuItem
+                                            $checked={!selected.trellis?.dimension}
+                                            onClick={() => {
+                                                updateTrellis(undefined);
+                                                close();
+                                            }}
+                                        >
+                                            {t('None')}
+                                        </MenuItem>
+                                        {trellisChoices.map((name) => (
+                                            <MenuItem
+                                                key={name}
+                                                $checked={selected.trellis?.dimension === name}
+                                                onClick={() => {
+                                                    updateTrellis({
+                                                        dimension: name,
+                                                        minColumnWidth: selected.trellis?.minColumnWidth ?? DEFAULT_TRELLIS.minColumnWidth,
+                                                        rowHeight: selected.trellis?.rowHeight ?? DEFAULT_TRELLIS.rowHeight,
+                                                        columns: selected.trellis?.columns ?? DEFAULT_TRELLIS.columns,
+                                                        pageSize: selected.trellis?.pageSize ?? DEFAULT_TRELLIS.pageSize,
+                                                    });
+                                                    close();
+                                                }}
+                                            >
+                                                {name}
+                                            </MenuItem>
+                                        ))}
+                                        {selected.trellis?.dimension ? (
+                                            <MenuFields>
+                                                <span>{t('Min column width')}</span>
+                                                <TinyInput
+                                                    aria-label={t('Min column width')}
+                                                    type="number"
+                                                    min={120}
+                                                    max={800}
+                                                    value={selected.trellis.minColumnWidth}
+                                                    onChange={(event) =>
+                                                        updateTrellis({
+                                                            ...selected.trellis!,
+                                                            minColumnWidth: clampNumber(event.target.value, DEFAULT_TRELLIS.minColumnWidth, 120, 800),
+                                                        })
+                                                    }
+                                                />
+                                                <span>{t('Row height')}</span>
+                                                <TinyInput
+                                                    aria-label={t('Row height')}
+                                                    type="number"
+                                                    min={140}
+                                                    max={600}
+                                                    value={selected.trellis.rowHeight}
+                                                    onChange={(event) =>
+                                                        updateTrellis({
+                                                            ...selected.trellis!,
+                                                            rowHeight: clampNumber(event.target.value, DEFAULT_TRELLIS.rowHeight, 140, 600),
+                                                        })
+                                                    }
+                                                />
+                                                <span>{t('Columns per row')}</span>
+                                                <TinyInput
+                                                    aria-label={t('Columns per row')}
+                                                    type="number"
+                                                    min={1}
+                                                    max={6}
+                                                    value={selected.trellis.columns}
+                                                    onChange={(event) =>
+                                                        updateTrellis({
+                                                            ...selected.trellis!,
+                                                            columns: clampNumber(event.target.value, DEFAULT_TRELLIS.columns, 1, 6),
+                                                        })
+                                                    }
+                                                />
+                                                <span>{t('Charts per page')}</span>
+                                                <TinyInput
+                                                    aria-label={t('Charts per page')}
+                                                    type="number"
+                                                    min={1}
+                                                    max={50}
+                                                    value={selected.trellis.pageSize}
+                                                    onChange={(event) =>
+                                                        updateTrellis({
+                                                            ...selected.trellis!,
+                                                            pageSize: clampNumber(event.target.value, DEFAULT_TRELLIS.pageSize, 1, 50),
+                                                        })
+                                                    }
+                                                />
+                                            </MenuFields>
+                                        ) : null}
+                                        <MenuItem
+                                            disabled={!selected.trellis?.dimension}
+                                            onClick={() => {
+                                                swapSplitAndTrellis();
+                                                close();
+                                            }}
+                                        >
+                                            {t('Swap with Split By')}
+                                        </MenuItem>
+                                    </>
+                                )}
+                            </DropdownMenu>
+                        ) : null}
+                        </>
+                    ) : null}
+                    <ToolbarTail>
+                    <Bar type="button" disabled={charts.length === 0} onClick={removeAll}>
                         <span aria-hidden="true">⌫</span> {t('Remove all')}
                     </Bar>
                     <Divider />
@@ -2478,182 +2676,8 @@ export function Explorer(): React.ReactElement {
                             </>
                         )}
                     </DropdownMenu>
+                    </ToolbarTail>
                 </Toolbar>
-                {charts.length > 0 ? (
-                <Toolbar aria-label={t('Global filters')}>
-                    <DropdownMenu
-                        label={t('Global filters')}
-                        trigger={(isOpen, toggle) => (
-                            <Bar type="button" aria-label={t('Global filters')} aria-expanded={isOpen} onClick={toggle}>
-                                {globalFilters.length > 0 ? `${t('Filters')} (${globalFilters.length})` : t('Filters')} ▾
-                            </Bar>
-                        )}
-                    >
-                        {(close) => (
-                            <>
-                                {globalFilters.length === 0 ? <MenuHeading>{t('No global filters.')}</MenuHeading> : null}
-                                {globalFilters.map((filter) => (
-                                    <MenuItem
-                                        key={`${filter.dimension}:${filter.mode}:${filter.values.join(',')}`}
-                                        onClick={() => setGlobalFilters((current) => current.filter((item) => item !== filter))}
-                                    >
-                                        {filter.dimension} {filter.mode === 'include' ? t('includes') : t('excludes')} {filter.values.join(', ')} ×
-                                    </MenuItem>
-                                ))}
-                                <MenuHeading>{t('+ Add global filter')}</MenuHeading>
-                                <FilterForm
-                                    onSubmit={(event) => {
-                                        event.preventDefault();
-                                        if (addGlobalFilter()) {
-                                            close();
-                                        }
-                                    }}
-                                >
-                                    <Select
-                                        aria-label={t('Global filter dimension')}
-                                        value={globalDimension}
-                                        onChange={(event) => setGlobalDimension(event.target.value)}
-                                    >
-                                        <option value="">{t('Select a dimension')}</option>
-                                        {allDimensions.map((name) => (
-                                            <option key={name} value={name}>
-                                                {name}
-                                            </option>
-                                        ))}
-                                    </Select>
-                                    <Select
-                                        aria-label={t('Global filter mode')}
-                                        value={globalMode}
-                                        onChange={(event) => setGlobalMode(event.target.value === 'exclude' ? 'exclude' : 'include')}
-                                    >
-                                        <option value="include">{t('Include')}</option>
-                                        <option value="exclude">{t('Exclude')}</option>
-                                    </Select>
-                                    <FilterInput
-                                        aria-label={t('Global filter values')}
-                                        value={globalValues}
-                                        placeholder={t('Values, comma separated')}
-                                        onChange={(event) => setGlobalValues(event.target.value)}
-                                    />
-                                    <TextLink type="submit">{t('Add')}</TextLink>
-                                </FilterForm>
-                                {globalFilterError ? <Note role="alert">{t(globalFilterError)}</Note> : null}
-                            </>
-                        )}
-                    </DropdownMenu>
-                    {globalSplit && selected && (trellisChoices.length > 0 || selected.trellis?.dimension) ? (
-                        <DropdownMenu
-                            label={t('Trellis')}
-                            trigger={(isOpen, toggle) => (
-                                <Bar type="button" aria-label={t('Trellis')} aria-expanded={isOpen} $pulse={swapPulse} onClick={toggle}>
-                                    {selected.trellis?.dimension ? `${t('Trellis')}: ${selected.trellis.dimension}` : t('Trellis')} ▾
-                                </Bar>
-                            )}
-                        >
-                            {(close) => (
-                                <>
-                                    <MenuItem
-                                        $checked={!selected.trellis?.dimension}
-                                        onClick={() => {
-                                            updateTrellis(undefined);
-                                            close();
-                                        }}
-                                    >
-                                        {t('None')}
-                                    </MenuItem>
-                                    {trellisChoices.map((name) => (
-                                        <MenuItem
-                                            key={name}
-                                            $checked={selected.trellis?.dimension === name}
-                                            onClick={() => {
-                                                updateTrellis({
-                                                    dimension: name,
-                                                    minColumnWidth: selected.trellis?.minColumnWidth ?? DEFAULT_TRELLIS.minColumnWidth,
-                                                    rowHeight: selected.trellis?.rowHeight ?? DEFAULT_TRELLIS.rowHeight,
-                                                    columns: selected.trellis?.columns ?? DEFAULT_TRELLIS.columns,
-                                                    pageSize: selected.trellis?.pageSize ?? DEFAULT_TRELLIS.pageSize,
-                                                });
-                                                close();
-                                            }}
-                                        >
-                                            {name}
-                                        </MenuItem>
-                                    ))}
-                                    {selected.trellis?.dimension ? (
-                                        <MenuFields>
-                                            <span>{t('Min column width')}</span>
-                                            <TinyInput
-                                                aria-label={t('Min column width')}
-                                                type="number"
-                                                min={120}
-                                                max={800}
-                                                value={selected.trellis.minColumnWidth}
-                                                onChange={(event) =>
-                                                    updateTrellis({
-                                                        ...selected.trellis!,
-                                                        minColumnWidth: clampNumber(event.target.value, DEFAULT_TRELLIS.minColumnWidth, 120, 800),
-                                                    })
-                                                }
-                                            />
-                                            <span>{t('Row height')}</span>
-                                            <TinyInput
-                                                aria-label={t('Row height')}
-                                                type="number"
-                                                min={140}
-                                                max={600}
-                                                value={selected.trellis.rowHeight}
-                                                onChange={(event) =>
-                                                    updateTrellis({
-                                                        ...selected.trellis!,
-                                                        rowHeight: clampNumber(event.target.value, DEFAULT_TRELLIS.rowHeight, 140, 600),
-                                                    })
-                                                }
-                                            />
-                                            <span>{t('Columns per row')}</span>
-                                            <TinyInput
-                                                aria-label={t('Columns per row')}
-                                                type="number"
-                                                min={1}
-                                                max={6}
-                                                value={selected.trellis.columns}
-                                                onChange={(event) =>
-                                                    updateTrellis({
-                                                        ...selected.trellis!,
-                                                        columns: clampNumber(event.target.value, DEFAULT_TRELLIS.columns, 1, 6),
-                                                    })
-                                                }
-                                            />
-                                            <span>{t('Charts per page')}</span>
-                                            <TinyInput
-                                                aria-label={t('Charts per page')}
-                                                type="number"
-                                                min={1}
-                                                max={50}
-                                                value={selected.trellis.pageSize}
-                                                onChange={(event) =>
-                                                    updateTrellis({
-                                                        ...selected.trellis!,
-                                                        pageSize: clampNumber(event.target.value, DEFAULT_TRELLIS.pageSize, 1, 50),
-                                                    })
-                                                }
-                                            />
-                                        </MenuFields>
-                                    ) : null}
-                                    <MenuItem
-                                        disabled={!selected.trellis?.dimension}
-                                        onClick={() => {
-                                            swapSplitAndTrellis();
-                                            close();
-                                        }}
-                                    >
-                                        {t('Swap with Split By')}
-                                    </MenuItem>
-                                </>
-                            )}
-                        </DropdownMenu>
-                    ) : null}
-                </Toolbar>
-                ) : null}
                 {recovered && charts.length > 0 ? (
                     <Note role="status">
                         {t('Your work has been recovered.')}{' '}

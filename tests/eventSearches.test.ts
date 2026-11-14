@@ -1,5 +1,5 @@
 import { eventSearchNameOk, eventSearchesFrom, savedSearchSpl, searchesByApp } from '../src/model/eventSearches';
-import { buildSeriesSearch } from '../src/spl/seriesSearch';
+import { buildSeriesSearch, freeSearchSpl } from '../src/spl/seriesSearch';
 import { buildTrellisValueSearch } from '../src/spl/buildMstats';
 import { aggregationMenu, METRIC_FUNCTIONS } from '../src/spl/functions';
 import { createSeries } from '../src/model/workspace';
@@ -43,6 +43,12 @@ test('a free search is run in the chart window, and an empty one is refused', ()
     expect(buildSeriesSearch(series, 'auto', '-24h', 'now', [], []).search).toBe('| timechart count');
     series.field = '| timechart sum(bytes)';
     expect(buildSeriesSearch(series, 'auto', '-1h', 'now', [], []).search).toBe('| timechart sum(bytes)');
+    series.field = 'index=_* sourcetype="splunkd" | timechart count by host';
+    expect(buildSeriesSearch(series, 'auto', '-1h', 'now', [], []).search).toBe(
+        'index=_* sourcetype="splunkd" | timechart count by host'
+    );
+    expect(freeSearchSpl('search index=_internal | timechart count')).toBe('| search index=_internal | timechart count');
+    expect(freeSearchSpl('sourcetype=splunkd | timechart count by host')).toBe('sourcetype=splunkd | timechart count by host');
     series.field = '  ';
     expect(() => buildSeriesSearch(series, 'auto', '-1h', 'now', [], [])).toThrow('Search is empty.');
 });

@@ -80,7 +80,7 @@
           <ul>
             <li>Listet Sourcetypes im Katalog-Zeitraum. Namen mit gemeinsamem <code>:</code>, <code>.</code> oder <code>_</code> werden zu Ordnern, eine lange Liste startet also eingeklappt. Ein Klick auf einen Ordner öffnet ihn. Ein Klick auf einen Namen öffnet das Diagramm. Das Symbol rechts fügt ihn dem ausgewählten Diagramm hinzu.</li>
             <li>Ein Klick öffnet ein Ereignisdiagramm. Die Suche läuft über <code>tstats</code>, nicht über <code>mstats</code>.</li>
-            <li>Unter der Liste lässt sich eine eigene Ereignissuche speichern. Sie muss ein Zeitdiagramm sein, zum Beispiel <code>timechart count</code>.</li>
+            <li>Unter der Liste ist „In dieser App gespeichert“ zunächst zu. Dort lässt sich eine Suche speichern. Eine normale Suche wie <code>index=_internal sourcetype=splunkd | timechart count by host</code> bleibt unverändert. Ein Befehl wie <code>timechart count</code> läuft als Zeitdiagramm.</li>
             <li>Gespeicherte Suchen anderer Apps sind optional. Sie sind nach App gruppiert, und eine Gruppe bleibt zu, bis man sie öffnet.</li>
             <li>In der Analyse wählt man das Feld, das aggregiert wird. <code>exactperc</code> ist hier möglich, <code>rate_avg</code> und <code>rate_sum</code> nicht.</li>
           </ul>
@@ -187,12 +187,12 @@
 
           <h3 id="mx-20">20. Globale Filter</h3>
           <ul>
-            <li>Das Menü „Filter“ in der zweiten Leiste listet die aktiven Filter. Ein Klick auf einen Filter entfernt ihn. Ein neuer Filter entsteht im selben Menü: Dimension, einschließen oder ausschließen, Werte.</li>
+            <li>Das Menü „Filter“ steht in derselben Leiste wie die übrigen Knöpfe und bricht mit ihnen um. Es listet die aktiven Filter. Ein Klick auf einen Filter entfernt ihn. Ein neuer Filter entsteht im selben Menü: Dimension, einschließen oder ausschließen, Werte.</li>
             <li>Sie gelten für alle Diagramme, deren Serie diese Dimension hat.</li>
           </ul>
 
           <h2>Trellis</h2>
-          <p>Ein kleines Diagramm je Wert einer Dimension, für das ausgewählte Diagramm. Das Menü steht in der zweiten Leiste, neben den Filtern.</p>
+          <p>Ein kleines Diagramm je Wert einer Dimension, für das ausgewählte Diagramm. Filter und Trellis stehen in derselben Leiste und brechen in die nächste Zeile um, wenn die Mitte schmal wird.</p>
           <div class="mx-figure">
             <img src="/static/app/metric_explorer_ng/docs-trellis-de.png" alt="Ein Trellis-Brett und das Trellis-Menü"/>
           </div>

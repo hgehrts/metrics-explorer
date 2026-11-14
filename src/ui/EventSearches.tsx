@@ -6,6 +6,10 @@ import { t } from '../i18n';
 import { eventSearchNameOk, eventSearchesFrom, SavedEventSearch, savedSearchSpl, searchesByApp, AppSearchGroup } from '../model/eventSearches';
 import { matchesQuery } from '../catalog/metricTree';
 
+const Panel = styled.div`
+    flex: 0 0 auto;
+`;
+
 const Block = styled.div`
     display: flex;
     flex-direction: column;
@@ -13,12 +17,21 @@ const Block = styled.div`
     padding: 4px 12px 8px;
 `;
 
-const Label = styled.div`
-    color: ${variables.contentColorMuted};
+const Opener = styled.button`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 6px 0;
+    border: 0;
+    background: transparent;
+    color: ${variables.contentColorDefault};
     font-family: inherit;
-    font-size: ${variables.fontSizeSmall};
+    font-size: ${variables.fontSize};
     font-weight: 600;
-    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
 `;
 
 const Input = styled.input`
@@ -32,7 +45,7 @@ const Input = styled.input`
 `;
 
 const Area = styled.textarea`
-    min-height: 72px;
+    min-height: 48px;
     padding: 4px 8px;
     font-family: inherit;
     font-size: ${variables.fontSize};
@@ -116,6 +129,7 @@ export function EventSearches(props: { open: boolean; query: string; onOpen: (na
     const [others, setOthers] = useState<AppSearchGroup[]>([]);
     const [othersError, setOthersError] = useState('');
     const [openApps, setOpenApps] = useState<Set<string>>(new Set());
+    const [composerOpen, setComposerOpen] = useState(false);
 
     function reload(): void {
         splunkGet('storage/collections/data/mx_event_searches?limit=200')
@@ -190,10 +204,26 @@ export function EventSearches(props: { open: boolean; query: string; onOpen: (na
         }
     }
 
+    const formOpen = composerOpen || editing !== '';
+
     return (
-        <>
+        <Panel>
             <Block>
-                <Label>{t('Saved in this app')}</Label>
+                <Opener
+                    type="button"
+                    aria-expanded={formOpen}
+                    onClick={() => {
+                        if (editing) {
+                            return;
+                        }
+                        setComposerOpen((current) => !current);
+                    }}
+                >
+                    <span aria-hidden>{formOpen ? '▾' : '▸'}</span>
+                    {t('Saved in this app')}
+                </Opener>
+                {formOpen ? (
+                    <>
                 <Input
                     aria-label={t('Event search name')}
                     value={name}
@@ -203,7 +233,7 @@ export function EventSearches(props: { open: boolean; query: string; onOpen: (na
                 <Area
                     aria-label={t('Event search')}
                     value={spl}
-                    placeholder={t('A time chart, for example timechart count')}
+                    placeholder={t('index=_internal | timechart count, or timechart count')}
                     onChange={(event) => setSpl(event.target.value)}
                 />
                 <Row>
@@ -225,6 +255,8 @@ export function EventSearches(props: { open: boolean; query: string; onOpen: (na
                     ) : null}
                 </Row>
                 {error ? <Note role="alert">{error}</Note> : null}
+                    </>
+                ) : null}
             </Block>
             {shown.map((item) => (
                 <Row key={item.key}>
@@ -317,6 +349,6 @@ export function EventSearches(props: { open: boolean; query: string; onOpen: (na
                       );
                   })
                 : null}
-        </>
+        </Panel>
     );
 }

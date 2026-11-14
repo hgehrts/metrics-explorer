@@ -48,6 +48,7 @@ const GERMAN: Record<string, string> = {
     'Event search name': 'Name der Ereignissuche',
     'Event search': 'Ereignissuche',
     'A time chart, for example timechart count': 'Ein Zeitdiagramm, zum Beispiel timechart count',
+    'index=_internal | timechart count, or timechart count': 'index=_internal | timechart count, oder timechart count',
     'Save event search': 'Ereignissuche speichern',
     Edit: 'Bearbeiten',
     'No saved event searches.': 'Keine gespeicherten Ereignissuchen.',

@@ -5,6 +5,51 @@ import { searchWindow } from './span';
 
 export type SeriesQuery = { search: string; earliest: string; latest: string };
 
+/** Commands a saved event search may start with. Anything else is a normal search and must not gain a leading pipe. */
+const PIPE_COMMANDS = new Set([
+    'bin',
+    'chart',
+    'datamodel',
+    'from',
+    'gentimes',
+    'inputlookup',
+    'loadjob',
+    'makeresults',
+    'mcatalog',
+    'metadata',
+    'metasearch',
+    'mpreview',
+    'mstats',
+    'rest',
+    'savedsearch',
+    'search',
+    'stats',
+    'timechart',
+    'tstats',
+    'union',
+    'walklex',
+]);
+
+/**
+ * A free event search. `timechart count` becomes `| timechart count`.
+ * `index=_internal | timechart count by host` stays as written, because a leading pipe would make `index=` a command.
+ */
+export function freeSearchSpl(spl: string): string {
+    const trimmed = spl.trim();
+    if (!trimmed) {
+        throw new Error('Search is empty.');
+    }
+    if (trimmed.startsWith('|')) {
+        return trimmed;
+    }
+    const head = trimmed.split('|', 1)[0]?.trim() ?? '';
+    const command = (head.split(/\s+/)[0] ?? '').toLowerCase();
+    if (/^[a-z_][a-z0-9_]*$/.test(command) && PIPE_COMMANDS.has(command)) {
+        return `| ${trimmed}`;
+    }
+    return trimmed;
+}
+
 /** The search one series runs, including its time shift. Throws when the series cannot be searched. */
 export function buildSeriesSearch(
     item: Series,
@@ -17,11 +62,7 @@ export function buildSeriesSearch(
     trellisBy = ''
 ): SeriesQuery {
     if (item.source === 'search') {
-        const spl = item.field.trim();
-        if (!spl) {
-            throw new Error('Search is empty.');
-        }
-        return { search: spl.startsWith('|') ? spl : `| ${spl}`, earliest, latest };
+        return { search: freeSearchSpl(item.field), earliest, latest };
     }
     const chosen = resolveForSource(item.source, item.aggregation);
     if (!chosen) {
