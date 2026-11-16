@@ -23,9 +23,10 @@ test('the app name, icons, dashboards link, and documentation view are packaged'
     const nav = fs.readFileSync(path.join(root, 'app/default/data/ui/nav/default.xml'), 'utf8');
     expect(nav).toContain('<view name="workspaces"/>');
     expect(nav).toContain('<view name="dashboards"/>');
-    expect(nav).toContain('<view name="documentation"/>');
+    expect(nav).not.toContain('documentation');
     const docs = fs.readFileSync(path.join(root, 'app/default/data/ui/views/documentation.xml'), 'utf8');
     const docsDe = fs.readFileSync(path.join(root, 'app/default/data/ui/views/documentation_de.xml'), 'utf8');
+    expect(docs).toContain('isVisible="false"');
     expect(docs).toContain('<label>Documentation</label>');
     expect(docs).toContain('docs-annotated-en.png');
     expect(docs).not.toContain('docs-annotated-de.png');

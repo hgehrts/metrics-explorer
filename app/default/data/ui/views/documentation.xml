@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<dashboard version="1.1" stylesheet="docs.css" script="docs.js" hideEdit="true" hideExport="true">
+<dashboard version="1.1" stylesheet="docs.css" script="docs.js" hideEdit="true" hideExport="true" isVisible="false">
   <label>Documentation</label>
   <description>Areas and functions of Metric Explorer NG.</description>
   <row>
