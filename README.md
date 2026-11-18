@@ -8,7 +8,7 @@ Browse Splunk metric indexes and chart them without writing SPL.
 
 Splunk removes the Analytics Workspace in Splunk Enterprise 10.6 and Splunk Cloud Platform 10.6 and does not ship a replacement. Metric Explorer NG is the app I built so that work still has a place: open a metric, see the chart, split it, filter it, and save it. The app covers the Analytics Workspace 2.56.0 functions and keeps a few additions that were already useful in daily work: events, datasets, base searches, named workspaces, the full `mstats` aggregations, and a global time span.
 
-The current package is [1.6](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.6.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
+The current package is [1.7](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.7.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
 
 ## Documentation
 
@@ -152,8 +152,12 @@ Indexes is its own section, above Metrics, and it collapses like the others. Che
 
 #### 21. Title
 
-- Shows the metric names of the series. With four or more name parts, the first stays, then `<...>`, then the last. Shorter names stay whole.
-- Hover and the accessible name show the full name. PNG export uses the full title.
+- Shows the metric names of the series. Click the title or the pencil to edit it.
+- Commas separate series. A formula such as `(ifInOctets + ifOutOctets) * 8` becomes one calculated series. `AS Gesamt` sets the legend name.
+- Short catalog names are accepted when they are unique. Quoted names work when a dash would otherwise look like minus.
+- Confirming the line runs the new SPL first. A parser or search error leaves the chart unchanged.
+- All metrics in a formula share the series aggregation and filters.
+- With four or more name parts, the first stays, then `<...>`, then the last. Shorter names stay whole.
 - Time charts also show the effective span, for example `(Time span=30s)`.
 - A click on the card selects the chart. Analysis on the right belongs to that selection.
 
@@ -162,9 +166,9 @@ Indexes is its own section, above Metrics, and it collapses like the others. Che
 - Arrow: collapse the chart or expand it again. The title stays.
 - Four arrows: give the chart the tall height, or restore it.
 - Three dots:
-- Open in Search opens the chart's SPL in a new search.
+- Open in Search opens the chart's SPL in a new search. Several series in one chart become one search (`append` and a join on `_time`).
 - Clone this panel copies the chart.
-- Search related events opens an event search for the time range and the filters.
+- Search related events opens an event search for the time range and the filters. Several series offer one entry each.
 - Save as scheduled alert and Save as streaming alert.
 - Save to Classic Dashboards and Save to Dashboard Studio write this one chart.
 - Save as report and Save as base search.

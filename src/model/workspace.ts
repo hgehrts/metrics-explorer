@@ -2,6 +2,7 @@ import { t } from '../i18n';
 import { ReferenceLine } from '../chart/reference';
 import { ChartSettings, defaultSettings } from '../chart/settings';
 import { resolveEventFunction, resolveMetricFunction, SeriesSource } from '../spl/functions';
+import { formulaMetrics, TitlePart } from '../spl/titleFormula';
 
 export type SeriesFilter = {
     dimension: string;
@@ -14,8 +15,10 @@ export type Series = {
     /** Metric name, event sourcetype, or data model name, depending on source. */
     metric: string;
     source: SeriesSource;
-    /** The tstats field, or the measure of a base search. Empty for count, and unused for metrics. */
+    /** The tstats field, the measure of a base search, or a calc formula. Empty for count. */
     field: string;
+    /** Display name from `AS` in the title row. Empty keeps the metric or formula. */
+    label?: string;
     /** live runs a base search now. cached loads its last scheduled result. */
     baseMode?: 'live' | 'cached';
     /** Owner of a base search, used in the loadjob path. */
@@ -135,17 +138,137 @@ export function cloneSeries(item: Series): Series {
     return { ...item, id: nextId('series'), filters: item.filters.map((filter) => ({ ...filter, values: [...filter.values] })), referenceLines: [...item.referenceLines] };
 }
 
+/** Metric names a series draws: one metric, or the operands of a formula. */
+export function seriesMetricNames(item: { metric: string; source?: string; field?: string }): string[] {
+    if (item.source === 'calc') {
+        const names = formulaMetrics(item.field || item.metric);
+        return names.length > 0 ? names : item.metric ? [item.metric] : [];
+    }
+    if ((item.source ?? 'metric') === 'metric') {
+        return item.metric ? [item.metric] : [];
+    }
+    return [];
+}
+
+/** Shared dimensions of a series once every operand's catalog list is loaded. */
+export function seriesDimensions(
+    item: { metric: string; source?: string; field?: string },
+    metricDims: Record<string, string[]>
+): string[] | undefined {
+    const names = seriesMetricNames(item);
+    if (names.length === 0) {
+        return metricDims[item.metric];
+    }
+    if (names.some((name) => !metricDims[name])) {
+        return undefined;
+    }
+    return sharedDimensions(names, metricDims);
+}
+
 /** The global filters a series gets: all of them for a metric with those dimensions, none for events and datasets. */
 export function globalFiltersFor(
-    item: { source?: string; metric: string },
+    item: { source?: string; metric: string; field?: string },
     filters: SeriesFilter[],
     metricDims: Record<string, string[]>
 ): SeriesFilter[] {
-    if ((item.source ?? 'metric') !== 'metric') {
+    if ((item.source ?? 'metric') !== 'metric' && item.source !== 'calc') {
         return [];
     }
-    const known = metricDims[item.metric];
+    const known = seriesDimensions(item, metricDims);
     return known ? filters.filter((filter) => known.includes(filter.dimension)) : filters;
+}
+
+function sameFilters(left: SeriesFilter[], right: SeriesFilter[]): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/** Why a title line cannot become series yet. Empty when it can. */
+export function titleLineError(chart: ChartModel, parts: TitlePart[]): string {
+    for (const part of parts) {
+        if (part.kind !== 'calc') {
+            continue;
+        }
+        const existing = part.metrics
+            .map((name) => chart.series.find((item) => (item.source ?? 'metric') === 'metric' && item.metric === name))
+            .filter((item): item is Series => Boolean(item));
+        if (existing.length < 2) {
+            continue;
+        }
+        const aggregation = existing[0].aggregation;
+        if (existing.some((item) => item.aggregation !== aggregation)) {
+            return 'A formula needs the same aggregation on every metric.';
+        }
+        if (existing.some((item) => !sameFilters(item.filters, existing[0].filters))) {
+            return 'A formula needs the same filters on every metric.';
+        }
+    }
+    return '';
+}
+
+function matchesPart(item: Series, part: TitlePart): boolean {
+    if (part.kind === 'calc') {
+        return item.source === 'calc' && (item.field === part.text || item.metric === part.text);
+    }
+    return (item.source ?? 'metric') !== 'calc' && item.metric === part.metrics[0];
+}
+
+function templateForPart(chart: ChartModel, part: TitlePart): Series | undefined {
+    for (const name of part.metrics) {
+        const found = chart.series.find((item) => (item.source ?? 'metric') === 'metric' && item.metric === name);
+        if (found) {
+            return found;
+        }
+    }
+    return chart.series.find((item) => (item.source ?? 'metric') === 'metric' || item.source === 'calc');
+}
+
+/** Rebuilds the chart series from a parsed title line. Existing matching series keep their settings. */
+export function applyTitleParts(chart: ChartModel, parts: TitlePart[]): ChartModel {
+    const used = new Set<string>();
+    const next: Series[] = [];
+    for (const part of parts) {
+        const found = chart.series.find((item) => !used.has(item.id) && matchesPart(item, part));
+        if (found) {
+            used.add(found.id);
+            next.push({
+                ...found,
+                label: part.label ?? '',
+                metric: part.kind === 'calc' ? part.text : part.metrics[0],
+                field: part.kind === 'calc' ? part.text : found.field,
+                source: part.kind === 'calc' ? 'calc' : found.source,
+            });
+            continue;
+        }
+        const template = templateForPart(chart, part);
+        const created = createSeries(
+            part.kind === 'calc' ? part.text : part.metrics[0],
+            template?.filters.map((filter) => ({ ...filter, values: [...filter.values] })) ?? [],
+            part.kind === 'calc' ? 'calc' : 'metric'
+        );
+        created.label = part.label ?? '';
+        if (part.kind === 'calc') {
+            created.field = part.text;
+            created.aggregation = template?.aggregation ?? created.aggregation;
+            created.splitBy = template?.splitBy ?? created.splitBy;
+            created.splitDirection = template?.splitDirection ?? created.splitDirection;
+            created.splitLimit = template?.splitLimit ?? created.splitLimit;
+        }
+        next.push(created);
+    }
+    if (next.length === 0) {
+        throw new Error('Enter a metric name or a formula.');
+    }
+    return { ...chart, series: next };
+}
+
+/** The editable title row: metrics, formulas, and AS labels. */
+export function chartTitleText(chart: Pick<ChartModel, 'series'>): string {
+    return chart.series
+        .map((item) => {
+            const core = item.source === 'calc' ? item.field || item.metric : item.metric;
+            return item.label ? `${core} AS ${item.label}` : core;
+        })
+        .join(', ');
 }
 
 let sequence = 0;
@@ -157,16 +280,17 @@ function nextId(prefix: string): string {
 
 /** Legend and analysis subtitle. A time shift is shown as `(-30m)`. Different metrics in one chart keep the metric name. */
 export function seriesLegend(
-    series: Pick<Series, 'metric' | 'aggregation' | 'splitBy' | 'timeShift'>,
-    siblings: Array<Pick<Series, 'metric'>> = [series]
+    series: Pick<Series, 'metric' | 'aggregation' | 'splitBy' | 'timeShift' | 'label'>,
+    siblings: Array<Pick<Series, 'metric' | 'label'>> = [series]
 ): string {
     const chosen = resolveMetricFunction(series.aggregation) ?? resolveEventFunction(series.aggregation);
     const aggregation = chosen?.label ?? series.aggregation;
-    const severalMetrics = new Set(siblings.map((item) => item.metric)).size > 1;
+    const name = series.label?.trim() || series.metric;
+    const severalMetrics = new Set(siblings.map((item) => item.label?.trim() || item.metric)).size > 1;
     const base = series.splitBy
         ? `${aggregation} ${t('by')} ${series.splitBy}`
         : severalMetrics
-          ? `${series.metric} ${aggregation}`
+          ? `${name} ${aggregation}`
           : aggregation;
     return series.timeShift ? `${base} (-${series.timeShift})` : base;
 }
@@ -177,9 +301,10 @@ export function createSeries(metric: string, filters: SeriesFilter[] = [], sourc
         metric,
         source,
         field: '',
+        label: '',
         baseMode: 'live',
         baseOwner: '',
-        aggregation: source === 'metric' ? 'Avg' : source === 'search' ? 'Search' : 'Count',
+        aggregation: source === 'metric' || source === 'calc' ? 'Avg' : source === 'search' ? 'Search' : 'Count',
         // The workspace split is a metric dimension. Events, datasets, and saved searches start unsplit.
         splitBy: source === 'event' || source === 'dataset' || source === 'search' ? '' : INHERIT_SPLIT,
         splitDirection: 'highest',
@@ -205,7 +330,7 @@ export function withTrellisValue(chart: ChartModel, dimension: string, value: st
     return {
         ...chart,
         series: chart.series.map((item) =>
-            (item.source ?? 'metric') === 'metric'
+            (item.source ?? 'metric') === 'metric' || item.source === 'calc'
                 ? { ...item, filters: [...item.filters, { dimension, mode: 'include', values: [value] }] }
                 : item
         ),

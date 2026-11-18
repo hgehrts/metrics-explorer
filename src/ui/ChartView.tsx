@@ -13,13 +13,13 @@ import { formatStatColumns, formatTimeCell } from '../chart/stats';
 import { HeatmapChart } from './HeatmapChart';
 import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
 import { chartPng, chartSvg, safeFileName } from '../export/png';
-import { ChartModel, globalFiltersFor, GlobalSplitLimit, hasSplitValues, resolveSeries, SeriesFilter, seriesLegend } from '../model/workspace';
+import { chartTitleText, ChartModel, globalFiltersFor, GlobalSplitLimit, hasSplitValues, resolveSeries, Series, SeriesFilter, seriesLegend, seriesMetricNames } from '../model/workspace';
 import { DropdownMenu, MenuItem } from './Menu';
 import { runSearch, SearchRow } from '../search/runSearch';
 import { buildReferenceValueSearch, relatedEventsSearch } from '../spl/buildMstats';
 import { resolveForSource } from '../spl/functions';
 import { estimatedPoints, spanForRange } from '../spl/span';
-import { buildSeriesSearch } from '../spl/seriesSearch';
+import { buildChartSearch, buildSeriesSearch } from '../spl/seriesSearch';
 import { t } from '../i18n';
 import { zoomWindow } from '../chart/zoom';
 import { formatTooltipValue } from '../chart/tooltip';
@@ -86,6 +86,27 @@ const IconAction = styled.button`
     }
 `;
 
+const TitleInput = styled.input`
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0 6px 0 0;
+    padding: 1px 4px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 14px;
+    border: 1px solid ${variables.interactiveColorPrimary};
+    border-radius: 4px;
+    background: ${variables.backgroundColorSection};
+    color: ${variables.contentColorDefault};
+`;
+
+const TitleError = styled.div`
+    margin: 4px 0 0;
+    color: ${variables.accentColorNegative};
+    font-size: 12px;
+    font-weight: 400;
+`;
+
 /** A metric name that stays whole when the line is wide enough and shortens only when it is not. */
 export function FittingTitle(props: { text: string }): React.ReactElement {
     const ref = useRef<HTMLHeadingElement>(null);
@@ -125,6 +146,130 @@ export function FittingTitle(props: { text: string }): React.ReactElement {
         >
             {shown}
         </h2>
+    );
+}
+
+/** Click-to-edit chart title. Formulas and AS labels are committed through `onCommit`. */
+export function ChartTitleEditor(props: {
+    text: string;
+    catalog?: string[];
+    onCommit?: (text: string) => Promise<void>;
+}): React.ReactElement {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(props.text);
+    const [error, setError] = useState('');
+    const [busy, setBusy] = useState(false);
+    useEffect(() => {
+        if (!editing) {
+            setDraft(props.text);
+            setError('');
+        }
+    }, [props.text, editing]);
+
+    async function commit(): Promise<void> {
+        if (!props.onCommit) {
+            setEditing(false);
+            return;
+        }
+        const next = draft.trim();
+        if (!next || next === props.text) {
+            setEditing(false);
+            setError('');
+            return;
+        }
+        setBusy(true);
+        setError('');
+        try {
+            await props.onCommit(next);
+            setEditing(false);
+        } catch (caught) {
+            setError(caught instanceof Error ? t(caught.message) : t('Could not apply the title.'));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    if (!props.onCommit) {
+        return <FittingTitle text={props.text} />;
+    }
+    if (editing) {
+        return (
+            <div style={{ flex: '1 1 auto', minWidth: 0 }} onClick={(event) => event.stopPropagation()}>
+                <TitleInput
+                    aria-label={t('Chart title')}
+                    list="mx-title-metrics"
+                    value={draft}
+                    disabled={busy}
+                    autoFocus
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void commit();
+                        }
+                        if (event.key === 'Escape') {
+                            event.preventDefault();
+                            setDraft(props.text);
+                            setError('');
+                            setEditing(false);
+                        }
+                    }}
+                />
+                <datalist id="mx-title-metrics">
+                    {(props.catalog ?? []).map((name) => (
+                        <option key={name} value={name} />
+                    ))}
+                </datalist>
+                {busy ? <TitleError>{t('Testing the search…')}</TitleError> : null}
+                {error ? (
+                    <TitleError role="alert">
+                        {error}
+                    </TitleError>
+                ) : null}
+            </div>
+        );
+    }
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, flex: '1 1 auto' }}>
+            <button
+                type="button"
+                onClick={(event) => {
+                    event.stopPropagation();
+                    setDraft(props.text);
+                    setEditing(true);
+                }}
+                aria-label={t('Edit chart title')}
+                title={t('Edit chart title')}
+                style={{
+                    display: 'inline',
+                    margin: 0,
+                    padding: 0,
+                    border: 0,
+                    background: 'transparent',
+                    color: 'inherit',
+                    font: 'inherit',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    textAlign: 'left',
+                    cursor: 'text',
+                    minWidth: 0,
+                }}
+            >
+                <FittingTitle text={props.text} />
+            </button>
+            <IconAction
+                type="button"
+                aria-label={t('Edit chart title')}
+                title={t('Edit chart title')}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    setDraft(props.text);
+                    setEditing(true);
+                }}
+            >
+                ✎
+            </IconAction>
+        </span>
     );
 }
 
@@ -223,6 +368,14 @@ const Empty = styled.div`
     font-size: 13px;
 `;
 
+function relatedSeries(item: Series): { source?: string; name: string } {
+    if (item.source === 'calc') {
+        const names = seriesMetricNames(item);
+        return { source: 'metric', name: names[0] ?? item.metric };
+    }
+    return { source: item.source, name: item.metric };
+}
+
 export type ChartSaveMode = 'report' | 'panel-classic' | 'panel-studio' | 'base' | 'alert-scheduled' | 'alert-streaming';
 
 type SeriesResult = {
@@ -268,6 +421,8 @@ export function ChartView(props: {
     compact?: boolean;
     plotHeight?: number;
     titleText?: string;
+    catalog?: string[];
+    onEditTitle?: (text: string) => Promise<void>;
 }): React.ReactElement {
     const [results, setResults] = useState<SeriesResult[]>([]);
     const [referenceNumbers, setReferenceNumbers] = useState<Array<number | null | undefined>>([]);
@@ -458,7 +613,7 @@ export function ChartView(props: {
     if (!categorical && stats.columns[0]) {
         stats.columns[0] = stats.columns[0].map((value) => formatTimeCell(value, locale));
     }
-    const title = props.titleText ?? [...new Set(props.chart.series.map((item) => item.metric))].join(', ');
+    const title = props.titleText ?? chartTitleText(props.chart);
     const titleBox = useRef<HTMLDivElement>(null);
     const [fits, setFits] = useState(true);
     useLayoutEffect(() => {
@@ -487,18 +642,36 @@ export function ChartView(props: {
     const visual = visualFor(props.chart.settings.type);
     const Viz = (visual.kind === 'area' ? Area : visual.kind === 'column' ? Column : Line) as typeof Line;
     const first = results[0];
+    let chartQuery: { search: string; earliest: string; latest: string } | null = null;
+    try {
+        chartQuery = buildChartSearch(
+            shown,
+            span,
+            timeWindow.earliest,
+            timeWindow.latest,
+            props.eventIndexes,
+            props.metricIndexes,
+            categorical
+        );
+    } catch {
+        chartQuery = first ? { search: first.search, earliest: first.earliest, latest: first.latest } : null;
+    }
 
     return (
         <Card ref={cardRef} $selected={props.selected} $compact={Boolean(props.compact)} onClick={props.onSelect}>
             <TitleRow>
                 <Title ref={titleBox}>
-                    <h2
-                        title={shownTitle === title ? undefined : title}
-                        aria-label={title}
-                        style={{ whiteSpace: fits ? 'nowrap' : 'normal' }}
-                    >
-                        {shownTitle}
-                    </h2>
+                    {props.compact || !props.onEditTitle ? (
+                        <h2
+                            title={shownTitle === title ? undefined : title}
+                            aria-label={title}
+                            style={{ whiteSpace: fits ? 'nowrap' : 'normal' }}
+                        >
+                            {shownTitle}
+                        </h2>
+                    ) : (
+                        <ChartTitleEditor text={title} catalog={props.catalog} onCommit={props.onEditTitle} />
+                    )}
                     {categorical ? null : <span>({t('Time span')}={span})</span>}
                 </Title>
                 {props.compact ? null : (
@@ -531,13 +704,17 @@ export function ChartView(props: {
                         {(close) => (
                             <>
                                 <MenuItem
-                                    disabled={!first?.search}
+                                    disabled={!chartQuery?.search}
                                     onClick={() => {
                                         close();
-                                        if (!first?.search) {
+                                        if (!chartQuery?.search) {
                                             return;
                                         }
-                                        window.open(splunkSearchUrl(locale ?? 'en-US', first.search, first.earliest, first.latest), '_blank', 'noopener');
+                                        window.open(
+                                            splunkSearchUrl(locale ?? 'en-US', chartQuery.search, chartQuery.earliest, chartQuery.latest),
+                                            '_blank',
+                                            'noopener'
+                                        );
                                     }}
                                 >
                                     {t('Open in Search')}
@@ -550,29 +727,34 @@ export function ChartView(props: {
                                 >
                                     {t('Clone this panel')}
                                 </MenuItem>
-                                <MenuItem
-                                    onClick={() => {
-                                        close();
-                                        const item = props.chart.series[0];
-                                        window.open(
-                                            splunkSearchUrl(
-                                                locale ?? 'en-US',
-                                                relatedEventsSearch({
-                                                    source: item?.source,
-                                                    name: item?.metric ?? '',
-                                                    filters: item?.filters,
-                                                    indexes: props.eventIndexes,
-                                                }),
-                                                timeWindow.earliest,
-                                                timeWindow.latest
-                                            ),
-                                            '_blank',
-                                            'noopener'
-                                        );
-                                    }}
-                                >
-                                    {t('Search related events')}
-                                </MenuItem>
+                                {props.chart.series.map((item) => (
+                                    <MenuItem
+                                        key={`related-${item.id}`}
+                                        onClick={() => {
+                                            close();
+                                            const related = relatedSeries(item);
+                                            window.open(
+                                                splunkSearchUrl(
+                                                    locale ?? 'en-US',
+                                                    relatedEventsSearch({
+                                                        source: related.source,
+                                                        name: related.name,
+                                                        filters: item.filters,
+                                                        indexes: props.eventIndexes,
+                                                    }),
+                                                    timeWindow.earliest,
+                                                    timeWindow.latest
+                                                ),
+                                                '_blank',
+                                                'noopener'
+                                            );
+                                        }}
+                                    >
+                                        {props.chart.series.length > 1
+                                            ? `${t('Search related events')}: ${item.label || item.metric}`
+                                            : t('Search related events')}
+                                    </MenuItem>
+                                ))}
                                 {(
                                     [
                                         ['alert-scheduled', 'Save as scheduled alert'],

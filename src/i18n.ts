@@ -516,6 +516,23 @@ const GERMAN: Record<string, string> = {
     'Filter values cannot span lines.': 'Filterwerte dürfen keine Zeilenumbrüche enthalten.',
     'Use letters, numbers, and . _ : -. Start with a letter or number. No spaces.':
         'Verwenden Sie Buchstaben, Ziffern und . _ : -. Beginnen Sie mit einem Buchstaben oder einer Ziffer. Keine Leerzeichen.',
+    'Enter a metric name or a formula.': 'Geben Sie einen Metriknamen oder eine Formel ein.',
+    'Unexpected character.': 'Unerwartetes Zeichen.',
+    'This formula has unbalanced parentheses.': 'In dieser Formel fehlen Klammern.',
+    'This formula has unbalanced quotes.': 'In dieser Formel fehlen Anführungszeichen.',
+    'Enter a name after AS.': 'Geben Sie nach AS einen Namen ein.',
+    'That label is not allowed.': 'Diese Beschriftung ist nicht zulässig.',
+    'A formula needs a metric.': 'Eine Formel braucht eine Metrik.',
+    'Formula is not allowed.': 'Die Formel ist nicht zulässig.',
+    'A formula needs the same aggregation on every metric.': 'Eine Formel braucht dieselbe Aggregation für jede Metrik.',
+    'A formula needs the same filters on every metric.': 'Eine Formel braucht dieselben Filter für jede Metrik.',
+    'Could not apply the title.': 'Der Titel konnte nicht übernommen werden.',
+    'Testing the search…': 'Suche wird geprüft…',
+    'Edit chart title': 'Diagrammtitel bearbeiten',
+    'Chart title': 'Diagrammtitel',
+    'A streaming alert can use only one series.': 'Eine Streaming-Benachrichtigung kann nur eine Reihe verwenden.',
+    'A base search can use only one series.': 'Eine Base Search kann nur eine Reihe verwenden.',
+    'Time range is not allowed.': 'Der Zeitraum ist nicht zulässig.',
 };
 
 export function t(text: string): string {

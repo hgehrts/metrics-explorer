@@ -81,7 +81,7 @@ export const EVENT_FUNCTIONS: MetricFunction[] = [
 
 const EVENT_BY_NAME = new Map(EVENT_FUNCTIONS.map((entry) => [entry.name, entry]));
 
-export type SeriesSource = 'metric' | 'event' | 'dataset' | 'base' | 'search';
+export type SeriesSource = 'metric' | 'event' | 'dataset' | 'base' | 'search' | 'calc';
 
 /** A saved SPL search is already a chart. It has no aggregation to pick. */
 const SEARCH_FUNCTION: MetricFunction = { name: 'search', label: 'Search', chart: 'line', rate: false };
@@ -128,14 +128,14 @@ export function resolveForSource(source: SeriesSource | undefined, value: string
     if (source === 'search') {
         return SEARCH_FUNCTION;
     }
-    return (source ?? 'metric') === 'metric' ? resolveMetricFunction(value) : resolveEventFunction(value);
+    return (source ?? 'metric') === 'metric' || source === 'calc' ? resolveMetricFunction(value) : resolveEventFunction(value);
 }
 
 export function functionsFor(source: SeriesSource): MetricFunction[] {
     if (source === 'search') {
         return [];
     }
-    return source === 'metric' ? METRIC_FUNCTIONS : EVENT_FUNCTIONS;
+    return source === 'metric' || source === 'calc' ? METRIC_FUNCTIONS : EVENT_FUNCTIONS;
 }
 
 /** count is the only tstats function that does not take a field. */

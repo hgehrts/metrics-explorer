@@ -60,6 +60,33 @@ export function runSearch(
     };
 }
 
+/** One result set, then the job is cancelled. Used to test a title line before the chart changes. */
+export function runSearchOnce(
+    search: string,
+    earliest: string,
+    latest = 'now'
+): Promise<{ rows: SearchRow[]; error?: string }> {
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (result: { rows: SearchRow[]; error?: string }): void => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            stop();
+            resolve(result);
+        };
+        const stop = runSearch(
+            search,
+            earliest,
+            (payload) => finish({ rows: payload.results ?? [] }),
+            (message) => finish({ rows: [], error: message }),
+            latest
+        );
+        window.setTimeout(() => finish({ rows: [], error: 'Search failed.' }), 30000);
+    });
+}
+
 /** Fields every metric data point has. mcatalog leaves them out of `_dims`, but they split and filter like dimensions. */
 export const DEFAULT_DIMENSIONS = ['host', 'source', 'sourcetype'] as const;
 

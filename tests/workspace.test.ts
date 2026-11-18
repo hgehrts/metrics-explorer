@@ -56,6 +56,10 @@ test('a trellis value filters metric series and leaves an event series unchanged
     expect(tiled.id).toBe(chart.id);
     expect(tiled.series[0].filters).toEqual([{ dimension: 'region', mode: 'include', values: ['eu'] }]);
     expect(tiled.series[1].filters).toEqual([]);
+    const calc = createChart('cpu');
+    calc.series[0].source = 'calc';
+    calc.series[0].field = '(cpu + mem) * 8';
+    expect(withTrellisValue(calc, 'region', 'eu').series[0].filters).toEqual([{ dimension: 'region', mode: 'include', values: ['eu'] }]);
     expect(chart.series[0].filters).toEqual([]);
 });
 
@@ -123,6 +127,12 @@ test('keeps distinct series names and shows a time shift in the legend', () => {
             { metric: 'cpu.idle' },
         ])
     ).toBe('cpu.user Avg');
+    expect(
+        seriesLegend({ metric: '(a + b) * 8', aggregation: 'Avg', splitBy: '', timeShift: '', label: 'Gesamt' }, [
+            { metric: '(a + b) * 8', label: 'Gesamt' },
+            { metric: 'cpu.idle' },
+        ])
+    ).toBe('Gesamt Avg');
 });
 
 test('a chart that does not follow the global split draws inherited series unsplit', () => {

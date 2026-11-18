@@ -31,12 +31,14 @@ import { buildAllDimensionSearch, buildDimensionSearch, buildDimensionValueSearc
 import { activeSpan, SPAN_PRESETS } from '../spl/span';
 import { boundForInput } from '../spl/timeRange';
 import { isSeriesFilter } from '../model/session';
-import { collectDimensions, collectFieldValues, collectMetricNames, collectValueMetrics, runSearch } from '../search/runSearch';
+import { collectDimensions, collectFieldValues, collectMetricNames, collectValueMetrics, runSearch, runSearchOnce } from '../search/runSearch';
 import { ReferenceLine, referenceSummary, referenceWindow } from '../chart/reference';
 import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, isCategorical, SPAN_UNITS, splitSpan, validateAxis } from '../chart/settings';
 import {
+    applyTitleParts,
     AUTO_REFRESH_MS,
     ChartModel,
+    chartTitleText,
     cloneChart,
     cloneSeries,
     createChart,
@@ -45,10 +47,15 @@ import {
     GlobalSplitLimit,
     reviveChart,
     createSeries,
+    globalFiltersFor,
     INHERIT_SPLIT,
     refreshStatus,
+    resolveSeries,
     resolveSplit,
+    seriesDimensions,
+    seriesMetricNames,
     sharedDimensions,
+    titleLineError,
     TrellisLayout,
     trellisDimensions,
     withTrellisValue,
@@ -56,7 +63,9 @@ import {
     SeriesFilter,
     seriesLegend,
 } from '../model/workspace';
-import { ChartSaveMode, ChartView, FittingTitle } from './ChartView';
+import { ChartSaveMode, ChartTitleEditor, ChartView } from './ChartView';
+import { parseTitleLine } from '../spl/titleFormula';
+import { buildChartSearch } from '../spl/seriesSearch';
 import { DataLists, ListSection } from './DataLists';
 import { DataFilterForm } from './DataFilterForm';
 import { DropdownMenu, MenuHeading, MenuItem } from './Menu';
@@ -1082,7 +1091,7 @@ export function Explorer(): React.ReactElement {
     /** The series as its header shows it: a split only counts when the metric has that dimension. */
     function headerSeries(item: Series): Series {
         const split = resolveSplit(item, globalSplit, selected?.useGlobalSplit ?? true);
-        const known = metricDims[item.metric];
+        const known = seriesDimensions(item, metricDims);
         return { ...item, splitBy: known && split && !known.includes(split) ? '' : split };
     }
 
@@ -1488,9 +1497,7 @@ export function Explorer(): React.ReactElement {
 
     const selected = charts.find((chart) => chart.id === selectedId) ?? charts[0];
     const globalSplitDimensions = sharedDimensions(
-        (selected?.series ?? [])
-            .filter((item) => (item.source ?? 'metric') === 'metric')
-            .map((item) => item.metric),
+        (selected?.series ?? []).flatMap((item) => seriesMetricNames(item)),
         metricDims
     );
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
@@ -1501,10 +1508,7 @@ export function Explorer(): React.ReactElement {
             if (!dimension) {
                 return '';
             }
-            const metrics = chart.series
-                .filter((item) => (item.source ?? 'metric') === 'metric')
-                .map((item) => item.metric)
-                .join(',');
+            const metrics = chart.series.flatMap((item) => seriesMetricNames(item)).join(',');
             return `${chart.id}:${dimension}:${metrics}`;
         })
         .filter(Boolean)
@@ -1519,10 +1523,7 @@ export function Explorer(): React.ReactElement {
             if (!dimension) {
                 return [];
             }
-            const metrics = chart.series
-                .filter((item) => (item.source ?? 'metric') === 'metric')
-                .map((item) => item.metric)
-                .filter(Boolean);
+            const metrics = chart.series.flatMap((item) => seriesMetricNames(item)).filter(Boolean);
             return [{ id: chart.id, dimension, metrics }];
         });
         for (const job of jobs) {
@@ -1594,7 +1595,7 @@ export function Explorer(): React.ReactElement {
     const chosen = resolveForSource(series?.source, series?.aggregation ?? '');
     const span = activeSpan(globalSpan, zoom?.earliest ?? range, zoom?.latest ?? latest);
     const locale = window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1];
-    const selectedMetrics = new Set(selected?.series.map((item) => item.metric) ?? []);
+    const selectedMetrics = new Set((selected?.series ?? []).flatMap((item) => seriesMetricNames(item)));
 
     useEffect(() => {
         if (!autoRefresh) {
@@ -1610,9 +1611,7 @@ export function Explorer(): React.ReactElement {
     // Metric series of every chart. Their dimensions decide which global filters and splits apply to them.
     const chartMetricKey = [
         ...new Set(
-            charts.flatMap((chart) =>
-                chart.series.filter((item) => (item.source ?? 'metric') === 'metric').map((item) => item.metric)
-            )
+            charts.flatMap((chart) => chart.series.flatMap((item) => seriesMetricNames(item)))
         ),
     ]
         .sort()
@@ -1636,7 +1635,14 @@ export function Explorer(): React.ReactElement {
 
     useEffect(() => {
         setDimensions([]);
-        if (!series?.metric) {
+        if (!series) {
+            return undefined;
+        }
+        if (series.source === 'calc') {
+            setDimensions(seriesDimensions(series, metricDims) ?? []);
+            return undefined;
+        }
+        if (!series.metric) {
             return undefined;
         }
         try {
@@ -1650,7 +1656,7 @@ export function Explorer(): React.ReactElement {
         } catch {
             return undefined;
         }
-    }, [series?.metric, range, latest, metricIndexes]);
+    }, [series?.id, series?.source, series?.metric, series?.field, range, latest, metricIndexes, metricDims]);
 
     useEffect(() => {
         setFilterChoices([]);
@@ -1704,6 +1710,44 @@ export function Explorer(): React.ReactElement {
         chart.series[0].baseMode = mode;
         chart.series[0].baseOwner = owner;
         showNewChart(chart);
+    }
+
+    async function commitChartTitle(chartId: string, text: string): Promise<void> {
+        const chart = charts.find((item) => item.id === chartId);
+        if (!chart) {
+            throw new Error('Enter a metric name or a formula.');
+        }
+        const catalog = [...new Set([...names, ...chart.series.flatMap((item) => seriesMetricNames(item))])];
+        const parts = parseTitleLine(text, catalog);
+        const problem = titleLineError(chart, parts);
+        if (problem) {
+            throw new Error(problem);
+        }
+        const next = applyTitleParts(chart, parts);
+        const resolved = resolveSeries(next.series, globalSplit, next.useGlobalSplit, globalLimit).map((item) => ({
+            ...item,
+            filters: [...globalFiltersFor(item, globalFilters, metricDims), ...item.filters],
+        }));
+        const query = buildChartSearch(
+            resolved,
+            next.settings.span || span,
+            zoom?.earliest ?? range,
+            zoom?.latest ?? latest,
+            eventIndexes,
+            metricIndexes,
+            isCategorical(next.settings.type),
+            next.trellis?.dimension && resolved.some((item) => (item.source ?? 'metric') === 'metric' || item.source === 'calc')
+                ? next.trellis.dimension
+                : ''
+        );
+        const probed = await runSearchOnce(`${query.search} | head 1`, query.earliest, query.latest);
+        if (probed.error) {
+            throw new Error(probed.error);
+        }
+        setCharts((current) => current.map((item) => (item.id === chartId ? next : item)));
+        setSelectedId(chartId);
+        setSelectedSeriesId(next.series[0]?.id ?? '');
+        refreshNow();
     }
 
     function addToSelected(metricName: string, filter?: MetricNode['filter'], source: SeriesSource = 'metric'): void {
@@ -2731,6 +2775,8 @@ export function Explorer(): React.ReactElement {
                                 metricDims,
                                 eventIndexes,
                                 metricIndexes,
+                                catalog: names,
+                                onEditTitle: (text: string) => commitChartTitle(chart.id, text),
                                 zoom,
                                 onZoom: setZoom,
                                 selected: chart.id === selected?.id,
@@ -2778,7 +2824,11 @@ export function Explorer(): React.ReactElement {
                                 return (
                                     <TrellisBoard key={chart.id}>
                                         <TrellisHead>
-                                            <FittingTitle text={chart.series.map((item) => item.metric).join(', ')} />
+                                            <ChartTitleEditor
+                                                text={chartTitleText(chart)}
+                                                catalog={names}
+                                                onCommit={(text) => commitChartTitle(chart.id, text)}
+                                            />
                                             <TrellisClose type="button" aria-label={t('Remove chart')} onClick={view.onRemove}>
                                                 ×
                                             </TrellisClose>
@@ -2846,7 +2896,7 @@ export function Explorer(): React.ReactElement {
                         <Field as="div">
                             <Select aria-label={t('Filter dimension')} value={filterDimension} onChange={(event) => setFilterDimension(event.target.value)}>
                                 <option value="">{t('Select a dimension')}</option>
-                                {((series.source ?? 'metric') === 'metric' ? dimensions : sourceFields).map((name) => (
+                                {((series.source ?? 'metric') === 'metric' || series.source === 'calc' ? dimensions : sourceFields).map((name) => (
                                     <option key={name} value={name}>
                                         {name}
                                     </option>
@@ -3091,12 +3141,12 @@ export function Explorer(): React.ReactElement {
                             type="button"
                             $open={item.id === expandedSeriesId}
                             aria-expanded={item.id === expandedSeriesId}
-                            aria-label={`${t('Settings for')} ${item.metric}`}
+                            aria-label={`${t('Settings for')} ${item.label || item.metric}`}
                             onClick={() => toggleSeries(item.id)}
                         >
                             <span aria-hidden>{item.id === expandedSeriesId ? '▾' : '▸'}</span>
                             <span>
-                                {item.metric}
+                                {item.label || item.metric}
                                 <Help>{seriesLegend(headerSeries(item), (selected?.series ?? []).map(headerSeries))}</Help>
                             </span>
                         </SeriesHeader>
@@ -3117,6 +3167,28 @@ export function Explorer(): React.ReactElement {
                             <Help>{t('Select or type an aggregation.')}</Help>
                             {(series.source ?? 'metric') === 'search' ? (
                                 <Note>{series.field}</Note>
+                            ) : series.source === 'calc' ? (
+                                <>
+                                    <Note>{series.field || series.metric}</Note>
+                                    <AggregationField
+                                        label={t('Aggregation')}
+                                        source="calc"
+                                        categorical={isCategorical(selected.settings.type ?? '')}
+                                        value={series.aggregation}
+                                        onChange={(aggregation) => {
+                                            const next = resolveForSource('calc', aggregation);
+                                            patchSeries({ aggregation });
+                                            if (next?.chart === 'table' && selected.settings.content === 'chart') {
+                                                const othersPlot = selected.series.some(
+                                                    (item) =>
+                                                        item.id !== series.id &&
+                                                        resolveForSource(item.source, item.aggregation)?.chart !== 'table'
+                                                );
+                                                patchSettings({ content: othersPlot ? 'both' : 'table' });
+                                            }
+                                        }}
+                                    />
+                                </>
                             ) : (
                                 <AggregationField
                                     label={t('Aggregation')}
@@ -3137,7 +3209,10 @@ export function Explorer(): React.ReactElement {
                                     }}
                                 />
                             )}
-                            {(series.source ?? 'metric') !== 'metric' && (series.source ?? 'metric') !== 'search' && needsField(chosen?.name ?? '') ? (
+                            {(series.source ?? 'metric') !== 'metric' &&
+                            (series.source ?? 'metric') !== 'search' &&
+                            series.source !== 'calc' &&
+                            needsField(chosen?.name ?? '') ? (
                                 <>
                                     <TextInput
                                         aria-label={t('Event field')}
@@ -3241,7 +3316,7 @@ export function Explorer(): React.ReactElement {
                                     <option value={INHERIT_SPLIT}>{t('Inherit Global Split By')}</option>
                                 )}
                                 {splitChoices(
-                                    (series.source ?? 'metric') === 'metric' ? dimensions : sourceFields,
+                                    (series.source ?? 'metric') === 'metric' || series.source === 'calc' ? dimensions : sourceFields,
                                     series.splitBy === INHERIT_SPLIT ? '' : series.splitBy
                                 ).map((name) => (
                                     <option key={name} value={name}>

@@ -1,5 +1,6 @@
 import { resolveEventFunction, resolveMetricFunction } from './functions';
 import { parseTimeShift } from './timeShift';
+import { assertEvalExpr } from './titleFormula';
 
 const IDENTIFIER = /^[A-Za-z0-9_.:-]+$/;
 const SPAN = /^\d+(s|m|h|d)$/;
@@ -193,6 +194,78 @@ export function buildMstats(input: {
     }
     const rank = input.splitDirection === 'lowest' ? `min in bottom${limit}` : `max in top${limit}`;
     const shifted = `${base} AS value WHERE ${where} span=${input.span} BY ${input.splitBy}${timeShiftClause(input.timeShift)}`;
+    return `${shifted} | chart useother=false first(value) over _time BY ${input.splitBy} WHERE ${rank}`;
+}
+
+/** One mstats with several aggregations, then an eval that becomes the plotted `value`. */
+export function buildCalcMstats(input: {
+    aggregation: string;
+    metrics: string[];
+    evalExpr: string;
+    span: string;
+    splitBy?: string;
+    splitLimit?: number;
+    splitDirection?: 'highest' | 'lowest';
+    timeShift?: string;
+    filters?: MetricFilter[];
+    indexes?: string[];
+    categorical?: boolean;
+    trellisBy?: string;
+}): string {
+    const aggregation = resolveMetricFunction(input.aggregation);
+    if (!aggregation) {
+        throw new Error('Unknown aggregation.');
+    }
+    if (input.categorical && aggregation.rate) {
+        throw new Error('Rate aggregations are not available for a categorical chart.');
+    }
+    const metrics = [...new Set(input.metrics.map((name) => name.trim()).filter(Boolean))];
+    if (metrics.length === 0) {
+        throw new Error('A formula needs a metric.');
+    }
+    metrics.forEach((name) => assertIdentifier(name, 'Metric name'));
+    assertEvalExpr(input.evalExpr, metrics.length);
+    if (!input.categorical && !SPAN.test(input.span)) {
+        throw new Error('Span is not allowed.');
+    }
+    const indexClause = metricIndexClause(input.indexes);
+    const aggs = metrics.map((name, index) => `${aggregation.name}(${quoteSpl(name)}) AS m${index + 1}`).join(' ');
+    const extra = filterClause(input.filters);
+    const where = extra ? `${indexClause} AND ${extra}` : indexClause;
+    const computed = ` | eval value=${input.evalExpr}`;
+    const keep = (fields: string[]): string => ` | fields ${fields.join(', ')}`;
+    if (input.trellisBy) {
+        const trellis = input.trellisBy;
+        assertIdentifier(trellis, 'Filter field');
+        const split = input.splitBy ?? '';
+        if (split) {
+            assertIdentifier(split, 'Split field');
+        }
+        if (input.categorical) {
+            const fields = split ? ['value', trellis, split] : ['value', trellis];
+            return `| mstats ${aggs} WHERE ${where} BY ${split ? `${trellis}, ${split}` : trellis}${computed}${keep(fields)}`;
+        }
+        const tail = ` | timechart span=${input.span} limit=0 useother=f`;
+        if (!split) {
+            return `| mstats ${aggs} WHERE ${where} span=${input.span} BY ${trellis}${computed}${keep(['_time', 'value', trellis])}${timeShiftClause(input.timeShift)}${tail} first(value) AS value BY ${trellis}`;
+        }
+        return `| mstats ${aggs} WHERE ${where} span=${input.span} BY ${trellis}, ${split}${computed}${keep(['_time', 'value', trellis, split])}${timeShiftClause(input.timeShift)} | eval {${split}}=value | fields - ${split}, value${tail} first(*) AS * BY ${trellis}`;
+    }
+    if (input.categorical) {
+        const fields = input.splitBy ? ['value', input.splitBy] : ['value'];
+        const aggregate = `| mstats ${aggs} WHERE ${where}${computed}${keep(fields)}`;
+        return input.splitBy ? `${aggregate}${categoryTail(input)}` : aggregate;
+    }
+    if (!input.splitBy) {
+        return `| mstats ${aggs} WHERE ${where} span=${input.span}${computed}${keep(['_time', 'value'])}${timeShiftClause(input.timeShift)}`;
+    }
+    assertIdentifier(input.splitBy, 'Split field');
+    const limit = input.splitLimit ?? 5;
+    if (!SPLIT_LIMITS.includes(limit as (typeof SPLIT_LIMITS)[number])) {
+        throw new Error('Split limit is not allowed.');
+    }
+    const rank = input.splitDirection === 'lowest' ? `min in bottom${limit}` : `max in top${limit}`;
+    const shifted = `| mstats ${aggs} WHERE ${where} span=${input.span} BY ${input.splitBy}${computed}${keep(['_time', 'value', input.splitBy])}${timeShiftClause(input.timeShift)}`;
     return `${shifted} | chart useother=false first(value) over _time BY ${input.splitBy} WHERE ${rank}`;
 }
 

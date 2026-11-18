@@ -51,14 +51,26 @@ function isChart(value: unknown): value is ChartModel {
     if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.settings) || !Array.isArray(value.series)) {
         return false;
     }
-    return value.series.every(
-        (item) =>
-            isRecord(item) &&
-            typeof item.id === 'string' &&
-            typeof item.metric === 'string' &&
-            typeof item.aggregation === 'string' &&
-            typeof item.splitBy === 'string'
-    );
+    return value.series.every((item) => {
+        if (
+            !isRecord(item) ||
+            typeof item.id !== 'string' ||
+            typeof item.metric !== 'string' ||
+            typeof item.aggregation !== 'string' ||
+            typeof item.splitBy !== 'string'
+        ) {
+            return false;
+        }
+        if (item.source === 'calc') {
+            if (typeof item.field !== 'string' || !item.field.trim() || /[\r\n]/.test(item.field)) {
+                return false;
+            }
+        }
+        if (item.label !== undefined && (typeof item.label !== 'string' || item.label.length > 80 || /[\r\n]/.test(item.label))) {
+            return false;
+        }
+        return true;
+    });
 }
 
 function bounded(value: unknown, fallback: number, min: number, max: number): number {

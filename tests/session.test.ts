@@ -59,6 +59,24 @@ test('missing, broken, or foreign values are ignored', () => {
     expect(parseSession(JSON.stringify({ version: 1, charts: [], layout: 'table', range: '-1h', globalSplit: '', savedAt: 1 }))).toBeNull();
 });
 
+test('a calculated series and a label round-trip through the session', () => {
+    const chart = createChart('lab.cpu.user');
+    chart.series[0].source = 'calc';
+    chart.series[0].field = '(lab.cpu.user + lab.cpu.idle) * 8';
+    chart.series[0].label = 'Gesamt';
+    const session = parseSession(
+        serializeSession(
+            { charts: [chart], layout: 'stack', range: '-1h', latest: 'now', catalogRange: '-24h', globalSplit: '', globalLimit: { direction: 'highest', limit: 5 }, globalFilters: [], globalSpan: '' },
+            1
+        )
+    );
+    expect(session?.charts[0].series[0]).toMatchObject({
+        source: 'calc',
+        field: '(lab.cpu.user + lab.cpu.idle) * 8',
+        label: 'Gesamt',
+    });
+});
+
 test('keys are per user and fall back to a default name', () => {
     expect(sessionKey('admin')).toBe('metrics-explorer.session.v1.admin');
     expect(sessionKey('')).toBe('metrics-explorer.session.v1.default');

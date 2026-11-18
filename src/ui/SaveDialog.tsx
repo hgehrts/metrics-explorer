@@ -29,10 +29,10 @@ import { isCategorical } from '../chart/settings';
 import { t } from '../i18n';
 import { serializeSession } from '../model/session';
 import { readPageTheme } from '../theme';
-import { ChartModel, GlobalSplitLimit, globalFiltersFor, resolveSeries, SeriesFilter } from '../model/workspace';
+import { chartTitleText, ChartModel, GlobalSplitLimit, globalFiltersFor, resolveSeries, SeriesFilter } from '../model/workspace';
 import { baseSavedName, buildBaseSearchSpl } from '../spl/buildMstats';
 import { resolveForSource } from '../spl/functions';
-import { buildSeriesSearch } from '../spl/seriesSearch';
+import { buildChartSearch } from '../spl/seriesSearch';
 import { AlertPreview } from './AlertPreview';
 import { ChartSaveMode } from './ChartView';
 import { Button, FormRow, Hint, Inline, Input, Modal, Picker } from './Modal';
@@ -145,24 +145,27 @@ function panelsFor(
             ...item,
             filters: [...globalFiltersFor(item, globalFilters, metricDims), ...item.filters],
         }));
-        const item = series[0];
-        if (!item || resolveForSource(item.source, item.aggregation)?.chart === 'table') {
+        const plot = series.filter((item) => resolveForSource(item.source, item.aggregation)?.chart !== 'table');
+        const item = plot[0];
+        if (!item) {
             continue;
         }
         const trellis = chart.trellis?.dimension ? chart.trellis : undefined;
-        const query = buildSeriesSearch(
-            item,
+        const query = buildChartSearch(
+            plot,
             chart.settings.span || span,
             range,
             latest,
             indexes,
             metricIndexes,
             isCategorical(chart.settings.type),
-            trellis && (item.source ?? 'metric') === 'metric' ? trellis.dimension : ''
+            trellis && plot.some((entry) => (entry.source ?? 'metric') === 'metric' || entry.source === 'calc')
+                ? trellis.dimension
+                : ''
         );
         const kind = chartKind(chart.settings.type);
         panels.push({
-            title: item.metric,
+            title: chartTitleText({ series: plot }),
             search: query.search,
             earliest: query.earliest,
             latest: query.latest,
@@ -218,7 +221,7 @@ export function SaveDialog(props: {
     const [existing, setExisting] = useState('');
     const [views, setViews] = useState<Array<{ name: string; label: string }>>([]);
     const [timeInput, setTimeInput] = useState(true);
-    const [panelTitle, setPanelTitle] = useState(series?.metric ?? '');
+    const [panelTitle, setPanelTitle] = useState(chart ? chartTitleText(chart) : series?.metric ?? '');
     const [studioLayout, setStudioLayout] = useState<'absolute' | 'grid'>('absolute');
     const [content, setContent] = useState<'both' | 'chart' | 'table'>('chart');
     const [reportPicker, setReportPicker] = useState(false);
@@ -478,6 +481,9 @@ export function SaveDialog(props: {
         if (!streamingOk) {
             throw new Error(t('Streaming alerts are not available on this instance.'));
         }
+        if (!chart || chart.series.length > 1) {
+            throw new Error(t('A streaming alert can use only one series.'));
+        }
         if (!series || (series.source ?? 'metric') !== 'metric') {
             throw new Error(t('A streaming alert needs a metric series.'));
         }
@@ -508,7 +514,10 @@ export function SaveDialog(props: {
     }
 
     async function saveBase(title: string): Promise<void> {
-        if (!series || series.source === 'base') {
+        if (!chart || chart.series.length > 1) {
+            throw new Error(t('A base search can use only one series.'));
+        }
+        if (!series || series.source === 'base' || series.source === 'calc' || series.source === 'search') {
             throw new Error(t('Open a metric, event, or dataset chart first.'));
         }
         const source = series.source === 'dataset' ? 'dataset' : series.source === 'event' ? 'event' : 'metric';

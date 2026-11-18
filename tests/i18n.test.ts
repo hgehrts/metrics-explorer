@@ -13,4 +13,6 @@ test('validation and chart messages that used to stay English are translated', (
     expect(t('No fields in the preview.')).toBe('Keine Felder in der Vorschau.');
     expect(t('This span draws about {0} points.').replace('{0}', '1200')).toBe('Diese Spanne zeichnet etwa 1200 Punkte.');
     expect(t('A chart stays readable under 1,000.')).toBe('Ein Diagramm bleibt unter 1.000 Punkten lesbar.');
+    expect(t('Enter a metric name or a formula.')).toBe('Geben Sie einen Metriknamen oder eine Formel ein.');
+    expect(t('A streaming alert can use only one series.')).toBe('Eine Streaming-Benachrichtigung kann nur eine Reihe verwenden.');
 });
