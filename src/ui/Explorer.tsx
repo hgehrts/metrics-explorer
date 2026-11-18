@@ -7,6 +7,7 @@ import {
     countLeaves,
     filterMetricTree,
     matchesQuery,
+    DEFAULT_HIERARCHY_SEPARATOR,
     HIERARCHY_SEPARATORS,
     buildSourcetypeTree,
     limitMetricNames,
@@ -383,13 +384,22 @@ const FilterInput = styled.input`
 
 const GroupRow = styled.div`
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     gap: 6px;
     margin: 0 12px 8px;
 
-    select {
-        width: 100%;
-        font-size: ${variables.fontSize};
+    select:first-of-type {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: ${variables.fontSizeSmall};
+    }
+
+    select:last-of-type {
+        flex: 0 0 auto;
+        width: auto;
+        max-width: 7.5em;
+        font-size: ${variables.fontSizeSmall};
     }
 `;
 
@@ -1072,7 +1082,7 @@ export function Explorer(): React.ReactElement {
     const [maxMetrics, setMaxMetrics] = useState(DEFAULT_MAX_METRICS);
     const [namesTruncated, setNamesTruncated] = useState(false);
     const [valuesTruncated, setValuesTruncated] = useState(false);
-    const [separator, setSeparator] = useState('.');
+    const [separator, setSeparator] = useState(DEFAULT_HIERARCHY_SEPARATOR);
     const [valueRows, setValueRows] = useState<ValueRow[]>([]);
     const [dataFilters, setDataFilters] = useState<DataFilter[]>([]);
     /** `all` charts every allowed index. `picked` is the explicit list, and an empty list charts none. */
@@ -1135,7 +1145,7 @@ export function Explorer(): React.ReactElement {
             .catch(() => ({
                 filters: [] as DataFilter[],
                 hierarchySource: 'metric_name',
-                hierarchySeparator: '.',
+                hierarchySeparator: DEFAULT_HIERARCHY_SEPARATOR,
                 maxMetrics: DEFAULT_MAX_METRICS,
                 catalogRange: '-24h',
             }))
@@ -2169,7 +2179,7 @@ export function Explorer(): React.ReactElement {
                     >
                         {HIERARCHY_SEPARATORS.map((item) => (
                             <option key={item} value={item}>
-                                {item}
+                                {item === '._' ? t('. and _') : item}
                             </option>
                         ))}
                     </Select>

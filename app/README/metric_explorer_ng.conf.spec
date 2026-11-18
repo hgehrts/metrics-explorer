@@ -23,8 +23,9 @@ hierarchy_source = <string>
 
 hierarchy_separator = <string>
 * Character used to split hierarchy_source into tree nodes.
-* Allowed: . / \ : |
-* Default: .
+* Allowed: .  ._  _  /  \  :  |
+* ._ splits on both dot and underscore, so otelcol_* and k8s.* share one tree.
+* Default: ._
 
 [features]
 data-alerts = <bool>

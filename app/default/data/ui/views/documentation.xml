@@ -61,7 +61,7 @@
           <h3 id="mx-3">3. Grouping</h3>
           <ul>
             <li>Group by orders the metric tree by metric name, by index, or by a dimension.</li>
-            <li>The separator splits the name into folders at that character. A dot gives the usual <code>a.b.c</code> hierarchy.</li>
+            <li>The separator splits the name into folders. The default <code>. and _</code> folds both dotted names such as <code>k8s.pod.cpu</code> and underscored names such as <code>otelcol_exporter_queue_size</code>.</li>
             <li>A click on a folder expands or collapses it.</li>
           </ul>
 

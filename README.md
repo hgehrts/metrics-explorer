@@ -38,7 +38,7 @@ Indexes is its own section, above Metrics, and it collapses like the others. Che
 #### 3. Grouping
 
 - Group by orders the metric tree by metric name, by index, or by a dimension.
-- The separator splits the name into folders at that character. A dot gives the usual `a.b.c` hierarchy.
+- The separator splits the name into folders. The default `. and _` folds both `k8s.pod.cpu` and `otelcol_exporter_queue_size`. Pick `.` or `_` alone when you only want one of those characters.
 - A click on a folder expands or collapses it.
 
 #### 4. Metrics

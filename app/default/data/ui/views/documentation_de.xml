@@ -61,7 +61,7 @@
           <h3 id="mx-3">3. Gruppierung</h3>
           <ul>
             <li>„Gruppieren nach“ ordnet den Metrikbaum nach Metrikname, nach Index oder nach einer Dimension.</li>
-            <li>Das Trennzeichen schneidet den Namen an diesem Zeichen in Ordner. Ein Punkt ergibt die übliche Hierarchie <code>a.b.c</code>.</li>
+            <li>Das Trennzeichen schneidet den Namen in Ordner. Die Vorgabe <code>. und _</code> gruppiert sowohl Namen mit Punkt wie <code>k8s.pod.cpu</code> als auch Namen mit Unterstrich wie <code>otelcol_exporter_queue_size</code>.</li>
             <li>Ein Klick auf einen Ordner klappt ihn auf oder zu.</li>
           </ul>
 

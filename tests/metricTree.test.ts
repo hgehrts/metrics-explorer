@@ -50,8 +50,51 @@ test('keeps a unique suffix on the leaf and folds a unique folder chain', () => 
 
 test('splits metric names at a chosen separator', () => {
     const tree = buildMetricTree(['lab/cpu/user', 'lab/net/bytes'], '/');
-    expect(tree[0]).toMatchObject({ id: 'lab/', label: 'lab', folder: true });
+    expect(tree[0]).toMatchObject({ label: 'lab', folder: true });
     expect(tree[0].children.map((node) => node.label)).toEqual(['cpu/user', 'net/bytes']);
+});
+
+test('dot and underscore together fold otelcol_* next to dotted names', () => {
+    const tree = buildMetricTree(
+        [
+            'otelcol.k8s.watcher',
+            'otelcol_exporter_in_flight_requests',
+            'otelcol_exporter_queue_capacity',
+            'otelcol_exporter_queue_size',
+            'scrape_samples_scraped',
+            'scrape_duration_seconds',
+            'k8s.pod.cpu.usage',
+        ],
+        '._'
+    );
+    expect(tree.map((node) => `${node.folder ? 'f' : 'l'}:${node.label}`)).toEqual([
+        'l:k8s.pod.cpu.usage',
+        'f:otelcol',
+        'f:scrape',
+    ]);
+    expect(tree.find((node) => node.label === 'k8s.pod.cpu.usage')?.metricName).toBe('k8s.pod.cpu.usage');
+    const otelcol = tree.find((node) => node.label === 'otelcol');
+    expect(otelcol?.children.map((node) => `${node.folder ? 'f' : 'l'}:${node.label}`)).toEqual([
+        'f:exporter',
+        'l:k8s.watcher',
+    ]);
+    const exporter = otelcol?.children.find((node) => node.label === 'exporter');
+    expect(exporter?.children.map((node) => `${node.folder ? 'f' : 'l'}:${node.label}`)).toEqual([
+        'l:in.flight.requests',
+        'f:queue',
+    ]);
+    expect(exporter?.children.find((node) => node.label === 'in.flight.requests')?.metricName).toBe(
+        'otelcol_exporter_in_flight_requests'
+    );
+    expect(exporter?.children.find((node) => node.label === 'queue')?.children.map((node) => node.metricName)).toEqual([
+        'otelcol_exporter_queue_capacity',
+        'otelcol_exporter_queue_size',
+    ]);
+    const scrape = tree.find((node) => node.label === 'scrape');
+    expect(scrape?.children.map((node) => node.metricName)).toEqual([
+        'scrape_duration_seconds',
+        'scrape_samples_scraped',
+    ]);
 });
 
 test('groups by a dimension value and lists the metrics under each value', () => {

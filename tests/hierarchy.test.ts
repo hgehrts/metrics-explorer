@@ -43,7 +43,11 @@ test('metadata settings are used only when they are valid', () => {
     });
     expect(hierarchyFromMetadata({ hierarchy_source: 'a"b', hierarchy_separator: '#' })).toEqual({
         hierarchySource: 'metric_name',
-        hierarchySeparator: '.',
+        hierarchySeparator: '._',
     });
-    expect(hierarchyFromMetadata({})).toEqual({ hierarchySource: 'metric_name', hierarchySeparator: '.' });
+    expect(hierarchyFromMetadata({})).toEqual({ hierarchySource: 'metric_name', hierarchySeparator: '._' });
+    expect(hierarchyFromMetadata({ hierarchy_separator: '._' })).toEqual({
+        hierarchySource: 'metric_name',
+        hierarchySeparator: '._',
+    });
 });

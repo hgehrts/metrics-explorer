@@ -121,6 +121,9 @@ msgstr "Nach Index gruppieren"
 msgid "Group separator"
 msgstr "Trennzeichen der Gruppierung"
 
+msgid ". and _"
+msgstr ". und _"
+
 msgid "No metrics in this time range."
 msgstr "Keine Metriken in diesem Zeitraum."
 

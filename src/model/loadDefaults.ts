@@ -1,5 +1,5 @@
 import { DataFilter, pickDefaults } from './dataFilters';
-import { HIERARCHY_SEPARATORS } from '../catalog/metricTree';
+import { DEFAULT_HIERARCHY_SEPARATOR, HIERARCHY_SEPARATORS } from '../catalog/metricTree';
 
 export type ExplorerSettings = {
     filters: DataFilter[];
@@ -75,12 +75,14 @@ export function maxMetricsFromMetadata(content: Record<string, string | undefine
     return value >= 1 && value <= 1000000 ? value : DEFAULT_MAX_METRICS;
 }
 
-/** The grouping settings from `[metadata]`. Anything unknown or invalid falls back to metric names and `.`. */
+/** The grouping settings from `[metadata]`. Anything unknown or invalid falls back to metric names and `. and _`. */
 export function hierarchyFromMetadata(content: Record<string, string | undefined>): Pick<ExplorerSettings, 'hierarchySource' | 'hierarchySeparator'> {
     const configured = typeof content.hierarchy_source === 'string' ? content.hierarchy_source.trim() : '';
     const configuredSeparator = typeof content.hierarchy_separator === 'string' ? content.hierarchy_separator : '';
     return {
         hierarchySource: /^[A-Za-z0-9_.:-]+$/.test(configured) ? configured : 'metric_name',
-        hierarchySeparator: (HIERARCHY_SEPARATORS as readonly string[]).includes(configuredSeparator) ? configuredSeparator : '.',
+        hierarchySeparator: (HIERARCHY_SEPARATORS as readonly string[]).includes(configuredSeparator)
+            ? configuredSeparator
+            : DEFAULT_HIERARCHY_SEPARATOR,
     };
 }

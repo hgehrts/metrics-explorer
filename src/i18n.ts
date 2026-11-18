@@ -42,6 +42,7 @@ const GERMAN: Record<string, string> = {
     'Group by name': 'Nach Name gruppieren',
     'Group by index': 'Nach Index gruppieren',
     'Group separator': 'Trennzeichen der Gruppierung',
+    '. and _': '. und _',
     'No metrics in this time range.': 'Keine Metriken in diesem Zeitraum.',
     'No sourcetypes in this time range.': 'Keine Sourcetypes in diesem Zeitraum.',
     'Saved in this app': 'In dieser App gespeichert',

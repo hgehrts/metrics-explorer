@@ -1,5 +1,35 @@
-/** Separators offered for the tree. `.` is the default for metric names. */
-export const HIERARCHY_SEPARATORS = ['.', '/', '\\', ':', '|'] as const;
+/** Separators offered for the tree. `. and _` is the default so both dotted and underscored names fold. */
+export const HIERARCHY_SEPARATORS = ['.', '._', '_', '/', '\\', ':', '|'] as const;
+
+export const DEFAULT_HIERARCHY_SEPARATOR = '._';
+
+/** Splits a name at every character in `separator`. `._` splits on both `.` and `_`. */
+export function splitHierarchyName(name: string, separator: string): string[] {
+    if (!separator) {
+        return [name];
+    }
+    const chars = separator === '._' ? '._' : separator;
+    const parts: string[] = [];
+    let current = '';
+    for (const ch of name) {
+        if (chars.includes(ch)) {
+            if (current) {
+                parts.push(current);
+                current = '';
+            }
+            continue;
+        }
+        current += ch;
+    }
+    if (current) {
+        parts.push(current);
+    }
+    return parts;
+}
+
+function joinHierarchyLabel(parts: string[], separator: string): string {
+    return parts.join(separator === '._' ? '.' : separator);
+}
 
 export type MetricNode = {
     id: string;
@@ -17,19 +47,21 @@ export type ValueRow = { value: string; metrics: string[] };
 type TrieNode = {
     segment: string;
     children: Map<string, TrieNode>;
-    terminal: boolean;
+    /** Original names that end at this node. Needed when `.` and `_` collapse to the same path. */
+    names: string[];
 };
 
 function makeNode(segment: string): TrieNode {
-    return { segment, children: new Map(), terminal: false };
+    return { segment, children: new Map(), names: [] };
 }
 
 function insert(root: TrieNode, metricName: string, separator: string): void {
+    const segments = splitHierarchyName(metricName, separator);
+    if (segments.length === 0) {
+        return;
+    }
     let current = root;
-    for (const segment of metricName.split(separator)) {
-        if (!segment) {
-            return;
-        }
+    for (const segment of segments) {
         let child = current.children.get(segment);
         if (!child) {
             child = makeNode(segment);
@@ -37,7 +69,9 @@ function insert(root: TrieNode, metricName: string, separator: string): void {
         }
         current = child;
     }
-    current.terminal = true;
+    if (!current.names.includes(metricName)) {
+        current.names.push(metricName);
+    }
 }
 
 function sortedChildren(node: TrieNode): TrieNode[] {
@@ -51,23 +85,29 @@ function compress(node: TrieNode, prefix: string[], separator: string): MetricNo
     for (const child of sortedChildren(node)) {
         const labels = [child.segment];
         let current = child;
-        while (!current.terminal && current.children.size === 1) {
+        while (current.names.length === 0 && current.children.size === 1) {
             const only = sortedChildren(current)[0];
             labels.push(only.segment);
             current = only;
         }
         const parts = [...prefix, ...labels];
-        const id = parts.join(separator);
-        const label = labels.join(separator);
+        const folderId = `${parts.join('\u001f')}/`;
+        const label = joinHierarchyLabel(labels, separator);
+        const leaves = [...current.names]
+            .sort((left, right) => left.localeCompare(right))
+            .map((name) => ({
+                id: name,
+                label: current.names.length > 1 ? name : label,
+                folder: false,
+                metricName: name,
+                children: [] as MetricNode[],
+            }));
         if (current.children.size === 0) {
-            result.push({ id, label, folder: false, metricName: id, children: [] });
+            result.push(...leaves);
             continue;
         }
-        const children = compress(current, parts, separator);
-        if (current.terminal) {
-            result.push({ id, label, folder: false, metricName: id, children: [] });
-        }
-        result.push({ id: `${id}/`, label, folder: true, children });
+        result.push(...leaves);
+        result.push({ id: folderId, label, folder: true, children: compress(current, parts, separator) });
     }
     return result.sort((left, right) => left.label.localeCompare(right.label));
 }
@@ -135,7 +175,7 @@ export function buildSourcetypeTree(names: string[]): MetricNode[] {
     return nodes.sort((left, right) => left.label.localeCompare(right.label));
 }
 
-/** The metric tree, split at the separator. Metric names are dotted, so `.` is the default. */
+/** The metric tree, split at the separator. `. and _` is the explorer default. */
 export function buildMetricTree(metricNames: string[], separator = '.'): MetricNode[] {
     const root = makeNode('');
     for (const name of metricNames) {
@@ -158,7 +198,7 @@ export function buildValueTree(dimension: string, rows: ValueRow[], separator: s
         if (!value || !separator) {
             continue;
         }
-        const segments = value.split(separator).filter(Boolean);
+        const segments = splitHierarchyName(value, separator);
         if (segments.length === 0) {
             continue;
         }
@@ -171,19 +211,19 @@ export function buildValueTree(dimension: string, rows: ValueRow[], separator: s
             }
             current = child;
         }
-        current.terminal = true;
-        const key = segments.join(separator);
-        metricsByValue.set(key, [...new Set([...(metricsByValue.get(key) ?? []), ...row.metrics])]);
+        if (!current.names.includes(value)) {
+            current.names.push(value);
+        }
+        metricsByValue.set(value, [...new Set([...(metricsByValue.get(value) ?? []), ...row.metrics])]);
     }
 
     const build = (node: TrieNode, path: string[]): MetricNode[] => {
         const children: MetricNode[] = sortedChildren(node).map((child) => {
             const parts = [...path, child.segment];
-            const id = parts.join(separator);
+            const id = parts.join('\u001f');
             return { id: `${dimension}:${id}`, label: child.segment, folder: true, children: build(child, parts) };
         });
-        if (node.terminal) {
-            const value = path.join(separator);
+        for (const value of node.names) {
             for (const metric of (metricsByValue.get(value) ?? []).sort()) {
                 children.push({
                     id: `${dimension}:${value}|${metric}`,
