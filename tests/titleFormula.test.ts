@@ -1,5 +1,5 @@
 import { applyTitleParts, chartTitleText, createChart, createSeries, titleLineError } from '../src/model/workspace';
-import { parseTitleLine, formulaMetrics } from '../src/spl/titleFormula';
+import { parseTitleLine, formulaMetrics, assertEvalExpr } from '../src/spl/titleFormula';
 
 const catalog = ['sc4snmp.IF-MIB.ifInOctets', 'sc4snmp.IF-MIB.ifOutOctets', 'lab.cpu.user'];
 
@@ -21,6 +21,13 @@ test('a formula uses catalog names and a safe eval expression', () => {
 test('division becomes a null-safe eval', () => {
     const [part] = parseTitleLine('ifInOctets / ifOutOctets', catalog);
     expect(part.evalExpr).toBe('if((m2)==0,null(),(m1)/(m2))');
+    expect(() => assertEvalExpr(part.evalExpr, part.metrics.length)).not.toThrow();
+});
+
+test('division by a constant number passes safety check', () => {
+    const [part] = parseTitleLine('((ifInOctets + ifOutOctets) * 8) / 100', catalog);
+    expect(part.evalExpr).toBe('if((100)==0,null(),(((m1)+(m2))*(8))/(100))');
+    expect(() => assertEvalExpr(part.evalExpr, part.metrics.length)).not.toThrow();
 });
 
 test('a quoted name and a dash in the catalog stay one metric', () => {

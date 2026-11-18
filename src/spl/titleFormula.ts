@@ -359,7 +359,7 @@ export function formulaMetrics(formula: string, catalog: string[] = []): string[
     }
 }
 
-const SAFE_EVAL = /^(?:m[1-9]\d*|if|null|\d+(?:\.\d+)?|[+\-*/(),\s])+$/;
+const SAFE_EVAL = /^(?:m[1-9]\d*|if|null|==|\d+(?:\.\d+)?|[+\-*/(),\s])+$/;
 
 /** Rejects an eval expression that is not the parser's own output. */
 export function assertEvalExpr(expr: string, metricCount: number): void {
