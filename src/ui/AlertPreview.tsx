@@ -95,6 +95,7 @@ export function AlertPreview(props: {
                             xAxisTitleVisibility: 'collapsed',
                             yAxisTitleVisibility: 'collapsed',
                             backgroundColor: 'transparent',
+                            ...(props.categorical ? {} : { nullValueDisplay: 'connect' }),
                         }}
                     />
                 </Plot>

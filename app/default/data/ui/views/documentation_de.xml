@@ -289,6 +289,7 @@
             <li>Y-Achse: Minimum, Maximum, linear oder logarithmisch. Leere Grenzen heißen automatisch. Zurücksetzen löscht die eigenen Grenzen.</li>
             <li>Nachkommastellen im Tooltip, 0 bis 4. Voreinstellung 4.</li>
             <li>„Zahlen auf der Achse abkürzen“ schaltet die Kurzform wie <code>214K</code> ein oder aus.</li>
+            <li>„Lücken anzeigen“ lässt fehlende Punkte in Linien- und Flächendiagrammen unverbunden. Aus zeichnet eine durchgehende Linie, das ist die Voreinstellung.</li>
           </ul>
 
           <h2>Speichern</h2>

@@ -6,7 +6,7 @@ import styled, { css } from 'styled-components';
 import { variables } from '@splunk/themes';
 import { mergeCategoryTables, toCategoryTable, toLineTable } from '../chart/columns';
 import { addReferenceLines, referenceWindow } from '../chart/reference';
-import { axisOptions, isCategorical, visualFor } from '../chart/settings';
+import { axisOptions, isCategorical, nullValueDisplay, visualFor } from '../chart/settings';
 import { chartTimeBounds } from '../chart/timeAxis';
 import { heatmapTable } from '../chart/heatmap';
 import { formatStatColumns, formatTimeCell } from '../chart/stats';
@@ -643,6 +643,7 @@ export function ChartView(props: {
     const shownTitle = fits ? title : abbreviateMetricTitle(title);
     const visual = visualFor(props.chart.settings.type);
     const Viz = (visual.kind === 'area' ? Area : visual.kind === 'column' ? Column : Line) as typeof Line;
+    const nulls = nullValueDisplay(props.chart.settings, visual.kind);
     const first = results[0];
     let chartQuery: { search: string; earliest: string; latest: string } | null = null;
     try {
@@ -914,6 +915,7 @@ export function ChartView(props: {
                         ...axisOptions(props.chart.settings),
                         ...(categorical ? {} : (chartTimeBounds(timeWindow.earliest, timeWindow.latest) ?? {})),
                         ...(visual.stacked ? { stackMode: 'stacked' } : {}),
+                        ...(nulls ? { nullValueDisplay: nulls } : {}),
                         ...(categorical ? { dataValuesDisplay: 'all' } : {}),
                     }}
                 />

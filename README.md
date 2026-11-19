@@ -8,7 +8,7 @@ Browse Splunk metric indexes and chart them without writing SPL.
 
 Splunk removes the Analytics Workspace in Splunk Enterprise 10.6 and Splunk Cloud Platform 10.6 and does not ship a replacement. Metric Explorer NG is the app I built so that work still has a place: open a metric, see the chart, split it, filter it, and save it. The app covers the Analytics Workspace 2.56.0 functions and keeps a few additions that were already useful in daily work: events, datasets, base searches, named workspaces, the full `mstats` aggregations, and a global time span.
 
-The current package is [1.8](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.8.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
+The current package is [1.9](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.9.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
 
 ## Documentation
 
@@ -231,6 +231,7 @@ Applies to the selected chart.
 - Y axis: minimum, maximum, linear or logarithmic. Empty bounds mean automatic. Revert clears your bounds.
 - Tooltip decimal places, 0 to 4. The default is 4.
 - Abbreviate numbers on the axis turns the short form, such as `214K`, on or off.
+- Show gaps leaves missing points unconnected on line and area charts. Off draws a continuous line through them, which is the default.
 
 ### Saving
 

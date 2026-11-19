@@ -406,6 +406,9 @@ msgstr "Nachkommastellen im Tooltip"
 msgid "Abbreviate numbers on the axis"
 msgstr "Zahlen auf der Achse abkürzen"
 
+msgid "Show gaps"
+msgstr "Lücken anzeigen"
+
 msgid "Revert y-axis"
 msgstr "Y-Achse zurücksetzen"
 

@@ -37,6 +37,8 @@ export type ChartSettings = {
     abbreviate?: boolean;
     /** Decimal places in the tooltip, 0 to 4. Missing means 4, the default of the original. */
     decimals?: number;
+    /** Line and area charts leave missing points unconnected. Off (the default) draws through them. */
+    showGaps?: boolean;
 };
 
 export const CHART_TYPES: { id: ChartType; label: string }[] = [
@@ -72,7 +74,19 @@ export function defaultSettings(): ChartSettings {
         yScale: 'linear',
         abbreviate: true,
         decimals: 4,
+        showGaps: false,
     };
+}
+
+/** Line and area charts connect missing points unless the chart asks for gaps. Columns leave this unset. */
+export function nullValueDisplay(
+    settings: Pick<ChartSettings, 'showGaps'>,
+    kind: 'line' | 'area' | 'column' | 'heatmap'
+): 'connect' | 'gaps' | undefined {
+    if (kind !== 'line' && kind !== 'area') {
+        return undefined;
+    }
+    return settings.showGaps ? 'gaps' : 'connect';
 }
 
 const SUFFIX: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9 };

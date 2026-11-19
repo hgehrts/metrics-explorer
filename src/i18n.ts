@@ -172,6 +172,7 @@ const GERMAN: Record<string, string> = {
     'Log': 'Logarithmisch',
     'Tooltip decimal places': 'Nachkommastellen im Tooltip',
     'Abbreviate numbers on the axis': 'Zahlen auf der Achse abkürzen',
+    'Show gaps': 'Lücken anzeigen',
     'Revert y-axis': 'Y-Achse zurücksetzen',
     'Data ingested from': 'Daten erfasst seit',
     "Let's bring you up to speed!": "Weiter geht's!",

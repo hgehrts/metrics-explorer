@@ -17,4 +17,5 @@ test('validation and chart messages that used to stay English are translated', (
     expect(t('A streaming alert can use only one series.')).toBe('Eine Streaming-Benachrichtigung kann nur eine Reihe verwenden.');
     expect(t('. and _')).toBe('. und _');
     expect(t('Then split on')).toBe('Dann unterteilen nach');
+    expect(t('Show gaps')).toBe('Lücken anzeigen');
 });

@@ -172,6 +172,7 @@ function panelsFor(
             latest: query.latest,
             chart: kind.chart,
             stacked: kind.stacked,
+            showGaps: chart.settings.showGaps === true,
             trellis: trellis
                 ? {
                       splitBy: trellis.dimension,
@@ -375,6 +376,9 @@ export function SaveDialog(props: {
                 'display.visualizations.show': content === 'table' ? '0' : '1',
                 'display.statistics.show': content === 'chart' ? '0' : '1',
                 'display.visualizations.charting.chart': panel.chart,
+                ...(panel.chart === 'line' || panel.chart === 'area'
+                    ? { 'display.visualizations.charting.chart.nullValueMode': panel.showGaps ? 'gaps' : 'connect' }
+                    : {}),
                 'display.general.timeRangePicker.show': reportPicker ? '1' : '0',
                 'request.ui_dispatch_view': 'search',
             },

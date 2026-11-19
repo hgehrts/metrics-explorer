@@ -33,6 +33,13 @@ test('a classic dashboard stores one panel per chart and escapes the title', () 
     expect(xml).toContain('<label>Lab &amp; cpu</label>');
     expect(xml).toContain('<![CDATA[| mstats avg("lab.cpu.user") WHERE index=* span=30m]]>');
     expect(xml).toContain('<option name="charting.chart">line</option>');
+    expect(xml).toContain('<option name="charting.chart.nullValueMode">connect</option>');
+});
+
+test('Show gaps stores nullValueMode gaps on a line dashboard panel', () => {
+    const xml = classicDashboard('Lab', [{ ...panel, showGaps: true }]);
+    expect(xml).toContain('<option name="charting.chart.nullValueMode">gaps</option>');
+    expect(studioDashboard('Lab', [{ ...panel, showGaps: true }])).toContain('"nullValueDisplay":"gaps"');
 });
 
 test('panels append to a classic dashboard and refuse a studio dashboard', () => {

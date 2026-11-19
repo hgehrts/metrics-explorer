@@ -1,4 +1,4 @@
-import { axisOptions, buildSpan, defaultSettings, parseAxisValue, splitSpan, validateAxis, visualFor } from '../src/chart/settings';
+import { axisOptions, buildSpan, defaultSettings, nullValueDisplay, parseAxisValue, splitSpan, validateAxis, visualFor } from '../src/chart/settings';
 
 test('reads the short forms the original workspace accepts', () => {
     expect(parseAxisValue('1000')).toBe(1000);
@@ -48,4 +48,12 @@ test('maps the chart types to a visualization and stack mode', () => {
     expect(visualFor('column')).toEqual({ kind: 'column', stacked: false });
     expect(visualFor('stacked')).toEqual({ kind: 'column', stacked: true });
     expect(visualFor('heatmap')).toEqual({ kind: 'heatmap', stacked: false });
+});
+
+test('line and area charts connect missing points unless Show gaps is on', () => {
+    expect(defaultSettings().showGaps).toBe(false);
+    expect(nullValueDisplay(defaultSettings(), 'line')).toBe('connect');
+    expect(nullValueDisplay({ showGaps: true }, 'line')).toBe('gaps');
+    expect(nullValueDisplay({ showGaps: true }, 'area')).toBe('gaps');
+    expect(nullValueDisplay({ showGaps: true }, 'column')).toBeUndefined();
 });

@@ -34,7 +34,7 @@ import { boundForInput } from '../spl/timeRange';
 import { isSeriesFilter } from '../model/session';
 import { collectDimensions, collectFieldValues, collectMetricNames, collectValueMetrics, runSearch, runSearchOnce } from '../search/runSearch';
 import { ReferenceLine, referenceSummary, referenceWindow } from '../chart/reference';
-import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, isCategorical, SPAN_UNITS, splitSpan, validateAxis } from '../chart/settings';
+import { buildSpan, ChartSettings, CHART_CONTENT, CHART_TYPES, isCategorical, SPAN_UNITS, splitSpan, validateAxis, visualFor } from '../chart/settings';
 import {
     applyTitleParts,
     AUTO_REFRESH_MS,
@@ -3766,6 +3766,17 @@ export function Explorer(): React.ReactElement {
                                             />{' '}
                                             {t('Abbreviate numbers on the axis')}
                                         </label>
+                                        {visualFor(selected.settings.type).kind === 'line' || visualFor(selected.settings.type).kind === 'area' ? (
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label={t('Show gaps')}
+                                                    checked={selected.settings.showGaps === true}
+                                                    onChange={(event) => patchSettings({ showGaps: event.target.checked })}
+                                                />{' '}
+                                                {t('Show gaps')}
+                                            </label>
+                                        ) : null}
                                     </Field>
                                 )}
                             </>

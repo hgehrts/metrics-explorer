@@ -8,6 +8,8 @@ export type PanelSpec = {
     stacked: boolean;
     /** Present when the chart is drawn as one small chart per value of this field. */
     trellis?: { splitBy: string; minColumnWidth: number; rowHeight: number; columns: number; pageSize: number };
+    /** Line and area charts leave missing points unconnected. Off draws through them. */
+    showGaps?: boolean;
 };
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/;
@@ -54,6 +56,10 @@ const TIME_TOKEN = 'mx_time';
 
 function panelXml(panel: PanelSpec, timeInput = false): string {
     const stack = panel.stacked ? '\n          <option name="charting.chart.stackMode">stacked</option>' : '';
+    const nulls =
+        panel.chart === 'line' || panel.chart === 'area'
+            ? `\n          <option name="charting.chart.nullValueMode">${panel.showGaps ? 'gaps' : 'connect'}</option>`
+            : '';
     const trellis = panel.trellis
         ? `\n          <option name="trellis.enabled">1</option>\n          <option name="trellis.splitBy">${xml(panel.trellis.splitBy)}</option>\n          <option name="trellis.size">${trellisSize(panel.trellis.minColumnWidth)}</option>\n          <option name="trellis.scales.shared">1</option>`
         : '';
@@ -68,7 +74,7 @@ function panelXml(panel: PanelSpec, timeInput = false): string {
             <earliest>${xml(earliest)}</earliest>
             <latest>${xml(latest)}</latest>
           </search>
-          <option name="charting.chart">${panel.chart}</option>${stack}${trellis}
+          <option name="charting.chart">${panel.chart}</option>${stack}${nulls}${trellis}
         </chart>
       </panel>
     </row>`;
@@ -131,6 +137,9 @@ function studioOptions(panel: PanelSpec): Record<string, unknown> {
     const options: Record<string, unknown> = {};
     if (panel.stacked) {
         options.stackMode = 'stacked';
+    }
+    if (panel.chart === 'line' || panel.chart === 'area') {
+        options.nullValueDisplay = panel.showGaps ? 'gaps' : 'connect';
     }
     if (panel.trellis) {
         options.splitByLayout = 'trellis';

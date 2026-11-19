@@ -289,6 +289,7 @@
             <li>Y axis: minimum, maximum, linear or logarithmic. Empty bounds mean automatic. Revert clears your bounds.</li>
             <li>Tooltip decimal places, 0 to 4. The default is 4.</li>
             <li>Abbreviate numbers on the axis turns the short form, such as <code>214K</code>, on or off.</li>
+            <li>Show gaps leaves missing points unconnected on line and area charts. Off draws a continuous line through them, which is the default.</li>
           </ul>
 
           <h2>Saving</h2>
