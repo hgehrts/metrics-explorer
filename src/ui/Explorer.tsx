@@ -813,8 +813,8 @@ const Empty = styled.div`
 `;
 
 const EmptyLogo = styled.img`
-    height: 180px;
-    width: auto;
+    width: 144px;
+    height: 144px;
     object-fit: contain;
     background: transparent;
 `;
@@ -2800,8 +2800,8 @@ export function Explorer(): React.ReactElement {
                             src={APP_LOGO}
                             srcSet={`${APP_LOGO} 1x, ${APP_LOGO_2X} 2x`}
                             alt={APP_TITLE}
-                            width={111}
-                            height={174}
+                            width={72}
+                            height={72}
                         />
                         <h1>
                             {APP_TITLE} {APP_VERSION}
