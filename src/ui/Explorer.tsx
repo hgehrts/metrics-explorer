@@ -76,6 +76,7 @@ import { SaveDialog, SaveMode } from './SaveDialog';
 import { SplitDialog } from './SplitDialog';
 import { TimeRangeDialog } from './TimeRangeDialog';
 import { t } from '../i18n';
+import { APP_GITHUB, APP_LOGO, APP_LOGO_2X, APP_TITLE, APP_VERSION } from '../title';
 import { clampPaneWidth, LEFT_PANE_DEFAULT, RIGHT_PANE_DEFAULT, shellColumns } from './panes';
 import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
 import { readRecent, rememberRecent } from '../model/recent';
@@ -787,9 +788,43 @@ const ChartList = styled.div<{ $grid: boolean }>`
 
 const Empty = styled.div`
     margin: auto;
-    max-width: 460px;
+    max-width: 520px;
     text-align: center;
     padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+
+    h1 {
+        margin: 8px 0 0;
+        font-size: 22px;
+    }
+
+    h2 {
+        margin: 16px 0 0;
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    p {
+        margin: 0;
+    }
+`;
+
+const EmptyLogo = styled.img`
+    width: 240px;
+    height: auto;
+`;
+
+const EmptyMeta = styled.div`
+    margin-top: 20px;
+    color: ${variables.contentColorMuted};
+    font-size: ${variables.fontSizeSmall};
+
+    a {
+        color: ${variables.linkColor};
+    }
 `;
 
 const Field = styled.label`
@@ -2759,9 +2794,19 @@ export function Explorer(): React.ReactElement {
                 ) : null}
                 {charts.length === 0 ? (
                     <Empty>
+                        <EmptyLogo
+                            src={APP_LOGO}
+                            srcSet={`${APP_LOGO} 1x, ${APP_LOGO_2X} 2x`}
+                            alt={APP_TITLE}
+                            width={240}
+                            height={240}
+                        />
+                        <h1>
+                            {APP_TITLE} {APP_VERSION}
+                        </h1>
                         {savedSession ? (
                             <>
-                                <h1>{t("Let's bring you up to speed!")}</h1>
+                                <h2>{t("Let's bring you up to speed!")}</h2>
                                 <p>{t('Open your latest charts, or start by selecting data.')}</p>
                                 <ToolButton type="button" onClick={openSaved}>
                                     {t('Open Charts')}
@@ -2769,10 +2814,23 @@ export function Explorer(): React.ReactElement {
                             </>
                         ) : (
                             <>
-                                <h1>{t('Start by selecting data.')}</h1>
+                                <h2>{t('Start by selecting data.')}</h2>
                                 <p>{t('Find something interesting? Save it to a dashboard, or create an alert.')}</p>
                             </>
                         )}
+                        <EmptyMeta>
+                            <p>{t('Copyright (c) 2026 Metrics Explorer. All rights reserved.')}</p>
+                            <p>
+                                {t(
+                                    'This Splunk app is private software. It may be installed and used on Splunk instances controlled by its owner. Redistribution and modification require permission from the owner.'
+                                )}
+                            </p>
+                            <p>
+                                <a href={APP_GITHUB} target="_blank" rel="noopener noreferrer">
+                                    {APP_GITHUB}
+                                </a>
+                            </p>
+                        </EmptyMeta>
                     </Empty>
                 ) : (
                     <ChartList $grid={layout === 'grid' && !maximizedId} data-layout={layout}>

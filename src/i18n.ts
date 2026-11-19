@@ -176,6 +176,10 @@ const GERMAN: Record<string, string> = {
     'Revert y-axis': 'Y-Achse zurücksetzen',
     'Data ingested from': 'Daten erfasst seit',
     "Let's bring you up to speed!": "Weiter geht's!",
+    'Copyright (c) 2026 Metrics Explorer. All rights reserved.':
+        'Copyright (c) 2026 Metrics Explorer. Alle Rechte vorbehalten.',
+    'This Splunk app is private software. It may be installed and used on Splunk instances controlled by its owner. Redistribution and modification require permission from the owner.':
+        'Diese Splunk-App ist private Software. Sie darf auf Splunk-Instanzen des Eigentümers installiert und genutzt werden. Weitergabe und Änderung brauchen die Erlaubnis des Eigentümers.',
     'Your work has been recovered.': 'Deine Arbeit wurde wiederhergestellt.',
     'Time span': 'Zeitspanne',
     Refresh: 'Aktualisieren',
