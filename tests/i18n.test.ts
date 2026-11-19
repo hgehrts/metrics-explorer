@@ -18,7 +18,7 @@ test('validation and chart messages that used to stay English are translated', (
     expect(t('. and _')).toBe('. und _');
     expect(t('Then split on')).toBe('Dann unterteilen nach');
     expect(t('Show gaps')).toBe('Lücken anzeigen');
-    expect(t('Copyright (c) 2026 Metrics Explorer. All rights reserved.')).toBe(
-        'Copyright (c) 2026 Metrics Explorer. Alle Rechte vorbehalten.'
+    expect(t('Licensed under the Apache License, Version 2.0')).toBe(
+        'Lizenziert unter der Apache License, Version 2.0'
     );
 });

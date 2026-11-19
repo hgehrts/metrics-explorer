@@ -40,6 +40,9 @@ test('the app name, icons, dashboards link, and documentation view are packaged'
     for (const name of ['appIcon.png', 'appIcon_2x.png', 'appIconAlt.png', 'appIconAlt_2x.png', 'appLogo.png', 'appLogo_2x.png']) {
         expect(fs.existsSync(path.join(root, 'app/static', name))).toBe(true);
     }
+    expect(fs.existsSync(path.join(root, 'app/appserver/static/emptyLogo.png'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'app/appserver/static/emptyLogo_2x.png'))).toBe(true);
+    expect(fs.readFileSync(path.join(root, 'app/LICENSE'), 'utf8')).toContain('Apache License');
     expect(fs.existsSync(path.join(root, 'app/appserver/static/docs-annotated-en.png'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'app/appserver/static/docs-annotated-de.png'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'app/locale/de_DE/LC_MESSAGES/messages.mo'))).toBe(true);

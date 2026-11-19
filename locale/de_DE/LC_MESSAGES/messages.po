@@ -418,11 +418,8 @@ msgstr "Daten erfasst seit"
 msgid "Let's bring you up to speed!"
 msgstr "Weiter geht's!"
 
-msgid "Copyright (c) 2026 Metrics Explorer. All rights reserved."
-msgstr "Copyright (c) 2026 Metrics Explorer. Alle Rechte vorbehalten."
-
-msgid "This Splunk app is private software. It may be installed and used on Splunk instances controlled by its owner. Redistribution and modification require permission from the owner."
-msgstr "Diese Splunk-App ist private Software. Sie darf auf Splunk-Instanzen des Eigentümers installiert und genutzt werden. Weitergabe und Änderung brauchen die Erlaubnis des Eigentümers."
+msgid "Licensed under the Apache License, Version 2.0"
+msgstr "Lizenziert unter der Apache License, Version 2.0"
 
 msgid "Your work has been recovered."
 msgstr "Deine Arbeit wurde wiederhergestellt."

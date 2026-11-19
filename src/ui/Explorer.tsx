@@ -76,7 +76,7 @@ import { SaveDialog, SaveMode } from './SaveDialog';
 import { SplitDialog } from './SplitDialog';
 import { TimeRangeDialog } from './TimeRangeDialog';
 import { t } from '../i18n';
-import { APP_GITHUB, APP_LOGO, APP_LOGO_2X, APP_TITLE, APP_VERSION } from '../title';
+import { APP_GITHUB, APP_LICENSE_URL, APP_LOGO, APP_LOGO_2X, APP_TITLE, APP_VERSION } from '../title';
 import { clampPaneWidth, LEFT_PANE_DEFAULT, RIGHT_PANE_DEFAULT, shellColumns } from './panes';
 import { parseSession, SavedSession, serializeSession, sessionKey } from '../model/session';
 import { readRecent, rememberRecent } from '../model/recent';
@@ -813,8 +813,10 @@ const Empty = styled.div`
 `;
 
 const EmptyLogo = styled.img`
-    width: 240px;
-    height: auto;
+    height: 180px;
+    width: auto;
+    object-fit: contain;
+    background: transparent;
 `;
 
 const EmptyMeta = styled.div`
@@ -2798,8 +2800,8 @@ export function Explorer(): React.ReactElement {
                             src={APP_LOGO}
                             srcSet={`${APP_LOGO} 1x, ${APP_LOGO_2X} 2x`}
                             alt={APP_TITLE}
-                            width={240}
-                            height={240}
+                            width={111}
+                            height={174}
                         />
                         <h1>
                             {APP_TITLE} {APP_VERSION}
@@ -2819,11 +2821,13 @@ export function Explorer(): React.ReactElement {
                             </>
                         )}
                         <EmptyMeta>
-                            <p>{t('Copyright (c) 2026 Metrics Explorer. All rights reserved.')}</p>
+                            <p>Copyright 2026 Hans-Henning Gehrts</p>
                             <p>
-                                {t(
-                                    'This Splunk app is private software. It may be installed and used on Splunk instances controlled by its owner. Redistribution and modification require permission from the owner.'
-                                )}
+                                {t('Licensed under the Apache License, Version 2.0')}
+                                {'. '}
+                                <a href={APP_LICENSE_URL} target="_blank" rel="noopener noreferrer">
+                                    {APP_LICENSE_URL}
+                                </a>
                             </p>
                             <p>
                                 <a href={APP_GITHUB} target="_blank" rel="noopener noreferrer">

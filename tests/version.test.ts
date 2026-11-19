@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { APP_GITHUB, APP_VERSION } from '../src/title';
+import { APP_GITHUB, APP_LICENSE_URL, APP_VERSION } from '../src/title';
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
 const root = path.resolve(__dirname, '..');
@@ -13,4 +13,5 @@ test('package, app.conf, and the empty-screen constant share a three-part semver
     expect(conf).toMatch(new RegExp(`\\[launcher\\][\\s\\S]*?version = ${pkg.version.replace(/\./g, '\\.')}`));
     expect(conf).toMatch(new RegExp(`\\[id\\][\\s\\S]*?version = ${pkg.version.replace(/\./g, '\\.')}`));
     expect(APP_GITHUB).toBe('https://github.com/hgehrts/metrics-explorer');
+    expect(APP_LICENSE_URL).toBe('http://www.apache.org/licenses/LICENSE-2.0');
 });
