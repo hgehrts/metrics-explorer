@@ -13,7 +13,7 @@ import { formatStatColumns, formatTimeCell } from '../chart/stats';
 import { HeatmapChart } from './HeatmapChart';
 import { mergeTables, splunkSearchUrl, toCsv } from '../export/table';
 import { chartPng, chartSvg, safeFileName } from '../export/png';
-import { chartTitleText, ChartModel, globalFiltersFor, GlobalSplitLimit, hasSplitValues, resolveSeries, Series, SeriesFilter, seriesLegend, seriesMetricNames } from '../model/workspace';
+import { chartTitleText, ChartModel, globalFiltersFor, GlobalSplitLimit, hasSplitValues, resolveSeries, Series, SeriesFilter, seriesLegend, seriesMetricNames, splitChartField } from '../model/workspace';
 import { DropdownMenu, MenuItem } from './Menu';
 import { runSearch, SearchRow } from '../search/runSearch';
 import { buildReferenceValueSearch, relatedEventsSearch } from '../spl/buildMstats';
@@ -393,6 +393,7 @@ export function ChartView(props: {
     span: string;
     refreshToken: number;
     globalSplit: string;
+    globalSplit2?: string;
     globalLimit: GlobalSplitLimit;
     /** The window every chart shows after a drag across one of them. Null shows the time range. */
     zoom: { earliest: string; latest: string } | null;
@@ -436,7 +437,7 @@ export function ChartView(props: {
     const tipRef = useRef<HTMLDivElement | null>(null);
     const cardRef = useRef<HTMLElement>(null);
     /** Series with the split they actually use, so inherited splits behave like chosen ones. */
-    const series = resolveSeries(props.chart.series, props.globalSplit, props.chart.useGlobalSplit, props.globalLimit).map((item) => ({
+    const series = resolveSeries(props.chart.series, props.globalSplit, props.chart.useGlobalSplit, props.globalLimit, props.globalSplit2).map((item) => ({
         ...item,
         filters: [...globalFiltersFor(item, props.globalFilters, props.metricDims), ...item.filters],
     }));
@@ -567,10 +568,11 @@ export function ChartView(props: {
 
     const locale = typeof window === 'undefined' ? undefined : window.location.pathname.match(/\/([a-z]{2}-[A-Z]{2})\//)?.[1];
     // A split only applies to a series whose metric has that dimension. Other series draw unsplit, and their legend says so.
-    const shown = series.map((item, index) => ({
-        ...item,
-        splitBy: hasSplitValues(results[index]?.rows ?? [], item.splitBy) ? item.splitBy : '',
-    }));
+    const shown = series.map((item, index) => {
+        const field = splitChartField(item.splitBy, item.splitBy2);
+        const splitBy = hasSplitValues(results[index]?.rows ?? [], field) ? field : '';
+        return { ...item, splitBy, splitBy2: splitBy === field && item.splitBy2 ? item.splitBy2 : '' };
+    });
     const tables = shown.map((item, index) => {
         // A split charted wide has one column per value. With only one value, that value names the line.
         const rows = results[index]?.rows ?? [];

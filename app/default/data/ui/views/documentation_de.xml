@@ -159,7 +159,7 @@
 
           <h3 id="mx-16">16. Unterteilen nach</h3>
           <ul>
-            <li>Öffnet die globale Unterteilung: Dimension, Richtung (höchste oder niedrigste Werte) und Anzahl. Voreinstellung ist die höchsten 5 Werte.</li>
+            <li>Öffnet die globale Unterteilung: eine erste Dimension, eine optionale zweite, Richtung (höchste oder niedrigste Werte) und Anzahl. Voreinstellung sind die höchsten 5 Werte der ersten Dimension; das zweite Feld zeichnet dann jedes passende Paar als eigene Linie (<code>host / ifName</code>).</li>
             <li>Sie gilt für Metrikserien, die die globale Unterteilung erben, und nur in Diagrammen, bei denen „Globale Unterteilung für dieses Diagramm verwenden“ an ist. Das ist die Voreinstellung.</li>
             <li>Ereignisse und Datensätze erben diese Dimension nicht. Eine Metrikdimension existiert dort nicht, die Suche lieferte sonst keine Zeilen.</li>
             <li>Eine eigene Dimension an der Serie ersetzt die globale.</li>

@@ -16,4 +16,5 @@ test('validation and chart messages that used to stay English are translated', (
     expect(t('Enter a metric name or a formula.')).toBe('Geben Sie einen Metriknamen oder eine Formel ein.');
     expect(t('A streaming alert can use only one series.')).toBe('Eine Streaming-Benachrichtigung kann nur eine Reihe verwenden.');
     expect(t('. and _')).toBe('. und _');
+    expect(t('Then split on')).toBe('Dann unterteilen nach');
 });

@@ -13,6 +13,8 @@ export interface SavedSession {
     latest: string;
     catalogRange: string;
     globalSplit: string;
+    /** Second global split dimension. Empty keeps a single split. */
+    globalSplit2: string;
     globalFilters: SeriesFilter[];
     globalLimit: GlobalSplitLimit;
     /** Empty follows the time range. Otherwise an SPL span such as 30s or 5m for every chart on Auto. */
@@ -69,6 +71,9 @@ function isChart(value: unknown): value is ChartModel {
         if (item.label !== undefined && (typeof item.label !== 'string' || item.label.length > 80 || /[\r\n]/.test(item.label))) {
             return false;
         }
+        if (item.splitBy2 !== undefined && (typeof item.splitBy2 !== 'string' || (item.splitBy2 !== '' && !NAME.test(item.splitBy2)))) {
+            return false;
+        }
         return true;
     });
 }
@@ -111,6 +116,10 @@ export function parseSession(text: string | null): SavedSession | null {
     if (typeof value.range !== 'string' || typeof value.globalSplit !== 'string' || typeof value.savedAt !== 'number') {
         return null;
     }
+    value.globalSplit2 =
+        typeof value.globalSplit2 === 'string' && NAME.test(value.globalSplit2) && value.globalSplit2 !== value.globalSplit
+            ? value.globalSplit2
+            : '';
     // Sessions saved before custom ranges existed end now.
     if (typeof value.latest !== 'string' || !/^(now|-\d{1,4}[smhdw]|\d{1,11})$/.test(value.latest)) {
         value.latest = 'now';
@@ -144,6 +153,17 @@ export function parseSession(text: string | null): SavedSession | null {
             chart.trellis = trellis;
         } else {
             delete chart.trellis;
+        }
+        for (const item of chart.series) {
+            const second = item.splitBy2;
+            item.splitBy2 =
+                item.splitBy &&
+                item.splitBy !== '*global*' &&
+                typeof second === 'string' &&
+                NAME.test(second) &&
+                second !== item.splitBy
+                    ? second
+                    : '';
         }
     }
     return value as unknown as SavedSession;

@@ -1,4 +1,4 @@
-import { Series, seriesLegend } from '../model/workspace';
+import { Series, seriesLegend, splitChartField } from '../model/workspace';
 import { boundSeconds } from './timeRange';
 import { buildBaseChartSearch, buildCalcMstats, buildMstats, buildTstats, quoteSpl } from './buildMstats';
 import { resolveForSource } from './functions';
@@ -142,6 +142,7 @@ export function buildSeriesSearch(
                       evalExpr: calc.evalExpr,
                       span,
                       splitBy: item.splitBy || undefined,
+                      splitBy2: item.splitBy2 || undefined,
                       splitDirection: item.splitDirection,
                       splitLimit: item.splitLimit,
                       timeShift: item.timeShift || undefined,
@@ -157,6 +158,7 @@ export function buildSeriesSearch(
                     metric: item.metric,
                     span,
                     splitBy: item.splitBy || undefined,
+                    splitBy2: item.splitBy2 || undefined,
                     splitDirection: item.splitDirection,
                     splitLimit: item.splitLimit,
                     timeShift: item.timeShift || undefined,
@@ -174,6 +176,7 @@ export function buildSeriesSearch(
                       span,
                       field: item.field,
                       splitBy: item.splitBy || undefined,
+                      splitBy2: item.splitBy2 || undefined,
                       splitDirection: item.splitDirection,
                       splitLimit: item.splitLimit,
                       categorical,
@@ -185,6 +188,7 @@ export function buildSeriesSearch(
                       span,
                       field: item.field,
                       splitBy: item.splitBy || undefined,
+                      splitBy2: item.splitBy2 || undefined,
                       splitDirection: item.splitDirection,
                       splitLimit: item.splitLimit,
                       timeShift: item.timeShift || undefined,
@@ -230,7 +234,8 @@ export function buildChartSearch(
                 : injectTimeBounds(query.search, query.earliest, query.latest);
         return suffixColumns(bounded, legends[index], categorical);
     });
-    const splitField = items.find((item) => item.splitBy)?.splitBy ?? '';
+    const splitItem = items.find((item) => item.splitBy);
+    const splitField = splitItem ? splitChartField(splitItem.splitBy, splitItem.splitBy2) : '';
     let search = prepared[0];
     for (const part of prepared.slice(1)) {
         search += categorical && !splitField ? ` | appendcols ${asSubsearch(part)}` : ` | append ${asSubsearch(part)}`;

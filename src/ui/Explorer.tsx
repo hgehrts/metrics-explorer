@@ -52,7 +52,6 @@ import {
     INHERIT_SPLIT,
     refreshStatus,
     resolveSeries,
-    resolveSplit,
     seriesDimensions,
     seriesMetricNames,
     sharedDimensions,
@@ -63,6 +62,7 @@ import {
     Series,
     SeriesFilter,
     seriesLegend,
+    splitLabel,
 } from '../model/workspace';
 import { ChartSaveMode, ChartTitleEditor, ChartView } from './ChartView';
 import { parseTitleLine } from '../spl/titleFormula';
@@ -1011,6 +1011,7 @@ export function Explorer(): React.ReactElement {
     const [allDimensions, setAllDimensions] = useState<string[]>([]);
     const [metricDims, setMetricDims] = useState<Record<string, string[]>>({});
     const [globalSplit, setGlobalSplit] = useState('');
+    const [globalSplit2, setGlobalSplit2] = useState('');
     /** Filters for every chart. Each chart's own filters come after them. */
     const [globalFilters, setGlobalFilters] = useState<SeriesFilter[]>([]);
     const [globalDimension, setGlobalDimension] = useState('');
@@ -1100,9 +1101,15 @@ export function Explorer(): React.ReactElement {
 
     /** The series as its header shows it: a split only counts when the metric has that dimension. */
     function headerSeries(item: Series): Series {
-        const split = resolveSplit(item, globalSplit, selected?.useGlobalSplit ?? true);
+        const [resolved] = resolveSeries([item], globalSplit, selected?.useGlobalSplit ?? true, globalLimit, globalSplit2);
         const known = seriesDimensions(item, metricDims);
-        return { ...item, splitBy: known && split && !known.includes(split) ? '' : split };
+        const split = resolved.splitBy;
+        const split2 = resolved.splitBy2;
+        return {
+            ...resolved,
+            splitBy: known && split && !known.includes(split) ? '' : split,
+            splitBy2: known && split && split2 && known.includes(split) && known.includes(split2) ? split2 : '',
+        };
     }
 
     /** Adds a filter for every chart. The values are typed as a comma separated list. */
@@ -1268,7 +1275,7 @@ export function Explorer(): React.ReactElement {
             return;
         }
         const session = serializeSession(
-            { charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit, globalSpan },
+            { charts, layout, range, latest, catalogRange, globalSplit, globalSplit2, globalFilters, globalLimit, globalSpan },
             Date.now()
         );
         try {
@@ -1277,7 +1284,7 @@ export function Explorer(): React.ReactElement {
         } catch {
             // Storage can be full or disabled; the workspace still works without it.
         }
-    }, [charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit, globalSpan]);
+    }, [charts, layout, range, latest, catalogRange, globalSplit, globalSplit2, globalFilters, globalLimit, globalSpan]);
 
     useEffect(() => {
         // A new range replaces the zoom, because the zoom lies inside the old range.
@@ -1296,6 +1303,7 @@ export function Explorer(): React.ReactElement {
         setLatest(saved.latest);
         setCatalogRange(saved.catalogRange);
         setGlobalSplit(saved.globalSplit);
+        setGlobalSplit2(saved.globalSplit2 ?? '');
         setGlobalFilters(saved.globalFilters);
         setGlobalLimit(saved.globalLimit);
         setGlobalSpan(saved.globalSpan);
@@ -1321,7 +1329,7 @@ export function Explorer(): React.ReactElement {
             return;
         }
         const session = serializeSession(
-            { charts, layout, range, latest, catalogRange, globalSplit, globalFilters, globalLimit, globalSpan },
+            { charts, layout, range, latest, catalogRange, globalSplit, globalSplit2, globalFilters, globalLimit, globalSpan },
             Date.now()
         );
         rememberRecent(currentUser(), metric, session, Date.now(), chart.id);
@@ -1511,7 +1519,7 @@ export function Explorer(): React.ReactElement {
         metricDims
     );
     const series = selected?.series.find((item) => item.id === selectedSeriesId) ?? selected?.series[0];
-    const trellisChoices = trellisDimensions(globalSplitDimensions, globalSplit);
+    const trellisChoices = trellisDimensions(globalSplitDimensions, globalSplit, globalSplit2);
     const trellisJobKey = charts
         .map((chart) => {
             const dimension = chart.trellis?.dimension ?? '';
@@ -1577,6 +1585,7 @@ export function Explorer(): React.ReactElement {
         const nextSplit = selected.trellis.dimension;
         const nextTrellis = globalSplit;
         setGlobalSplit(nextSplit);
+        setGlobalSplit2(globalSplit2 === nextSplit ? '' : globalSplit2);
         updateTrellis({ ...selected.trellis, dimension: nextTrellis });
         setSwapPulse(true);
         window.setTimeout(() => setSwapPulse(false), 420);
@@ -1734,7 +1743,7 @@ export function Explorer(): React.ReactElement {
             throw new Error(problem);
         }
         const next = applyTitleParts(chart, parts);
-        const resolved = resolveSeries(next.series, globalSplit, next.useGlobalSplit, globalLimit).map((item) => ({
+        const resolved = resolveSeries(next.series, globalSplit, next.useGlobalSplit, globalLimit, globalSplit2).map((item) => ({
             ...item,
             filters: [...globalFiltersFor(item, globalFilters, metricDims), ...item.filters],
         }));
@@ -2482,10 +2491,18 @@ export function Explorer(): React.ReactElement {
                     <Divider />
                     <Bar type="button" aria-label={t('Split By')} $pulse={swapPulse} onClick={() => setSplitDialog(true)}>
                         <span aria-hidden="true">⑃</span>
-                        {globalSplit ? `${t('Split By')}: ${globalSplit}` : t('Split By')}
+                        {globalSplit ? `${t('Split By')}: ${splitLabel(globalSplit, globalSplit2)}` : t('Split By')}
                     </Bar>
                     {globalSplit ? (
-                        <Bar type="button" aria-label={t('Clear Split By')} title={t('Clear Split By')} onClick={() => setGlobalSplit('')}>
+                        <Bar
+                            type="button"
+                            aria-label={t('Clear Split By')}
+                            title={t('Clear Split By')}
+                            onClick={() => {
+                                setGlobalSplit('');
+                                setGlobalSplit2('');
+                            }}
+                        >
                             ×
                         </Bar>
                     ) : null}
@@ -2780,6 +2797,7 @@ export function Explorer(): React.ReactElement {
                                 spanManual: Boolean(globalSpan),
                                 refreshToken,
                                 globalSplit,
+                                globalSplit2,
                                 globalLimit,
                                 globalFilters,
                                 metricDims,
@@ -3319,7 +3337,13 @@ export function Explorer(): React.ReactElement {
                                         ? ''
                                         : series.splitBy
                                 }
-                                onChange={(event) => patchSeries({ splitBy: event.target.value })}
+                                onChange={(event) => {
+                                    const next = event.target.value;
+                                    patchSeries({
+                                        splitBy: next,
+                                        splitBy2: next && next !== INHERIT_SPLIT && next !== series.splitBy2 ? series.splitBy2 : '',
+                                    });
+                                }}
                             >
                                 <option value="">{t('None')}</option>
                                 {series.source === 'event' || series.source === 'dataset' ? null : (
@@ -3334,6 +3358,25 @@ export function Explorer(): React.ReactElement {
                                     </option>
                                 ))}
                             </Select>
+                            {series.splitBy && series.splitBy !== INHERIT_SPLIT ? (
+                                <Select
+                                    aria-label={t('Then split on')}
+                                    value={series.splitBy2 ?? ''}
+                                    onChange={(event) => patchSeries({ splitBy2: event.target.value })}
+                                >
+                                    <option value="">{t('None')}</option>
+                                    {splitChoices(
+                                        ((series.source ?? 'metric') === 'metric' || series.source === 'calc' ? dimensions : sourceFields).filter(
+                                            (name) => name !== series.splitBy
+                                        ),
+                                        series.splitBy2 ?? ''
+                                    ).map((name) => (
+                                        <option key={name} value={name}>
+                                            {name}
+                                        </option>
+                                    ))}
+                                </Select>
+                            ) : null}
                             {series.splitBy && series.splitBy !== INHERIT_SPLIT ? (
                                 <SplitRow>
                                     <Select
@@ -3757,10 +3800,12 @@ export function Explorer(): React.ReactElement {
                 <SplitDialog
                     dimensions={globalSplitDimensions}
                     split={globalSplit}
+                    split2={globalSplit2}
                     limit={globalLimit}
                     onClose={() => setSplitDialog(false)}
-                    onApply={(split, limit) => {
+                    onApply={(split, split2, limit) => {
                         setGlobalSplit(split);
+                        setGlobalSplit2(split ? split2 : '');
                         setGlobalLimit(limit);
                         setSplitDialog(false);
                     }}
@@ -3778,6 +3823,7 @@ export function Explorer(): React.ReactElement {
                     catalogRange={catalogRange}
                     layout={layout}
                     globalSplit={globalSplit}
+                    globalSplit2={globalSplit2}
                     globalFilters={globalFilters}
                     globalSpan={globalSpan}
                     metricDims={metricDims}

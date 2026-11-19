@@ -5,9 +5,13 @@ import {
     hasSplitValues,
     INHERIT_SPLIT,
     refreshStatus,
+    resolveSeries,
     resolveSplit,
+    resolveSplit2,
     sharedDimensions,
     seriesLegend,
+    splitChartField,
+    splitLabel,
     trellisDimensions,
     withTrellisValue,
     createChart,
@@ -47,6 +51,7 @@ test('global Split By lists only dimensions shared by the active chart metrics',
 test('trellis offers the shared dimensions except the split field', () => {
     expect(trellisDimensions(['host', 'region', 'source'], 'host')).toEqual(['region', 'source']);
     expect(trellisDimensions(['host'], 'host')).toEqual([]);
+    expect(trellisDimensions(['host', 'ifName', 'region'], 'host', 'ifName')).toEqual(['region']);
 });
 
 test('a trellis value filters metric series and leaves an event series unchanged', () => {
@@ -72,10 +77,20 @@ test('a saved search series starts unsplit', () => {
 test('a new series inherits the global split, and a chosen split overrides it', () => {
     const series = createSeries('lab.net.bytes_total');
     expect(series.splitBy).toBe(INHERIT_SPLIT);
+    expect(series.splitBy2).toBe('');
     expect(resolveSplit(series, 'host')).toBe('host');
+    expect(resolveSplit2(series, 'host', 'ifName')).toBe('ifName');
     expect(resolveSplit(series, '')).toBe('');
     expect(resolveSplit({ splitBy: 'c' }, 'host')).toBe('c');
     expect(resolveSplit({ splitBy: '' }, 'host')).toBe('');
+    const [inherited] = resolveSeries([series], 'host', true, undefined, 'ifName');
+    expect(inherited).toMatchObject({ splitBy: 'host', splitBy2: 'ifName' });
+    const own = createSeries('lab.net.bytes_total');
+    own.splitBy = 'region';
+    own.splitBy2 = 'ifName';
+    expect(resolveSeries([own], 'host', true, undefined, 'dc')[0]).toMatchObject({ splitBy: 'region', splitBy2: 'ifName' });
+    expect(splitLabel('host', 'ifName')).toBe('host, ifName');
+    expect(splitChartField('host', 'ifName')).toBe('mxsplit');
 });
 
 test('counts down from ten seconds while auto-refresh is on', () => {
@@ -121,6 +136,7 @@ test('keeps distinct series names and shows a time shift in the legend', () => {
         ]).fields.map((field) => field.name)
     ).toEqual(['_time', 'Avg (-30m)', 'Avg']);
     expect(seriesLegend({ metric: 'cpu.user', aggregation: 'Max', splitBy: '', timeShift: '30m' })).toBe('Max (-30m)');
+    expect(seriesLegend({ metric: 'cpu.user', aggregation: 'Avg', splitBy: 'host', splitBy2: 'ifName', timeShift: '' })).toBe('Avg by host, ifName');
     expect(
         seriesLegend({ metric: 'cpu.user', aggregation: 'Avg', splitBy: '', timeShift: '' }, [
             { metric: 'cpu.user' },

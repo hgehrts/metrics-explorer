@@ -57,6 +57,21 @@ test('a categorical trellis export stays a table the trellis splits by rows', ()
     );
 });
 
+test('a second split ranks the first field and draws every pair', () => {
+    expect(
+        buildMstats({
+            aggregation: 'Avg',
+            metric: 'cpu_metric.pctUser',
+            span: '10s',
+            splitBy: 'host',
+            splitBy2: 'ifName',
+            splitLimit: 5,
+        })
+    ).toBe(
+        '| mstats avg("cpu_metric.pctUser") AS value WHERE index=* span=10s BY host, ifName | eventstats max(value) AS mxscore BY host | sort 0 -mxscore, host | streamstats dc(host) AS mxrank | where mxrank <= 5 | eval mxsplit=host." / ".ifName | fields - host, ifName, mxscore, mxrank | chart useother=false first(value) over _time BY mxsplit'
+    );
+});
+
 test('uses the lowest values when that limit is selected', () => {
     expect(
         buildMstats({

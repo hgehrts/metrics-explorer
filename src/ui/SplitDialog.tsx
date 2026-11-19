@@ -8,20 +8,31 @@ import { Button, FormRow, Inline, Modal, Picker } from './Modal';
 export function SplitDialog(props: {
     dimensions: string[];
     split: string;
+    split2?: string;
     limit: GlobalSplitLimit;
-    onApply: (split: string, limit: GlobalSplitLimit) => void;
+    onApply: (split: string, split2: string, limit: GlobalSplitLimit) => void;
     onClose: () => void;
 }): React.ReactElement {
     const [split, setSplit] = useState(props.dimensions.includes(props.split) ? props.split : '');
+    const secondChoices = props.dimensions.filter((name) => name !== split);
+    const [split2, setSplit2] = useState(secondChoices.includes(props.split2 ?? '') ? (props.split2 ?? '') : '');
     const [direction, setDirection] = useState(props.limit.direction);
     const [limit, setLimit] = useState(props.limit.limit);
     const choices = props.dimensions;
+
+    function chooseFirst(next: string): void {
+        setSplit(next);
+        if (!next || next === split2) {
+            setSplit2('');
+        }
+    }
+
     return (
         <Modal
             title={t('Split metrics by a dimension')}
             width={520}
             onClose={props.onClose}
-            onSubmit={() => props.onApply(split, { direction, limit })}
+            onSubmit={() => props.onApply(split, split ? split2 : '', { direction, limit })}
             footer={
                 <>
                     <Button type="button" onClick={props.onClose}>
@@ -35,7 +46,7 @@ export function SplitDialog(props: {
         >
             <FormRow>
                 <span>{t('Split on')}</span>
-                <Picker aria-label={t('Split on')} value={split} onChange={(event) => setSplit(event.target.value)}>
+                <Picker aria-label={t('Split on')} value={split} onChange={(event) => chooseFirst(event.target.value)}>
                     <option value="">{t('None')}</option>
                     {choices.map((name) => (
                         <option key={name} value={name}>
@@ -44,6 +55,19 @@ export function SplitDialog(props: {
                     ))}
                 </Picker>
             </FormRow>
+            {split ? (
+                <FormRow>
+                    <span>{t('Then split on')}</span>
+                    <Picker aria-label={t('Then split on')} value={split2} onChange={(event) => setSplit2(event.target.value)}>
+                        <option value="">{t('None')}</option>
+                        {secondChoices.map((name) => (
+                            <option key={name} value={name}>
+                                {name}
+                            </option>
+                        ))}
+                    </Picker>
+                </FormRow>
+            ) : null}
             <FormRow>
                 <span>{t('Show')}</span>
                 <Inline>

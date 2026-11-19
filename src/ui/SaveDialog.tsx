@@ -133,6 +133,7 @@ function panelsFor(
     range: string,
     latest: string,
     globalSplit: string,
+    globalSplit2: string,
     globalLimit: GlobalSplitLimit,
     globalFilters: SeriesFilter[],
     metricDims: Record<string, string[]>,
@@ -141,7 +142,7 @@ function panelsFor(
 ): PanelSpec[] {
     const panels: PanelSpec[] = [];
     for (const chart of charts) {
-        const series = resolveSeries(chart.series, globalSplit, chart.useGlobalSplit, globalLimit).map((item) => ({
+        const series = resolveSeries(chart.series, globalSplit, chart.useGlobalSplit, globalLimit, globalSplit2).map((item) => ({
             ...item,
             filters: [...globalFiltersFor(item, globalFilters, metricDims), ...item.filters],
         }));
@@ -195,6 +196,7 @@ export function SaveDialog(props: {
     catalogRange: string;
     layout: 'stack' | 'grid';
     globalSplit: string;
+    globalSplit2?: string;
     globalLimit: GlobalSplitLimit;
     globalFilters: SeriesFilter[];
     globalSpan: string;
@@ -301,6 +303,7 @@ export function SaveDialog(props: {
             props.range,
             props.latest,
             props.globalSplit,
+            props.globalSplit2 ?? '',
             props.globalLimit,
             props.globalFilters,
             props.metricDims,
@@ -491,13 +494,13 @@ export function SaveDialog(props: {
         if (!aggregation) {
             throw new Error(t('Unknown aggregation.'));
         }
-        const resolved = resolveSeries([series], props.globalSplit, chart?.useGlobalSplit ?? true, props.globalLimit)[0] ?? series;
+        const resolved = resolveSeries([series], props.globalSplit, chart?.useGlobalSplit ?? true, props.globalLimit, props.globalSplit2)[0] ?? series;
         const fields = streamingAlertFields({
             name: title,
             condition: metricAlertCondition(aggregation.name, series.metric, alertComparator(comparator), threshold),
             metricIndexes: props.metricIndexes === undefined || props.metricIndexes.length === 0 ? '*' : props.metricIndexes.join(','),
             filter: metricAlertFilter([...globalFiltersFor(series, props.globalFilters, props.metricDims), ...series.filters]),
-            groupby: resolved.splitBy ?? '',
+            groupby: resolved.splitBy2 ? `${resolved.splitBy},${resolved.splitBy2}` : resolved.splitBy ?? '',
             severity: Number(severity),
             throttleMinutes: throttleOn ? throttleAmount : '',
             description,
@@ -574,6 +577,7 @@ export function SaveDialog(props: {
                 latest: props.latest,
                 catalogRange: props.catalogRange,
                 globalSplit: props.globalSplit,
+                globalSplit2: props.globalSplit2 ?? '',
                 globalLimit: props.globalLimit,
                 globalFilters: props.globalFilters,
                 globalSpan: props.globalSpan,

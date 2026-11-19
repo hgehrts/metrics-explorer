@@ -8,7 +8,7 @@ Browse Splunk metric indexes and chart them without writing SPL.
 
 Splunk removes the Analytics Workspace in Splunk Enterprise 10.6 and Splunk Cloud Platform 10.6 and does not ship a replacement. Metric Explorer NG is the app I built so that work still has a place: open a metric, see the chart, split it, filter it, and save it. The app covers the Analytics Workspace 2.56.0 functions and keeps a few additions that were already useful in daily work: events, datasets, base searches, named workspaces, the full `mstats` aggregations, and a global time span.
 
-The current package is [1.7](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.7.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
+The current package is [1.8](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-1.8.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
 
 ## Documentation
 
@@ -118,7 +118,7 @@ Indexes is its own section, above Metrics, and it collapses like the others. Che
 
 #### 16. Split by
 
-- Opens the global split: dimension, direction (highest or lowest values), and count. The default is the highest 5 values.
+- Opens the global split: a first dimension, an optional second dimension, direction (highest or lowest values), and count. The default is the highest 5 values of the first dimension; the second field then adds every matching pair as its own line (`host / ifName`).
 - With no metric in the active chart, the dimension list is empty.
 - One metric lists that metric's dimensions. Several metrics in the same chart list only the dimensions every one of them has.
 - It applies to metric series that inherit the global split, and only on charts where Use global split by for this chart is on. That is the default.

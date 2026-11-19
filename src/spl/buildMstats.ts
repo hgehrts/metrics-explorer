@@ -1,3 +1,4 @@
+import { SPLIT_PAIR_FIELD } from '../model/workspace';
 import { resolveEventFunction, resolveMetricFunction } from './functions';
 import { parseTimeShift } from './timeShift';
 import { assertEvalExpr } from './titleFormula';
@@ -126,12 +127,39 @@ function categoryTail(input: { splitBy?: string; splitLimit?: number; splitDirec
     return ` BY ${field} | sort ${input.splitDirection === 'lowest' ? '' : '-'}value | head ${limit}`;
 }
 
+function secondSplit(splitBy: string | undefined, splitBy2: string | undefined): string {
+    const second = (splitBy2 ?? '').trim();
+    if (!splitBy || !second || second === splitBy) {
+        return '';
+    }
+    assertIdentifier(second, 'Split field');
+    return second;
+}
+
+function splitLimit(input: { splitLimit?: number }): number {
+    const limit = input.splitLimit ?? 5;
+    if (!SPLIT_LIMITS.includes(limit as (typeof SPLIT_LIMITS)[number])) {
+        throw new Error('Split limit is not allowed.');
+    }
+    return limit;
+}
+
+/** Keep the top/bottom N values of the first field, then every value of the second as `mxsplit`. */
+function pairRank(first: string, second: string, limit: number, lowest: boolean, group = ''): string {
+    const score = lowest ? 'min(value)' : 'max(value)';
+    const by = group ? `${group}, ${first}` : first;
+    const sort = lowest ? `sort 0 mxscore, ${by}` : `sort 0 -mxscore, ${by}`;
+    const rankBy = group ? ` BY ${group}` : '';
+    return ` | eventstats ${score} AS mxscore BY ${by} | ${sort} | streamstats dc(${first}) AS mxrank${rankBy} | where mxrank <= ${limit} | eval ${SPLIT_PAIR_FIELD}=${first}." / ".${second} | fields - ${first}, ${second}, mxscore, mxrank`;
+}
+
 export function buildMstats(input: {
     aggregation: string;
     metric: string;
     span: string;
     index?: string;
     splitBy?: string;
+    splitBy2?: string;
     splitLimit?: number;
     splitDirection?: 'highest' | 'lowest';
     timeShift?: string;
@@ -163,6 +191,8 @@ export function buildMstats(input: {
     const base = `| mstats ${aggregation.name}(${metric})`;
     const extra = filterClause(input.filters);
     const where = extra ? `${indexClause} AND ${extra}` : indexClause;
+    const split2 = secondSplit(input.splitBy, input.splitBy2);
+    const lowest = input.splitDirection === 'lowest';
     if (input.trellisBy) {
         const trellis = input.trellisBy;
         assertIdentifier(trellis, 'Filter field');
@@ -171,28 +201,41 @@ export function buildMstats(input: {
             assertIdentifier(split, 'Split field');
         }
         if (input.categorical) {
+            if (split && split2) {
+                return `${base} AS value WHERE ${where} BY ${trellis}, ${split}, ${split2}${pairRank(split, split2, splitLimit(input), lowest, trellis)}`;
+            }
             return `${base} AS value WHERE ${where} BY ${split ? `${trellis}, ${split}` : trellis}`;
         }
         const tail = ` | timechart span=${input.span} limit=0 useother=f`;
         if (!split) {
             return `${base} AS value WHERE ${where} span=${input.span} BY ${trellis}${timeShiftClause(input.timeShift)}${tail} first(value) AS value BY ${trellis}`;
         }
+        if (split2) {
+            return `${base} AS value WHERE ${where} span=${input.span} BY ${trellis}, ${split}, ${split2}${timeShiftClause(input.timeShift)}${pairRank(split, split2, splitLimit(input), lowest, trellis)} | eval {${SPLIT_PAIR_FIELD}}=value | fields - ${SPLIT_PAIR_FIELD}, value${tail} first(*) AS * BY ${trellis}`;
+        }
         // Each split value becomes its own aggregation, so every small chart draws one line per split value.
         return `${base} AS value WHERE ${where} span=${input.span} BY ${trellis}, ${split}${timeShiftClause(input.timeShift)} | eval {${split}}=value | fields - ${split}, value${tail} first(*) AS * BY ${trellis}`;
     }
     if (input.categorical) {
         const aggregate = `${base} AS value WHERE ${where}`;
-        return input.splitBy ? `${aggregate}${categoryTail(input)}` : aggregate;
+        if (!input.splitBy) {
+            return aggregate;
+        }
+        if (split2) {
+            assertIdentifier(input.splitBy, 'Split field');
+            return `${aggregate} BY ${input.splitBy}, ${split2}${pairRank(input.splitBy, split2, splitLimit(input), lowest)}`;
+        }
+        return `${aggregate}${categoryTail(input)}`;
     }
     if (!input.splitBy) {
         return `${base} WHERE ${where} span=${input.span}${timeShiftClause(input.timeShift)}`;
     }
     assertIdentifier(input.splitBy, 'Split field');
-    const limit = input.splitLimit ?? 5;
-    if (!SPLIT_LIMITS.includes(limit as (typeof SPLIT_LIMITS)[number])) {
-        throw new Error('Split limit is not allowed.');
+    const limit = splitLimit(input);
+    if (split2) {
+        return `${base} AS value WHERE ${where} span=${input.span} BY ${input.splitBy}, ${split2}${timeShiftClause(input.timeShift)}${pairRank(input.splitBy, split2, limit, lowest)} | chart useother=false first(value) over _time BY ${SPLIT_PAIR_FIELD}`;
     }
-    const rank = input.splitDirection === 'lowest' ? `min in bottom${limit}` : `max in top${limit}`;
+    const rank = lowest ? `min in bottom${limit}` : `max in top${limit}`;
     const shifted = `${base} AS value WHERE ${where} span=${input.span} BY ${input.splitBy}${timeShiftClause(input.timeShift)}`;
     return `${shifted} | chart useother=false first(value) over _time BY ${input.splitBy} WHERE ${rank}`;
 }
@@ -204,6 +247,7 @@ export function buildCalcMstats(input: {
     evalExpr: string;
     span: string;
     splitBy?: string;
+    splitBy2?: string;
     splitLimit?: number;
     splitDirection?: 'highest' | 'lowest';
     timeShift?: string;
@@ -234,6 +278,8 @@ export function buildCalcMstats(input: {
     const where = extra ? `${indexClause} AND ${extra}` : indexClause;
     const computed = ` | eval value=${input.evalExpr}`;
     const keep = (fields: string[]): string => ` | fields ${fields.join(', ')}`;
+    const split2 = secondSplit(input.splitBy, input.splitBy2);
+    const lowest = input.splitDirection === 'lowest';
     if (input.trellisBy) {
         const trellis = input.trellisBy;
         assertIdentifier(trellis, 'Filter field');
@@ -242,6 +288,9 @@ export function buildCalcMstats(input: {
             assertIdentifier(split, 'Split field');
         }
         if (input.categorical) {
+            if (split && split2) {
+                return `| mstats ${aggs} WHERE ${where} BY ${trellis}, ${split}, ${split2}${computed}${keep(['value', trellis, split, split2])}${pairRank(split, split2, splitLimit(input), lowest, trellis)}`;
+            }
             const fields = split ? ['value', trellis, split] : ['value', trellis];
             return `| mstats ${aggs} WHERE ${where} BY ${split ? `${trellis}, ${split}` : trellis}${computed}${keep(fields)}`;
         }
@@ -249,9 +298,16 @@ export function buildCalcMstats(input: {
         if (!split) {
             return `| mstats ${aggs} WHERE ${where} span=${input.span} BY ${trellis}${computed}${keep(['_time', 'value', trellis])}${timeShiftClause(input.timeShift)}${tail} first(value) AS value BY ${trellis}`;
         }
+        if (split2) {
+            return `| mstats ${aggs} WHERE ${where} span=${input.span} BY ${trellis}, ${split}, ${split2}${computed}${keep(['_time', 'value', trellis, split, split2])}${timeShiftClause(input.timeShift)}${pairRank(split, split2, splitLimit(input), lowest, trellis)} | eval {${SPLIT_PAIR_FIELD}}=value | fields - ${SPLIT_PAIR_FIELD}, value${tail} first(*) AS * BY ${trellis}`;
+        }
         return `| mstats ${aggs} WHERE ${where} span=${input.span} BY ${trellis}, ${split}${computed}${keep(['_time', 'value', trellis, split])}${timeShiftClause(input.timeShift)} | eval {${split}}=value | fields - ${split}, value${tail} first(*) AS * BY ${trellis}`;
     }
     if (input.categorical) {
+        if (input.splitBy && split2) {
+            assertIdentifier(input.splitBy, 'Split field');
+            return `| mstats ${aggs} WHERE ${where} BY ${input.splitBy}, ${split2}${computed}${keep(['value', input.splitBy, split2])}${pairRank(input.splitBy, split2, splitLimit(input), lowest)}`;
+        }
         const fields = input.splitBy ? ['value', input.splitBy] : ['value'];
         const aggregate = `| mstats ${aggs} WHERE ${where}${computed}${keep(fields)}`;
         return input.splitBy ? `${aggregate}${categoryTail(input)}` : aggregate;
@@ -260,11 +316,11 @@ export function buildCalcMstats(input: {
         return `| mstats ${aggs} WHERE ${where} span=${input.span}${computed}${keep(['_time', 'value'])}${timeShiftClause(input.timeShift)}`;
     }
     assertIdentifier(input.splitBy, 'Split field');
-    const limit = input.splitLimit ?? 5;
-    if (!SPLIT_LIMITS.includes(limit as (typeof SPLIT_LIMITS)[number])) {
-        throw new Error('Split limit is not allowed.');
+    const limit = splitLimit(input);
+    if (split2) {
+        return `| mstats ${aggs} WHERE ${where} span=${input.span} BY ${input.splitBy}, ${split2}${computed}${keep(['_time', 'value', input.splitBy, split2])}${timeShiftClause(input.timeShift)}${pairRank(input.splitBy, split2, limit, lowest)} | chart useother=false first(value) over _time BY ${SPLIT_PAIR_FIELD}`;
     }
-    const rank = input.splitDirection === 'lowest' ? `min in bottom${limit}` : `max in top${limit}`;
+    const rank = lowest ? `min in bottom${limit}` : `max in top${limit}`;
     const shifted = `| mstats ${aggs} WHERE ${where} span=${input.span} BY ${input.splitBy}${computed}${keep(['_time', 'value', input.splitBy])}${timeShiftClause(input.timeShift)}`;
     return `${shifted} | chart useother=false first(value) over _time BY ${input.splitBy} WHERE ${rank}`;
 }
@@ -308,6 +364,7 @@ export function buildTstats(input: {
     span: string;
     field?: string;
     splitBy?: string;
+    splitBy2?: string;
     splitLimit?: number;
     splitDirection?: 'highest' | 'lowest';
     timeShift?: string;
@@ -340,18 +397,24 @@ export function buildTstats(input: {
         from = `where ${where}`;
     }
     const base = `| tstats ${call} AS value ${from}`;
+    const split2 = secondSplit(input.splitBy, input.splitBy2);
+    const lowest = input.splitDirection === 'lowest';
     if (input.categorical) {
+        if (input.splitBy && split2) {
+            assertIdentifier(input.splitBy, 'Split field');
+            return `${base} BY ${input.splitBy}, ${split2}${pairRank(input.splitBy, split2, splitLimit(input), lowest)}`;
+        }
         return input.splitBy ? `${base}${categoryTail(input)}` : base;
     }
     if (!input.splitBy) {
         return `${base} by _time span=${input.span}${timeShiftClause(input.timeShift)}`;
     }
     assertIdentifier(input.splitBy, 'Split field');
-    const limit = input.splitLimit ?? 5;
-    if (!SPLIT_LIMITS.includes(limit as (typeof SPLIT_LIMITS)[number])) {
-        throw new Error('Split limit is not allowed.');
+    const limit = splitLimit(input);
+    if (split2) {
+        return `${base} by _time span=${input.span}, ${input.splitBy}, ${split2}${timeShiftClause(input.timeShift)}${pairRank(input.splitBy, split2, limit, lowest)} | chart useother=false first(value) over _time BY ${SPLIT_PAIR_FIELD}`;
     }
-    const rank = input.splitDirection === 'lowest' ? `min in bottom${limit}` : `max in top${limit}`;
+    const rank = lowest ? `min in bottom${limit}` : `max in top${limit}`;
     return `${base} by _time span=${input.span}, ${input.splitBy}${timeShiftClause(input.timeShift)} | chart useother=false first(value) over _time BY ${input.splitBy} WHERE ${rank}`;
 }
 
@@ -451,6 +514,7 @@ export function buildBaseChartSearch(input: {
     span: string;
     field: string;
     splitBy?: string;
+    splitBy2?: string;
     splitLimit?: number;
     splitDirection?: 'highest' | 'lowest';
     categorical?: boolean;
@@ -475,7 +539,13 @@ export function buildBaseChartSearch(input: {
             ? `| loadjob savedsearch=${quoteSpl(`${input.owner}:metric_explorer_ng:${saved}`)}`
             : `| savedsearch ${quoteSpl(saved)}`;
     const call = aggregation.name === 'count' ? 'count' : `${aggregation.name}(${quoteSpl(field)})`;
+    const split2 = secondSplit(input.splitBy, input.splitBy2);
+    const lowest = input.splitDirection === 'lowest';
     if (input.categorical) {
+        if (input.splitBy && split2) {
+            assertIdentifier(input.splitBy, 'Split field');
+            return `${head} | stats ${call} AS value BY ${input.splitBy}, ${split2}${pairRank(input.splitBy, split2, splitLimit(input), lowest)}`;
+        }
         const aggregate = `${head} | stats ${call} AS value`;
         return input.splitBy ? `${aggregate}${categoryTail(input)}` : aggregate;
     }
@@ -483,9 +553,9 @@ export function buildBaseChartSearch(input: {
         return `${head} | timechart span=${input.span} ${call} AS value`;
     }
     assertIdentifier(input.splitBy, 'Split field');
-    const limit = input.splitLimit ?? 5;
-    if (!SPLIT_LIMITS.includes(limit as (typeof SPLIT_LIMITS)[number])) {
-        throw new Error('Split limit is not allowed.');
+    const limit = splitLimit(input);
+    if (split2) {
+        return `${head} | bin _time span=${input.span} | stats ${call} AS value BY _time, ${input.splitBy}, ${split2}${pairRank(input.splitBy, split2, limit, lowest)} | chart useother=false first(value) over _time BY ${SPLIT_PAIR_FIELD}`;
     }
     // timechart keeps the highest series. A lowest split is applied by reversing the limit label in the chart, which timechart cannot do.
     return `${head} | timechart span=${input.span} ${call} AS value by ${input.splitBy} limit=${limit} useother=f`;

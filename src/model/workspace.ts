@@ -25,6 +25,8 @@ export type Series = {
     baseOwner?: string;
     aggregation: string;
     splitBy: string;
+    /** Second split dimension. Empty keeps a single split. Combined lines are `splitBy / splitBy2`. */
+    splitBy2?: string;
     splitDirection: 'highest' | 'lowest';
     splitLimit: number;
     timeShift: string;
@@ -72,9 +74,21 @@ export const INHERIT_SPLIT = '*global*';
  * Nothing is selected, or a metric's dimensions are not loaded yet: the list stays empty.
  * Several metrics offer only the dimensions every one of them has.
  */
+/** The chart/table field after a two-dimension split. Not a metric dimension. */
+export const SPLIT_PAIR_FIELD = 'mxsplit';
+
+export function splitLabel(splitBy: string, splitBy2 = ''): string {
+    return splitBy2 ? `${splitBy}, ${splitBy2}` : splitBy;
+}
+
+/** Field the drawn rows use: the pair field when both splits are set, otherwise the first dimension. */
+export function splitChartField(splitBy: string, splitBy2 = ''): string {
+    return splitBy && splitBy2 ? SPLIT_PAIR_FIELD : splitBy;
+}
+
 /** Dimensions a trellis can use: the shared ones, without the field that already splits the lines. */
-export function trellisDimensions(shared: string[], splitBy: string): string[] {
-    return shared.filter((name) => name !== splitBy);
+export function trellisDimensions(shared: string[], splitBy: string, splitBy2 = ''): string[] {
+    return shared.filter((name) => name !== splitBy && name !== splitBy2);
 }
 
 export function sharedDimensions(metrics: string[], known: Record<string, string[] | undefined>): string[] {
@@ -101,6 +115,25 @@ export function resolveSplit(series: Pick<Series, 'splitBy'> & { source?: Series
     return series.splitBy;
 }
 
+export function resolveSplit2(
+    series: Pick<Series, 'splitBy' | 'splitBy2'> & { source?: Series['source'] },
+    globalSplit: string,
+    globalSplit2 = '',
+    useGlobalSplit = true
+): string {
+    const first = resolveSplit(series, globalSplit, useGlobalSplit);
+    if (!first) {
+        return '';
+    }
+    const second =
+        series.splitBy === INHERIT_SPLIT
+            ? useGlobalSplit
+                ? globalSplit2
+                : ''
+            : series.splitBy2 ?? '';
+    return second && second !== first ? second : '';
+}
+
 /** True when the rows carry values for the split field. Metrics without that dimension return rows without it. */
 export function hasSplitValues(rows: Array<Record<string, unknown>>, field: string): boolean {
     if (!field) {
@@ -119,18 +152,33 @@ export function resolveSeries(
     series: Series[],
     globalSplit: string,
     useGlobalSplit = true,
-    globalLimit: GlobalSplitLimit = DEFAULT_GLOBAL_LIMIT
+    globalLimit: GlobalSplitLimit = DEFAULT_GLOBAL_LIMIT,
+    globalSplit2 = ''
 ): Series[] {
-    return series.map((item) =>
-        item.splitBy === INHERIT_SPLIT &&
-        useGlobalSplit &&
-        globalSplit &&
-        item.source !== 'event' &&
-        item.source !== 'dataset' &&
-        item.source !== 'search'
-            ? { ...item, splitBy: globalSplit, splitDirection: globalLimit.direction, splitLimit: globalLimit.limit }
-            : { ...item, splitBy: resolveSplit(item, globalSplit, useGlobalSplit) }
-    );
+    return series.map((item) => {
+        if (
+            item.splitBy === INHERIT_SPLIT &&
+            useGlobalSplit &&
+            globalSplit &&
+            item.source !== 'event' &&
+            item.source !== 'dataset' &&
+            item.source !== 'search'
+        ) {
+            return {
+                ...item,
+                splitBy: globalSplit,
+                splitBy2: globalSplit2 && globalSplit2 !== globalSplit ? globalSplit2 : '',
+                splitDirection: globalLimit.direction,
+                splitLimit: globalLimit.limit,
+            };
+        }
+        const splitBy = resolveSplit(item, globalSplit, useGlobalSplit);
+        return {
+            ...item,
+            splitBy,
+            splitBy2: splitBy ? resolveSplit2(item, globalSplit, globalSplit2, useGlobalSplit) : '',
+        };
+    });
 }
 
 /** A copy of one series with a new id, placed right after the original. */
@@ -250,6 +298,7 @@ export function applyTitleParts(chart: ChartModel, parts: TitlePart[]): ChartMod
             created.field = part.text;
             created.aggregation = template?.aggregation ?? created.aggregation;
             created.splitBy = template?.splitBy ?? created.splitBy;
+            created.splitBy2 = template?.splitBy2 ?? created.splitBy2;
             created.splitDirection = template?.splitDirection ?? created.splitDirection;
             created.splitLimit = template?.splitLimit ?? created.splitLimit;
         }
@@ -280,7 +329,7 @@ function nextId(prefix: string): string {
 
 /** Legend and analysis subtitle. A time shift is shown as `(-30m)`. Different metrics in one chart keep the metric name. */
 export function seriesLegend(
-    series: Pick<Series, 'metric' | 'aggregation' | 'splitBy' | 'timeShift' | 'label'>,
+    series: Pick<Series, 'metric' | 'aggregation' | 'splitBy' | 'timeShift' | 'label'> & { splitBy2?: string },
     siblings: Array<Pick<Series, 'metric' | 'label'>> = [series]
 ): string {
     const chosen = resolveMetricFunction(series.aggregation) ?? resolveEventFunction(series.aggregation);
@@ -288,7 +337,7 @@ export function seriesLegend(
     const name = series.label?.trim() || series.metric;
     const severalMetrics = new Set(siblings.map((item) => item.label?.trim() || item.metric)).size > 1;
     const base = series.splitBy
-        ? `${aggregation} ${t('by')} ${series.splitBy}`
+        ? `${aggregation} ${t('by')} ${splitLabel(series.splitBy, series.splitBy2)}`
         : severalMetrics
           ? `${name} ${aggregation}`
           : aggregation;
@@ -307,6 +356,7 @@ export function createSeries(metric: string, filters: SeriesFilter[] = [], sourc
         aggregation: source === 'metric' || source === 'calc' ? 'Avg' : source === 'search' ? 'Search' : 'Count',
         // The workspace split is a metric dimension. Events, datasets, and saved searches start unsplit.
         splitBy: source === 'event' || source === 'dataset' || source === 'search' ? '' : INHERIT_SPLIT,
+        splitBy2: '',
         splitDirection: 'highest',
         splitLimit: 5,
         timeShift: '',

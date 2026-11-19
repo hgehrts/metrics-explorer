@@ -159,7 +159,7 @@
 
           <h3 id="mx-16">16. Split by</h3>
           <ul>
-            <li>Opens the global split: dimension, direction (highest or lowest values), and count. The default is the highest 5 values.</li>
+            <li>Opens the global split: a first dimension, an optional second dimension, direction (highest or lowest values), and count. The default is the highest 5 values of the first dimension; the second field then adds every matching pair as its own line (<code>host / ifName</code>).</li>
             <li>It applies to metric series that inherit the global split, and only on charts where Use global split by for this chart is on. That is the default.</li>
             <li>Events and datasets do not inherit this dimension. A metric dimension does not exist there, and the search would return no rows.</li>
             <li>A dimension set on the series replaces the global one.</li>
