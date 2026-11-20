@@ -39,9 +39,10 @@ You do not write SPL by hand. The app generates it, and "Open in Search" shows i
 splunk metrics, mstats, metric indexes, analytics workspace, metrics explorer, dashboard, charts, time series
 ```
 
-**Release notes for 2.1.2**
+**Release notes for 2.1.3**
 
 ```
+2.1.3: Enable check_for_updates in app.conf for Splunkbase compatibility.
 2.1.2: Documentation and README update. Trellis is described in the README and the Splunkbase text.
 2.1.1: The split-by filter now applies to every appended series in exported dashboards.
 2.1.0: Dashboard exports offer split-by and time span inputs. The time span menu is cleaned up, and 1s and 7d are removed.
@@ -54,7 +55,7 @@ splunk metrics, mstats, metric indexes, analytics workspace, metrics explorer, d
 **Support and information**
 
 ```
-Version: 2.1.2
+Version: 2.1.3
 App ID: metric_explorer_ng
 Author: Hans-Henning Gehrts
 License: Apache-2.0
@@ -69,7 +70,7 @@ Browse Splunk metric indexes and chart them without writing SPL.
 
 Splunk removes the Analytics Workspace in Splunk Enterprise 10.6 and Splunk Cloud Platform 10.6 and does not ship a replacement. Metric Explorer NG is the app I built so that work still has a place: open a metric, see the chart, split it, filter it, and save it. The app covers the Analytics Workspace 2.56.0 functions and keeps a few additions that were already useful in daily work: events, datasets, base searches, named workspaces, the full `mstats` aggregations, and a global time span.
 
-The current package is [2.1.2](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-2.1.2.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
+The current package is [2.1.3](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-2.1.3.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
 
 ## Documentation
 

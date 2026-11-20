@@ -20,6 +20,7 @@ test('the app name, icons, dashboards link, and documentation view are packaged'
     const conf = fs.readFileSync(path.join(root, 'app/default/app.conf'), 'utf8');
     expect(conf).toContain('label = Metric Explorer NG');
     expect(conf).toContain('name = metric_explorer_ng');
+    expect(conf).toContain('check_for_updates = true');
     const nav = fs.readFileSync(path.join(root, 'app/default/data/ui/nav/default.xml'), 'utf8');
     expect(nav).toContain('<view name="workspaces"/>');
     expect(nav).toContain('<view name="dashboards"/>');
