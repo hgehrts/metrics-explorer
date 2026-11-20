@@ -1,14 +1,75 @@
 # Metric Explorer NG
 
 <p>
-  <img src="app/static/appLogo.png" alt="Metric Explorer NG" width="160">
+  <img src="app/static/appIcon_2x.png" alt="Metric Explorer NG" width="144">
 </p>
+
+## Splunkbase listing
+
+**Title**
+
+```
+Metric Explorer NG
+```
+
+**Summary** (short description)
+
+```
+Browse Splunk metric indexes and chart them without writing SPL. Save charts as dashboards, alerts, or reports.
+```
+
+**Description**
+
+```
+Splunk removed the Analytics Workspace in Splunk Enterprise 10.6 and Splunk Cloud Platform 10.6 without a replacement. Metric Explorer NG brings that workflow back as a Splunk app.
+
+- Browse metric indexes, metrics, dimensions, events, datasets, base searches, and alerts in one column.
+- Click a metric to chart it. Add more metrics, formulas, and series, each with its own aggregation, split, filter, time shift, and right axis.
+- Trellis splits a chart into small multiples, one per value of a dimension, with paging and shared scales on export.
+- One time range, zoom, and time span for all charts, plus a global split-by.
+- Save charts as Classic or Dashboard Studio dashboards, with optional time, split-by, and span inputs. You can also save them as reports, scheduled or streaming alerts, or base searches.
+- Export charts as PNG or CSV. Named workspaces save and restore your whole session.
+
+You do not write SPL by hand. The app generates it, and "Open in Search" shows it for any chart.
+```
+
+**Keywords**
+
+```
+splunk metrics, mstats, metric indexes, analytics workspace, metrics explorer, dashboard, charts, time series
+```
+
+**Release notes for 2.1.2**
+
+```
+2.1.2: Documentation and README update. Trellis is described in the README and the Splunkbase text.
+2.1.1: The split-by filter now applies to every appended series in exported dashboards.
+2.1.0: Dashboard exports offer split-by and time span inputs. The time span menu is cleaned up, and 1s and 7d are removed.
+2.0.1: The empty screen uses the 2x app icon.
+2.0.0: The license is Apache-2.0, and the app logo is cropped.
+1.9.1: Version format fixed for Splunk Cloud. The empty screen shows the app name, version, license, and GitHub link.
+1.9: Lines connect across missing points by default. The new option "Show gaps" leaves them open.
+```
+
+**Support and information**
+
+```
+Version: 2.1.2
+App ID: metric_explorer_ng
+Author: Hans-Henning Gehrts
+License: Apache-2.0
+Source and support: https://github.com/hgehrts/metrics-explorer (issues and releases)
+Splunk compatibility: Splunk Enterprise 10.4 and 10.6
+Installation: Apps > Manage Apps > Install app from file, then restart Splunk.
+```
+
+---
 
 Browse Splunk metric indexes and chart them without writing SPL.
 
 Splunk removes the Analytics Workspace in Splunk Enterprise 10.6 and Splunk Cloud Platform 10.6 and does not ship a replacement. Metric Explorer NG is the app I built so that work still has a place: open a metric, see the chart, split it, filter it, and save it. The app covers the Analytics Workspace 2.56.0 functions and keeps a few additions that were already useful in daily work: events, datasets, base searches, named workspaces, the full `mstats` aggregations, and a global time span.
 
-The current package is [2.1.1](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-2.1.1.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
+The current package is [2.1.2](https://github.com/hgehrts/metrics-explorer/releases/latest). Install `metric_explorer_ng-2.1.2.tar.gz` from **Apps > Manage Apps > Install app from file**, then restart Splunk. The app id is `metric_explorer_ng`. It runs on Splunk Enterprise 10.4 and 10.6. The in-app documentation pages are hidden for now.
 
 ## Documentation
 
@@ -179,6 +240,7 @@ Indexes is its own section, above Metrics, and it collapses like the others. Che
 #### 23. Plot
 
 - Time charts: line, area, column, stacked column, heatmap.
+- Trellis splits a time chart into small multiples, one per value of a dimension. Dimensions come from the global split and are not already used by it. Eight charts per page by default, two columns.
 - Categorical charts: one column, or stacked columns, per series or split value, across the whole time range.
 - A second axis appears when a series has Overlay on right axis turned on.
 - The legend names the aggregation and, with a split, the values.
