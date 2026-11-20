@@ -1,4 +1,4 @@
-import { buildAllDimensionSearch, buildDimensionSearch, buildMstats, buildReferenceValueSearch } from '../src/spl/buildMstats';
+import { buildAllDimensionSearch, buildDimensionSearch, buildMstats, buildReferenceValueSearch, buildSplitChoiceSearch } from '../src/spl/buildMstats';
 
 test('builds one mstats command for a metric', () => {
     expect(
@@ -192,4 +192,11 @@ test('the per-metric dimension search keeps a row for metrics without dimensions
         '(index="_metrics" OR index="metrics_lab")'
     );
     expect(buildDimensionSearch('lab.cpu.user')).not.toContain('mvexpand');
+});
+
+test('lists combined split values as mxsplit for a dashboard filter', () => {
+    expect(buildSplitChoiceSearch(['lab.net.bytes_total'], 'host', 'ifName')).toBe(
+        '| mcatalog values(metric_name) WHERE metric_name="lab.net.bytes_total" AND index=* AND NOT metric_name="*_mrollup_*" BY host, ifName | eval mxsplit=host." / ".ifName | fields mxsplit'
+    );
+    expect(buildSplitChoiceSearch(['lab.cpu.user'], 'host')).toContain(' BY host | fields host');
 });

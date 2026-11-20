@@ -608,15 +608,24 @@ const Stage = styled.main`
 
 const SpanCustom = styled.div`
     display: flex;
-    gap: 6px;
-    align-items: center;
-    padding: 6px 12px 8px;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 248px;
+    padding: 8px 12px 12px;
+`;
+
+const SpanCustomRow = styled.div`
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
 
     input,
     select {
-        width: 72px;
+        width: 100%;
+        min-height: 32px;
+        box-sizing: border-box;
         font-size: ${variables.fontSize};
-        padding: 4px;
+        padding: 6px 8px;
     }
 `;
 
@@ -2437,25 +2446,28 @@ export function Explorer(): React.ReactElement {
                                 ))}
                                 <MenuHeading>{t('Custom…')}</MenuHeading>
                                 <SpanCustom>
-                                    <TextInput
-                                        aria-label={t('Span count')}
-                                        value={globalSpanCount}
-                                        inputMode="numeric"
-                                        onChange={(event) => setGlobalSpanCount(event.target.value)}
-                                    />
-                                    <Select
-                                        aria-label={t('Span unit')}
-                                        value={globalSpanUnit}
-                                        onChange={(event) => setGlobalSpanUnit(event.target.value)}
-                                    >
-                                        {SPAN_UNITS.map((item) => (
-                                            <option key={item.id} value={item.id}>
-                                                {t(item.label)}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    <SpanCustomRow>
+                                        <TextInput
+                                            aria-label={t('Span count')}
+                                            value={globalSpanCount}
+                                            inputMode="numeric"
+                                            onChange={(event) => setGlobalSpanCount(event.target.value)}
+                                        />
+                                        <Select
+                                            aria-label={t('Span unit')}
+                                            value={globalSpanUnit}
+                                            onChange={(event) => setGlobalSpanUnit(event.target.value)}
+                                        >
+                                            {SPAN_UNITS.map((item) => (
+                                                <option key={item.id} value={item.id}>
+                                                    {t(item.label)}
+                                                </option>
+                                            ))}
+                                        </Select>
+                                    </SpanCustomRow>
                                     <ToolButton
                                         type="button"
+                                        style={{ width: '100%' }}
                                         disabled={buildSpan(globalSpanCount, globalSpanUnit) === null}
                                         onClick={() => {
                                             const next = buildSpan(globalSpanCount, globalSpanUnit);

@@ -22,6 +22,7 @@ import {
     classicDashboard,
     dashboardIdError,
     dashboardIdFromTitle,
+    DashboardExportOptions,
     PanelSpec,
     studioDashboard,
 } from '../actions/dashboards';
@@ -29,8 +30,9 @@ import { isCategorical } from '../chart/settings';
 import { t } from '../i18n';
 import { serializeSession } from '../model/session';
 import { readPageTheme } from '../theme';
-import { chartTitleText, ChartModel, GlobalSplitLimit, globalFiltersFor, resolveSeries, SeriesFilter } from '../model/workspace';
-import { baseSavedName, buildBaseSearchSpl } from '../spl/buildMstats';
+import { chartTitleText, ChartModel, GlobalSplitLimit, globalFiltersFor, resolveSeries, seriesMetricNames, SeriesFilter, sharedExportSplit } from '../model/workspace';
+import { baseSavedName, buildBaseSearchSpl, buildSplitChoiceSearch } from '../spl/buildMstats';
+import { SPAN_PRESETS } from '../spl/span';
 import { resolveForSource } from '../spl/functions';
 import { buildChartSearch } from '../spl/seriesSearch';
 import { AlertPreview } from './AlertPreview';
@@ -224,6 +226,8 @@ export function SaveDialog(props: {
     const [existing, setExisting] = useState('');
     const [views, setViews] = useState<Array<{ name: string; label: string }>>([]);
     const [timeInput, setTimeInput] = useState(true);
+    const [splitInput, setSplitInput] = useState(true);
+    const [spanInput, setSpanInput] = useState(false);
     const [panelTitle, setPanelTitle] = useState(chart ? chartTitleText(chart) : series?.metric ?? '');
     const [studioLayout, setStudioLayout] = useState<'absolute' | 'grid'>('absolute');
     const [content, setContent] = useState<'both' | 'chart' | 'table'>('chart');
@@ -296,6 +300,38 @@ export function SaveDialog(props: {
             alive = false;
         };
     }, [mode]);
+
+    const exportSplit = sharedExportSplit(targets, props.globalSplit, props.globalSplit2 ?? '', props.globalLimit);
+    const splitMetrics = [
+        ...new Set(
+            targets.flatMap((chart) =>
+                resolveSeries(chart.series, props.globalSplit, chart.useGlobalSplit, props.globalLimit, props.globalSplit2 ?? '').flatMap(
+                    (item) => seriesMetricNames(item)
+                )
+            )
+        ),
+    ];
+    const canSplitInput = Boolean(exportSplit && splitMetrics.length > 0);
+
+    function dashboardOptions(): DashboardExportOptions {
+        return {
+            description,
+            timeInput,
+            theme: pageTheme(),
+            splitInput:
+                splitInput && exportSplit && splitMetrics.length > 0
+                    ? {
+                          field: exportSplit.field,
+                          label: exportSplit.label,
+                          search: buildSplitChoiceSearch(splitMetrics, exportSplit.splitBy, exportSplit.splitBy2, props.metricIndexes),
+                          allLabel: t('All'),
+                      }
+                    : undefined,
+            spanInput: spanInput
+                ? { defaultSpan: props.span, presets: SPAN_PRESETS, label: t('Time span') }
+                : undefined,
+        };
+    }
 
     function panels(): PanelSpec[] {
         const list = panelsFor(
@@ -409,7 +445,7 @@ export function SaveDialog(props: {
         }
         await splunkPost(
             'data/ui/views',
-            { name: id, 'eai:data': classicDashboard(title, list, { description, timeInput, theme: pageTheme() }) },
+            { name: id, 'eai:data': classicDashboard(title, list, dashboardOptions()) },
             currentUser()
         );
         await share(`data/ui/views/${encodeURIComponent(id)}`);
@@ -421,7 +457,7 @@ export function SaveDialog(props: {
         const id = dashboardIdFromTitle(title);
         await splunkPost(
             'data/ui/views',
-            { name: id, 'eai:data': studioDashboard(title, panels(), { description, layout: studioLayout, theme: pageTheme() }) },
+            { name: id, 'eai:data': studioDashboard(title, panels(), { ...dashboardOptions(), layout: studioLayout }) },
             currentUser()
         );
         await share(`data/ui/views/${encodeURIComponent(id)}`);
@@ -603,6 +639,34 @@ export function SaveDialog(props: {
     const span = chart?.settings.span || props.span;
     const finished = Boolean(done);
 
+    const dashboardInputRows = (
+        <>
+            <FormRow>
+                <span />
+                <label>
+                    <input type="checkbox" checked={timeInput} onChange={(event) => setTimeInput(event.target.checked)} />{' '}
+                    {t('Add interactive time picker')}
+                </label>
+            </FormRow>
+            {canSplitInput ? (
+                <FormRow>
+                    <span />
+                    <label>
+                        <input type="checkbox" checked={splitInput} onChange={(event) => setSplitInput(event.target.checked)} />{' '}
+                        {t('Add split-by filter')}
+                    </label>
+                </FormRow>
+            ) : null}
+            <FormRow>
+                <span />
+                <label>
+                    <input type="checkbox" checked={spanInput} onChange={(event) => setSpanInput(event.target.checked)} />{' '}
+                    {t('Add time span picker')}
+                </label>
+            </FormRow>
+        </>
+    );
+
     const sharingRow = (
         <FormRow>
             <span>{t('Permissions')}</span>
@@ -755,13 +819,7 @@ export function SaveDialog(props: {
                                     onChange={(event) => setDescription(event.target.value)}
                                 />
                             </FormRow>
-                            <FormRow>
-                                <span />
-                                <label>
-                                    <input type="checkbox" checked={timeInput} onChange={(event) => setTimeInput(event.target.checked)} />{' '}
-                                    {t('Add interactive time picker')}
-                                </label>
-                            </FormRow>
+                            {dashboardInputRows}
                             {sharingRow}
                         </>
                     )}
@@ -790,6 +848,7 @@ export function SaveDialog(props: {
                             onChange={setStudioLayout}
                         />
                     </FormRow>
+                    {dashboardInputRows}
                     {sharingRow}
                 </>
             ) : null}

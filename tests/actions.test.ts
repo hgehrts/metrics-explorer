@@ -17,6 +17,8 @@ import {
     dashboardIdError,
     dashboardIdFromTitle,
     studioDashboard,
+    withSpanToken,
+    withSplitSearch,
 } from '../src/actions/dashboards';
 
 const panel = {
@@ -81,6 +83,42 @@ test('exported dashboards use the theme of the explorer', () => {
     expect(classicDashboard('Lab', [panel], { theme: 'dark' })).toContain('<dashboard version="1.1" theme="dark">');
     expect(classicDashboard('Lab', [panel])).toContain('<dashboard version="1.1" theme="light">');
     expect(studioDashboard('Lab', [panel], { theme: 'dark' })).toContain('<dashboard version="2" theme="dark">');
+});
+
+test('a split filter and span picker become dashboard inputs', () => {
+    const search =
+        '| mstats avg("lab.cpu.user") AS value WHERE index=* span=30m BY host | chart useother=false first(value) over _time BY host WHERE max in top5';
+    expect(withSplitSearch(search)).toContain('| search $mx_split$ | chart');
+    expect(withSpanToken(search)).toContain('span=$mx_span$');
+    const xml = classicDashboard(
+        'Lab',
+        [{ ...panel, search }],
+        {
+            timeInput: true,
+            splitInput: {
+                field: 'mxsplit',
+                label: 'host / ifName',
+                search: '| mcatalog values(metric_name) WHERE metric_name="lab.cpu.user" AND index=* AND NOT metric_name="*_mrollup_*" BY host, ifName | eval mxsplit=host." / ".ifName | fields mxsplit',
+                allLabel: 'All',
+            },
+            spanInput: { defaultSpan: '30m', presets: ['10s', '30s', '1m'] },
+        }
+    );
+    expect(xml).toContain('token="mx_split"');
+    expect(xml).toContain('<choice value="*">All</choice>');
+    expect(xml).toContain('valuePrefix>mxsplit="');
+    expect(xml).toContain('| search $mx_split$');
+    expect(xml).toContain('token="mx_span"');
+    expect(xml).toContain('span=$mx_span$');
+    expect(xml).not.toContain('span=30m');
+    const studio = studioDashboard('Lab', [{ ...panel, search }], {
+        timeInput: true,
+        splitInput: { field: 'host', label: 'host', search: '| mcatalog values(metric_name) WHERE metric_name="lab.cpu.user" AND index=* AND NOT metric_name="*_mrollup_*" BY host | fields host' },
+        spanInput: { defaultSpan: '10s', presets: ['10s', '1m'] },
+    });
+    expect(studio).toContain('"token":"mx_split"');
+    expect(studio).toContain('"token":"mx_span"');
+    expect(studio).toContain('input.timerange');
 });
 
 test('a studio dashboard keeps the search in the definition', () => {

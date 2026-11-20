@@ -1,11 +1,10 @@
 import { parseTimeShift, shiftSeconds } from './timeShift';
 import { boundSeconds, isRelativeBound } from './timeRange';
 
-/** Spans the toolbar offers. The same steps size an automatic span. */
-export const SPAN_PRESETS = ['1s', '10s', '30s', '1m', '5m', '10m', '30m', '1h', '4h', '1d', '7d'] as const;
+/** Spans the toolbar offers. Auto may still pick 7d for a very long range. */
+export const SPAN_PRESETS = ['10s', '30s', '1m', '5m', '10m', '30m', '1h', '4h', '1d'] as const;
 
 const SPANS: { seconds: number; spl: string }[] = [
-    { seconds: 1, spl: '1s' },
     { seconds: 10, spl: '10s' },
     { seconds: 30, spl: '30s' },
     { seconds: 60, spl: '1m' },

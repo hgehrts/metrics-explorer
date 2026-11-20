@@ -703,6 +703,15 @@ msgstr "Fügt eine neue horizontale Linie hinzu, um signifikante Werte oder Schw
 msgid "Add interactive time picker"
 msgstr "Interaktives Zeitsteuerelement hinzufügen"
 
+msgid "Add split-by filter"
+msgstr "Split-By-Filter hinzufügen"
+
+msgid "Add time span picker"
+msgstr "Zeitspannen-Auswahl hinzufügen"
+
+msgid "All"
+msgstr "Alle"
+
 msgid "Add new filter"
 msgstr "Neuen Filter hinzufügen"
 

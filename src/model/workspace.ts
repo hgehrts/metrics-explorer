@@ -147,6 +147,41 @@ export type GlobalSplitLimit = { direction: 'highest' | 'lowest'; limit: number 
 
 export const DEFAULT_GLOBAL_LIMIT: GlobalSplitLimit = { direction: 'highest', limit: 5 };
 
+/** The one split the exported charts share, or null when they split on different fields or none. */
+export function sharedExportSplit(
+    charts: ChartModel[],
+    globalSplit: string,
+    globalSplit2 = '',
+    globalLimit: GlobalSplitLimit = DEFAULT_GLOBAL_LIMIT
+): { splitBy: string; splitBy2: string; field: string; label: string } | null {
+    const keys: string[] = [];
+    let splitBy = '';
+    let splitBy2 = '';
+    for (const chart of charts) {
+        for (const item of resolveSeries(chart.series, globalSplit, chart.useGlobalSplit, globalLimit, globalSplit2)) {
+            if (!item.splitBy) {
+                continue;
+            }
+            const second = item.splitBy2 ?? '';
+            const key = `${item.splitBy}\0${second}`;
+            if (!keys.includes(key)) {
+                keys.push(key);
+            }
+            splitBy = item.splitBy;
+            splitBy2 = second;
+        }
+    }
+    if (keys.length !== 1) {
+        return null;
+    }
+    return {
+        splitBy,
+        splitBy2,
+        field: splitChartField(splitBy, splitBy2),
+        label: splitBy2 ? `${splitBy} / ${splitBy2}` : splitBy,
+    };
+}
+
 /** Series with their resolved split, for searches, legends and the signature of a chart. */
 export function resolveSeries(
     series: Series[],

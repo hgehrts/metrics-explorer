@@ -7,6 +7,7 @@ import {
     refreshStatus,
     resolveSeries,
     resolveSplit,
+    sharedExportSplit,
     resolveSplit2,
     sharedDimensions,
     seriesLegend,
@@ -91,6 +92,17 @@ test('a new series inherits the global split, and a chosen split overrides it', 
     expect(resolveSeries([own], 'host', true, undefined, 'dc')[0]).toMatchObject({ splitBy: 'region', splitBy2: 'ifName' });
     expect(splitLabel('host', 'ifName')).toBe('host, ifName');
     expect(splitChartField('host', 'ifName')).toBe('mxsplit');
+});
+
+test('dashboard export uses one shared split, including combined pairs', () => {
+    const chart = createChart('lab.net.bytes_total');
+    expect(sharedExportSplit([chart], 'host', 'ifName')).toEqual({
+        splitBy: 'host',
+        splitBy2: 'ifName',
+        field: 'mxsplit',
+        label: 'host / ifName',
+    });
+    expect(sharedExportSplit([chart], '')).toBeNull();
 });
 
 test('counts down from ten seconds while auto-refresh is on', () => {

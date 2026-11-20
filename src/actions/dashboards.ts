@@ -52,7 +52,121 @@ export function dashboardIdFromTitle(title: string): string {
 }
 
 /** Token of the interactive time input. Panels read their range from it when the dashboard has one. */
-const TIME_TOKEN = 'mx_time';
+export const TIME_TOKEN = 'mx_time';
+export const SPLIT_TOKEN = 'mx_split';
+export const SPAN_TOKEN = 'mx_span';
+
+export type SplitDashboardInput = {
+    field: string;
+    label: string;
+    search: string;
+    allLabel?: string;
+};
+
+export type SpanDashboardInput = {
+    defaultSpan: string;
+    presets: readonly string[];
+    label?: string;
+};
+
+export type DashboardExportOptions = {
+    description?: string;
+    timeInput?: boolean;
+    splitInput?: SplitDashboardInput;
+    spanInput?: SpanDashboardInput;
+    theme?: 'light' | 'dark';
+    layout?: 'absolute' | 'grid';
+};
+
+/** Puts `| search $mx_split$` on the rows that still carry the split field. */
+export function withSplitSearch(search: string, token = SPLIT_TOKEN): string {
+    const needle = ` | search $${token}$`;
+    if (search.includes(needle)) {
+        return search;
+    }
+    const marks = [' | eval {', ' | chart ', ' | timechart '];
+    let at = -1;
+    for (const mark of marks) {
+        const index = search.indexOf(mark);
+        if (index >= 0 && (at < 0 || index < at)) {
+            at = index;
+        }
+    }
+    if (at < 0) {
+        return `${search}${needle}`;
+    }
+    return `${search.slice(0, at)}${needle}${search.slice(at)}`;
+}
+
+/** Replaces every `span=30s` with the dashboard span token. */
+export function withSpanToken(search: string, token = SPAN_TOKEN): string {
+    return search.replace(/\bspan=\d+[smhd]\b/g, `span=$${token}$`);
+}
+
+function applyExportTokens(search: string, options: DashboardExportOptions): string {
+    let next = search;
+    if (options.splitInput) {
+        next = withSplitSearch(next);
+    }
+    if (options.spanInput) {
+        next = withSpanToken(next);
+    }
+    return next;
+}
+
+function classicFieldset(panels: PanelSpec[], options: DashboardExportOptions): string {
+    const parts: string[] = [];
+    if (options.timeInput) {
+        parts.push(`    <input type="time" token="${TIME_TOKEN}">
+      <label></label>
+      <default>
+        <earliest>${xml(panels[0].earliest)}</earliest>
+        <latest>${xml(panels[0].latest)}</latest>
+      </default>
+    </input>`);
+    }
+    if (options.splitInput) {
+        const field = options.splitInput.field;
+        const all = options.splitInput.allLabel ?? 'All';
+        const earliest = options.timeInput ? `$${TIME_TOKEN}.earliest$` : panels[0].earliest;
+        const latest = options.timeInput ? `$${TIME_TOKEN}.latest$` : panels[0].latest;
+        parts.push(`    <input type="multiselect" token="${SPLIT_TOKEN}" searchWhenChanged="true">
+      <label>${xml(options.splitInput.label)}</label>
+      <choice value="*">${xml(all)}</choice>
+      <default>*</default>
+      <initialValue>*</initialValue>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>${xml(field)}="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>${xml(field)}</fieldForLabel>
+      <fieldForValue>${xml(field)}</fieldForValue>
+      <search>
+        <query>${cdata(options.splitInput.search)}</query>
+        <earliest>${xml(earliest)}</earliest>
+        <latest>${xml(latest)}</latest>
+      </search>
+    </input>`);
+    }
+    if (options.spanInput) {
+        const choices = options.spanInput.presets
+            .map((span) => `      <choice value="${xml(span)}">${xml(span)}</choice>`)
+            .join('\n');
+        parts.push(`    <input type="dropdown" token="${SPAN_TOKEN}" searchWhenChanged="true">
+      <label>${xml(options.spanInput.label ?? 'Time span')}</label>
+      <default>${xml(options.spanInput.defaultSpan)}</default>
+${choices}
+    </input>`);
+    }
+    if (parts.length === 0) {
+        return '';
+    }
+    return `
+  <fieldset submitButton="false">
+${parts.join('\n')}
+  </fieldset>`;
+}
 
 function panelXml(panel: PanelSpec, timeInput = false): string {
     const stack = panel.stacked ? '\n          <option name="charting.chart.stackMode">stacked</option>' : '';
@@ -81,30 +195,16 @@ function panelXml(panel: PanelSpec, timeInput = false): string {
 }
 
 /** A Classic dashboard. One row per panel. */
-export function classicDashboard(
-    label: string,
-    panels: PanelSpec[],
-    options: { description?: string; timeInput?: boolean; theme?: 'light' | 'dark' } = {}
-): string {
+export function classicDashboard(label: string, panels: PanelSpec[], options: DashboardExportOptions = {}): string {
     if (panels.length === 0) {
         throw new Error('Nothing to save.');
     }
     const description = options.description?.trim() ? `\n  <description>${xml(options.description.trim())}</description>` : '';
-    const fieldset = options.timeInput
-        ? `
-  <fieldset submitButton="false">
-    <input type="time" token="${TIME_TOKEN}">
-      <label></label>
-      <default>
-        <earliest>${xml(panels[0].earliest)}</earliest>
-        <latest>${xml(panels[0].latest)}</latest>
-      </default>
-    </input>
-  </fieldset>`
-        : '';
+    const prepared = panels.map((panel) => ({ ...panel, search: applyExportTokens(panel.search, options) }));
+    const fieldset = classicFieldset(prepared, options);
     return `<dashboard version="1.1" theme="${options.theme === 'dark' ? 'dark' : 'light'}">
   <label>${xml(label)}</label>${description}${fieldset}
-${panels.map((panel) => panelXml(panel, Boolean(options.timeInput))).join('\n')}
+${prepared.map((panel) => panelXml(panel, Boolean(options.timeInput))).join('\n')}
 </dashboard>
 `;
 }
@@ -171,20 +271,83 @@ function studioViz(panel: PanelSpec, id: string): Record<string, unknown> {
     };
 }
 
+function studioInputs(panels: PanelSpec[], options: DashboardExportOptions): {
+    inputs: Record<string, unknown>;
+    dataSources: Record<string, unknown>;
+    globalInputs: string[];
+} {
+    const inputs: Record<string, unknown> = {};
+    const dataSources: Record<string, unknown> = {};
+    const globalInputs: string[] = [];
+    const earliest = options.timeInput ? `$${TIME_TOKEN}.earliest$` : panels[0].earliest;
+    const latest = options.timeInput ? `$${TIME_TOKEN}.latest$` : panels[0].latest;
+    if (options.timeInput) {
+        globalInputs.push('input_mx_time');
+        inputs.input_mx_time = {
+            type: 'input.timerange',
+            options: {
+                token: TIME_TOKEN,
+                defaultValue: `${panels[0].earliest},${panels[0].latest}`,
+            },
+        };
+    }
+    if (options.splitInput) {
+        globalInputs.push('input_mx_split');
+        dataSources.ds_mx_split = {
+            type: 'ds.search',
+            name: options.splitInput.label,
+            options: {
+                query: options.splitInput.search,
+                queryParameters: { earliest, latest },
+            },
+        };
+        inputs.input_mx_split = {
+            type: 'input.multiselect',
+            title: options.splitInput.label,
+            dataSources: { primary: 'ds_mx_split' },
+            encoding: {
+                label: `primary.fields.${options.splitInput.field}`,
+                value: `primary.fields.${options.splitInput.field}`,
+            },
+            options: {
+                token: SPLIT_TOKEN,
+                defaultValue: '*',
+                items: [{ label: options.splitInput.allLabel ?? 'All', value: '*' }],
+                delimiter: ' OR ',
+                tokenPrefix: '(',
+                tokenSuffix: ')',
+                itemPrefix: `${options.splitInput.field}="`,
+                itemSuffix: '"',
+            },
+        };
+    }
+    if (options.spanInput) {
+        globalInputs.push('input_mx_span');
+        inputs.input_mx_span = {
+            type: 'input.dropdown',
+            title: options.spanInput.label ?? 'Time span',
+            options: {
+                token: SPAN_TOKEN,
+                defaultValue: options.spanInput.defaultSpan,
+                items: options.spanInput.presets.map((span) => ({ label: span, value: span })),
+            },
+        };
+    }
+    return { inputs, dataSources, globalInputs };
+}
+
 /** A Dashboard Studio definition. Panels sit in a grid, one under the other. */
-export function studioDashboard(
-    label: string,
-    panels: PanelSpec[],
-    options: { description?: string; layout?: 'absolute' | 'grid'; theme?: 'light' | 'dark' } = {}
-): string {
+export function studioDashboard(label: string, panels: PanelSpec[], options: DashboardExportOptions = {}): string {
     if (panels.length === 0) {
         throw new Error('Nothing to save.');
     }
+    const prepared = panels.map((panel) => ({ ...panel, search: applyExportTokens(panel.search, options) }));
+    const extra = studioInputs(prepared, options);
     const visualizations: Record<string, unknown> = {};
-    const dataSources: Record<string, unknown> = {};
+    const dataSources: Record<string, unknown> = { ...extra.dataSources };
     const structure: unknown[] = [];
     let top = 0;
-    panels.forEach((panel, index) => {
+    prepared.forEach((panel, index) => {
         const id = `chart_${index + 1}`;
         visualizations[`viz_${id}`] = studioViz(panel, id);
         dataSources[`ds_${id}`] = {
@@ -192,7 +355,10 @@ export function studioDashboard(
             name: panel.title,
             options: {
                 query: panel.search,
-                queryParameters: { earliest: panel.earliest, latest: panel.latest },
+                queryParameters: {
+                    earliest: options.timeInput ? `$${TIME_TOKEN}.earliest$` : panel.earliest,
+                    latest: options.timeInput ? `$${TIME_TOKEN}.latest$` : panel.latest,
+                },
             },
         };
         const height = studioHeight(panel);
@@ -206,12 +372,12 @@ export function studioDashboard(
     const size = { width: 1200, height: Math.max(320, top) };
     const layout =
         options.layout === 'grid'
-            ? { type: 'grid', options: size, structure, globalInputs: [] }
-            : { type: 'absolute', options: size, structure, globalInputs: [] };
+            ? { type: 'grid', options: size, structure, globalInputs: extra.globalInputs }
+            : { type: 'absolute', options: size, structure, globalInputs: extra.globalInputs };
     const definition = {
         title: label,
         description: options.description?.trim() ?? '',
-        inputs: {},
+        inputs: extra.inputs,
         defaults: {},
         visualizations,
         dataSources,

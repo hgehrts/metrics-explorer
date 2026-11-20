@@ -296,7 +296,7 @@
           <ul>
             <li>Title is required. Description is optional.</li>
             <li>Permissions: Private saves the object for the current user. Shared in App makes it visible in the app.</li>
-            <li>Dashboard: new or existing. The ID of a new Classic dashboard is filled from the title as you type, and you can change it. It may contain only letters, digits, and underscores. Panel title, and optionally a time range picker on the dashboard. A report also asks whether the panel contains the chart, the table, or both.</li>
+            <li>Dashboard: new or existing. The ID of a new Classic dashboard is filled from the title as you type, and you can change it. It may contain only letters, digits, and underscores. Panel title, and optionally a time range picker, a split-by filter (all values by default, one or more selectable, combinations when two split fields are set), and a time span picker on the dashboard. A report also asks whether the panel contains the chart, the table, or both.</li>
             <li>Scheduled alert: interval, trigger (greater than, less than, or equal to a threshold), an In the last window, optional throttle, actions.</li>
             <li>Streaming alert: only for one metric series, and only when the instance supports streaming metric alerts. Trigger and throttle are in minutes, without the scheduled window.</li>
             <li>Actions: add to triggered alerts (with a severity), email, webhook (http or https), script (a file name in Splunk's script directory, without a path).</li>

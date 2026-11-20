@@ -90,6 +90,23 @@ export function buildTrellisValueSearch(metrics: string[], dimension: string, in
     return `| mcatalog values(metric_name) WHERE ${where} AND ${metricIndexClause(indexes)} AND NOT metric_name="*_mrollup_*" BY ${field} | fields ${field}`;
 }
 
+/** Distinct split values (or host / ifName pairs) for a dashboard multiselect. */
+export function buildSplitChoiceSearch(metrics: string[], splitBy: string, splitBy2 = '', indexes?: string[]): string {
+    assertIdentifier(splitBy, 'Split field');
+    const names = [...new Set(metrics.map((name) => name.trim()).filter(Boolean))];
+    if (names.length === 0) {
+        throw new Error('Metric name is not allowed.');
+    }
+    names.forEach((name) => assertIdentifier(name, 'Metric name'));
+    const metricClause = names.map((name) => `metric_name=${quoteSpl(name)}`).join(' OR ');
+    const where = `${names.length === 1 ? metricClause : `(${metricClause})`} AND ${metricIndexClause(indexes)} AND NOT metric_name="*_mrollup_*"`;
+    const split2 = secondSplit(splitBy, splitBy2);
+    if (split2) {
+        return `| mcatalog values(metric_name) WHERE ${where} BY ${splitBy}, ${split2} | eval ${SPLIT_PAIR_FIELD}=${splitBy}." / ".${split2} | fields ${SPLIT_PAIR_FIELD}`;
+    }
+    return `| mcatalog values(metric_name) WHERE ${where} BY ${splitBy} | fields ${splitBy}`;
+}
+
 export function buildDimensionValueSearch(metric: string, dimension: string, indexes?: string[]): string {
     assertIdentifier(metric, 'Metric name');
     assertIdentifier(dimension, 'Filter field');

@@ -296,7 +296,7 @@
           <ul>
             <li>Titel ist Pflicht. Beschreibung ist optional.</li>
             <li>Berechtigung: „Privat“ speichert beim aktuellen Benutzer. „In App freigegeben“ macht das Objekt für die App sichtbar.</li>
-            <li>Dashboard: neu oder vorhandenes. Die ID eines neuen Classic Dashboards füllt sich beim Tippen aus dem Titel und lässt sich ändern. Sie darf nur Buchstaben, Ziffern und Unterstriche enthalten. Teilfenstertitel, optional ein Zeitsteuerelement auf dem Dashboard. Bei einem Bericht zusätzlich die Wahl, ob das Teilfenster Diagramm, Tabelle oder beides enthält.</li>
+            <li>Dashboard: neu oder vorhandenes. Die ID eines neuen Classic Dashboards füllt sich beim Tippen aus dem Titel und lässt sich ändern. Sie darf nur Buchstaben, Ziffern und Unterstriche enthalten. Teilfenstertitel, optional ein Zeitsteuerelement, ein Split-By-Filter (Standard alle Werte, eine oder mehrere auswählbar, bei zwei Split-Feldern die Kombinationen) und eine Zeitspannen-Auswahl auf dem Dashboard. Bei einem Bericht zusätzlich die Wahl, ob das Teilfenster Diagramm, Tabelle oder beides enthält.</li>
             <li>Geplante Benachrichtigung: Intervall, Auslöser (größer, kleiner oder gleich einem Schwellenwert), Fenster „in den letzten“, optionale Unterdrückung, Aktionen.</li>
             <li>Streaming-Benachrichtigung: nur für eine Metrikserie und nur, wenn die Instanz Streaming-Metrikbenachrichtigungen kann. Trigger und Unterdrückung in Minuten, ohne das geplante Fenster.</li>
             <li>Aktionen: zu ausgelösten Benachrichtigungen hinzufügen (mit Schweregrad), E-Mail, Webhook (http oder https), Skript (Dateiname im Skriptverzeichnis von Splunk, ohne Pfad).</li>
