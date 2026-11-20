@@ -80,6 +80,13 @@ export type DashboardExportOptions = {
 
 /** Puts `| search $mx_split$` on the rows that still carry the split field. */
 export function withSplitSearch(search: string, token = SPLIT_TOKEN): string {
+    const parts = search.split(/ \| append(?:cols)? \[/);
+    const seps = search.match(/ \| append(?:cols)? \[/g) ?? [];
+    const updated = parts.map((part) => withSplitSearchOnce(part, token));
+    return updated.reduce((all, part, index) => (index === 0 ? part : `${all}${seps[index - 1]}${part}`), '');
+}
+
+function withSplitSearchOnce(search: string, token: string): string {
     const needle = ` | search $${token}$`;
     if (search.includes(needle)) {
         return search;

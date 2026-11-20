@@ -90,6 +90,10 @@ test('a split filter and span picker become dashboard inputs', () => {
         '| mstats avg("lab.cpu.user") AS value WHERE index=* span=30m BY host | chart useother=false first(value) over _time BY host WHERE max in top5';
     expect(withSplitSearch(search)).toContain('| search $mx_split$ | chart');
     expect(withSpanToken(search)).toContain('span=$mx_span$');
+    const appended =
+        `${search} | append [ ${search} ] | stats first(*) AS * BY _time`;
+    const filtered = withSplitSearch(appended);
+    expect(filtered.split('| search $mx_split$').length - 1).toBe(2);
     const xml = classicDashboard(
         'Lab',
         [{ ...panel, search }],
